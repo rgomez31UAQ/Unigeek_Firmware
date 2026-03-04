@@ -14,20 +14,24 @@ class ShowQRCodeAction
 public:
   // Renders a QR code for `content` with `label` above it.
   // Blocks until any key/nav press. Wipes the area on exit.
-  static void show(const char* label, const char* content) {
-    ShowQRCodeAction action(label, content);
+  static void show(const char* label, const char* content, bool inverted = false) {
+    ShowQRCodeAction action(label, content, inverted);
     action._run();
   }
 
 private:
   const char* _label;
   const char* _content;
+  bool        _inverted;
 
-  ShowQRCodeAction(const char* label, const char* content)
-    : _label(label), _content(content) {}
+  ShowQRCodeAction(const char* label, const char* content, bool inverted)
+    : _label(label), _content(content), _inverted(inverted) {}
 
   void _run() {
     auto& lcd = Uni.Lcd;
+
+    // Render status bar first — its WIDTH defines the QR area boundary
+    StatusBar::refresh();
 
     const int aX = StatusBar::WIDTH;
     const int aW = lcd.width()  - aX;
@@ -48,8 +52,11 @@ private:
       int qrX = aX + (aW - qrW) / 2;
       int qrY = labelH + (aH - labelH - qrH) / 2;
 
-      lcd.fillRect(aX, 0, aW, aH, TFT_WHITE);
-      lcd.setTextColor(TFT_BLACK, TFT_WHITE);
+      uint16_t bg = _inverted ? TFT_BLACK : TFT_WHITE;
+      uint16_t fg = _inverted ? TFT_WHITE : TFT_BLACK;
+
+      lcd.fillRect(aX, 0, aW, aH, bg);
+      lcd.setTextColor(fg, bg);
       lcd.setTextDatum(TC_DATUM);
       lcd.setTextSize(1);
       lcd.drawString(_label, aX + aW / 2, 2);
@@ -57,7 +64,7 @@ private:
       for (uint8_t y = 0; y < qr.size; y++) {
         for (uint8_t x = 0; x < qr.size; x++) {
           if (lgfx_qrcode_getModule(&qr, x, y)) {
-            lcd.fillRect(qrX + x * ps, qrY + y * ps, ps, ps, TFT_BLACK);
+            lcd.fillRect(qrX + x * ps, qrY + y * ps, ps, ps, fg);
           }
         }
       }

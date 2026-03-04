@@ -108,6 +108,7 @@ Always null-check before using — Uni.StorageSD is nullptr on M5StickC.
 - Do NOT put IRAM_ATTR functions inline in .h files — put in .cpp
 - Do NOT declare static constexpr const char*[] as class members — define inside methods
 - Do NOT call setItems({}) — use clearItems() instead
+- Do NOT call setItems() after toggling an option — it resets the highlight index; update sublabels on the array then call render() instead
 - Do NOT use string comparison in onItemSelected — use index switch
 - Do NOT draw StatusBar or ListScreen body directly to LCD — both use TFT_eSprite to prevent flicker
 - Do NOT forget deleteSprite() after every createSprite() + pushSprite()
@@ -268,6 +269,21 @@ If adding .cpp files in a board folder, ensure boards.ini includes:
 Otherwise .cpp files will not be compiled.
 
 ---
+
+## Migrating Screens from puteros
+
+When the user says "migrate <category>":
+1. Read BOTH .h and .cpp from `../puteros/firmware/src/os/screens/<category>/` first
+2. Adapt to unigeek conventions (see CLAUDE.md Migration section for mapping table)
+3. Place files in `src/screens/<category>/`
+4. Wire up parent menu (e.g. MainMenuScreen case index)
+
+Key adaptations:
+- `_global->setScreen(new X())`  →  `Screen.setScreen(new X())`
+- `Template::renderQRCode(data)` →  `ShowQRCodeAction::show(label, data)`
+- `Template::renderStatus(msg)`  →  `ShowStatusAction::show(msg, 1500)`
+- `InputTextScreen::popup()`     →  `InputTextAction::popup()`
+- `onEnter(entry)` string match  →  `onItemSelected(index)` switch
 
 ## Keeping Documentation Accurate
 

@@ -3,6 +3,7 @@
 #include "core/Device.h"
 #include "core/ConfigManager.h"
 #include "ui/components/Icon.h"
+#include <WiFi.h>
 #include <time.h>
 
 class StatusBar
@@ -30,6 +31,16 @@ public:
   static constexpr uint8_t CLOCK_TEXT_H    = 8;   // setTextSize(1) character height
   static constexpr uint8_t CLOCK_BOX_H    = CLOCK_PAD * 2 + CLOCK_TEXT_H * 2 + CLOCK_LINE_GAP;
   static constexpr uint8_t CLOCK_BOTTOM   = 6;    // gap from bottom edge of sprite
+
+  static void refresh() {
+    StatusBar sb;
+    sb.render({
+      (uint8_t)Uni.Power.getBatteryPercentage(),
+      WiFi.isConnected(),
+      false,
+      Uni.Power.isCharging()
+    });
+  }
 
   void render(const Status& status)
   {

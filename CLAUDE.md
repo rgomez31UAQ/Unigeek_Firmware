@@ -103,6 +103,11 @@ All hardware differences are isolated in board-specific folders.
     │   │   ├── MainMenuScreen.cpp
     │   │   ├── SettingScreen.h
     │   │   ├── SettingScreen.cpp   9 settings mirroring puteros, uses APP_CONFIG_* defines
+    │   │   ├── utility/
+    │   │   │   ├── UtilityMenuScreen.h
+    │   │   │   ├── UtilityMenuScreen.cpp
+    │   │   │   ├── QRCodeScreen.h      prompt text via InputTextAction → ShowQRCodeAction loop
+    │   │   │   └── QRCodeScreen.cpp
     │   │   └── wifi/
     │   │       ├── WifiMenuScreen.h
     │   │       ├── WifiMenuScreen.cpp
@@ -121,7 +126,8 @@ All hardware differences are isolated in board-specific folders.
     │   │       ├── InputTextAction.h   text input overlay
     │   │       ├── InputNumberAction.h number input overlay
     │   │       ├── InputSelectAction.h select list overlay
-    │   │       └── ShowStatusAction.h  status message overlay, auto word-wraps long text
+    │   │       ├── ShowStatusAction.h  status message overlay, auto word-wraps long text
+    │   │       └── ShowQRCodeAction.h  QR code overlay, blocks until dismissed
     │   └── main.cpp
 
 ---
@@ -167,6 +173,32 @@ All hardware differences are isolated in board-specific folders.
       SpeakerI2S    — Cardputer / Cardputer ADV (I2S, I2S_NUM_1, WAV capable)
       SpeakerADV    — Cardputer ADV only (extends SpeakerI2S, adds ES8311 codec init)
       SpeakerBuzzer — M5StickC Plus 1.1 (LEDC PWM on GPIO 2, no WAV, tone sequences only)
+
+### ShowQRCodeAction
+
+    // src/ui/actions/ShowQRCodeAction.h — blocking QR code overlay
+    // Uses lgfx_qrcode (firmware/lib/lgfx_qrcode/) — copied from M5GFX, same as puteros
+    // Return convention: lgfx_qrcode_initText returns 0 on SUCCESS (opposite of ricmoo)
+
+    ShowQRCodeAction::show("Label", "content string")
+    // Auto-finds QR version (1–40), renders on white background, blocks until key/nav press.
+    // WiFi QR format: "WIFI:T:WPA;S:<ssid>;P:<password>;;"
+
+    QR code data capacity: auto-scales version — handles any length up to version 40.
+    Pixel size is computed to fit the body area with 14px reserved for the label.
+
+### Migration from puteros
+
+    Reference: ../puteros/firmware/src/os/screens/
+    When user says "migrate <category>" — check that directory first for the source screens.
+    Adapt puteros patterns to unigeek conventions:
+      - Template::renderHead() / setEntries()  →  title() / setItems()
+      - _global->setScreen(new X())            →  Screen.setScreen(new X())
+      - InputTextScreen::popup()               →  InputTextAction::popup()
+      - Template::renderStatus()               →  ShowStatusAction::show()
+      - Template::renderQRCode()               →  ShowQRCodeAction::show()
+      - onEnter(entry) / entry.label           →  onItemSelected(index) / switch(index)
+      - Always read both .h and .cpp from puteros before migrating
 
 ### RtcManager
 
@@ -250,7 +282,9 @@ All hardware differences are isolated in board-specific folders.
         - Default nav (M5StickC): no DIR_BACK; back via "< Back" list item
     - hasBackItem() controls whether "< Back" appears — default true, override false for root screens
     - "< Back" is hidden on keyboard boards and encoder nav (DIR_BACK handles it instead)
-    - setItems() calls render() (full chrome + body redraw)
+    - setItems() resets _selectedIndex and _scrollOffset to 0 then calls render() — ONLY call on init or when switching item arrays
+    - NEVER call setItems() to refresh sublabels after user selects an option — it resets the highlight index
+      Instead: update sublabels directly on the member array, then call render()
     - Implement onBack() in a .cpp file when it needs to instantiate a parent screen:
 
       // MyScreen.h

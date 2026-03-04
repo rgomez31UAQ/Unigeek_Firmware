@@ -1,6 +1,5 @@
 #pragma once
 
-#include "WiFi.h"
 #include "core/IScreen.h"
 #include "ui/components/Header.h"
 #include "ui/components/StatusBar.h"
@@ -15,9 +14,8 @@ public:
   }
 
   void update() override {
-    // refresh status bar every second
     if (millis() - _lastStatusUpdate > 1000) {
-      _renderStatusBar();
+      StatusBar::refresh();
       _lastStatusUpdate = millis();
     }
     onUpdate();
@@ -38,31 +36,16 @@ protected:
   // ─── Subclass overrides ───────────────────────────────
   virtual const char* title() { return nullptr; }  // nullptr = no header
 
-  virtual StatusBar::Status statusBarStatus() {
-    // override to provide live data from your Power/radio classes
-    return {
-      Uni.Power.getBatteryPercentage(),
-      WiFi.isConnected(),
-      false,
-      Uni.Power.isCharging()
-    };
-  }
-
   virtual void onInit()   {}
   virtual void onUpdate() {}
   virtual void onRender() {}
 
 private:
-  Header    _header;
-  StatusBar _statusBar;
-  uint32_t  _lastStatusUpdate = 0;
+  Header   _header;
+  uint32_t _lastStatusUpdate = 0;
 
   void _renderChrome() {
     _header.render(title());
-    _renderStatusBar();
-  }
-
-  void _renderStatusBar() {
-    _statusBar.render(statusBarStatus());
+    StatusBar::refresh();
   }
 };
