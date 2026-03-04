@@ -1,0 +1,69 @@
+#include "PortScannerScreen.h"
+#include "core/ScreenManager.h"
+#include "screens/wifi/network/NetworkMenuScreen.h"
+#include "ui/actions/InputTextAction.h"
+#include "ui/actions/ShowStatusAction.h"
+
+void PortScannerScreen::onInit() {
+  memset(_results,     0, sizeof(_results));
+  memset(_resultItems, 0, sizeof(_resultItems));
+  memset(_configItems, 0, sizeof(_configItems));
+  _showInput();
+}
+
+void PortScannerScreen::onBack() {
+  if (_state == STATE_RESULTS) {
+    _showInput();
+  } else {
+    Screen.setScreen(new NetworkMenuScreen());
+  }
+}
+
+void PortScannerScreen::onItemSelected(uint8_t index) {
+  if (_state == STATE_INPUT) {
+    switch (index) {
+      case 0:
+        _targetIp = InputTextAction::popup("Target IP", _targetIp.c_str());
+        _showInput();
+        break;
+      case 1:
+        _scan();
+        break;
+    }
+  }
+}
+
+// ── private ────────────────────────────────────────────
+
+void PortScannerScreen::_showInput() {
+  _state = STATE_INPUT;
+  _targetIpSub = _targetIp.length() > 0 ? _targetIp : "-";
+  _configItems[0] = {"Target IP", _targetIpSub.c_str()};
+  _configItems[1] = {"Start Scan"};
+  setItems(_configItems, 2);
+}
+
+void PortScannerScreen::_scan() {
+  if (_targetIp.length() == 0) {
+    ShowStatusAction::show("Enter target IP first");
+    return;
+  }
+
+  memset(_results,     0, sizeof(_results));
+  memset(_resultItems, 0, sizeof(_resultItems));
+
+  _resultCount = PortScanUtil::scan(_targetIp.c_str(), _results, PortScanUtil::MAX_RESULTS);
+
+  if (_resultCount == 0) {
+    _resultItems[0] = {"No ports open"};
+    _state = STATE_RESULTS;
+    setItems(_resultItems, 1);
+    return;
+  }
+
+  for (uint8_t i = 0; i < _resultCount; i++) {
+    _resultItems[i] = {_results[i].label, _results[i].service};
+  }
+  _state = STATE_RESULTS;
+  setItems(_resultItems, _resultCount);
+}

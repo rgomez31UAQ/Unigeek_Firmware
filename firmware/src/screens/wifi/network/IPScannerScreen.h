@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/templates/ListScreen.h"
+#include "utils/PortScanUtil.h"
 
 class IPScannerScreen : public ListScreen {
 public:
@@ -28,18 +29,15 @@ private:
   String  _endIpSub;
 
   static constexpr uint8_t MAX_FOUND = 64;
-  static constexpr uint8_t MAX_PORTS = 80;
-
-  struct FoundIP  { char ip[16]; char hostname[50]; };
-  struct OpenPort { char label[24]; char service[20]; };
+  struct FoundIP { char ip[16]; char hostname[50]; };
 
   FoundIP  _foundIPs[MAX_FOUND];
   uint8_t  _foundCount = 0;
   ListItem _foundItems[MAX_FOUND];
 
-  OpenPort _openPorts[MAX_PORTS];
-  uint8_t  _openCount = 0;
-  ListItem _openItems[MAX_PORTS];
+  PortScanUtil::Result _openPorts[PortScanUtil::MAX_RESULTS];
+  uint8_t              _openCount = 0;
+  ListItem             _openItems[PortScanUtil::MAX_RESULTS];
 
   ListItem _configItems[3];
 
