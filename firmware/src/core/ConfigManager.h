@@ -12,6 +12,8 @@
 #define APP_CONFIG_DEVICE_NAME_DEFAULT          "UniGeek"
 #define APP_CONFIG_ENABLE_POWER_SAVING          "enable_power_saving"
 #define APP_CONFIG_ENABLE_POWER_SAVING_DEFAULT  "1"
+#define APP_CONFIG_ENABLE_POWER_OFF             "enable_power_off"
+#define APP_CONFIG_ENABLE_POWER_OFF_DEFAULT     "1"
 #define APP_CONFIG_INTERVAL_DISPLAY_OFF         "interval_display_off"
 #define APP_CONFIG_INTERVAL_DISPLAY_OFF_DEFAULT "10"
 #define APP_CONFIG_INTERVAL_POWER_OFF           "interval_power_off"

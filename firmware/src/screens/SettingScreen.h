@@ -20,8 +20,9 @@ private:
 
   enum : uint8_t {
     SETT_NAME = 0,
-    SETT_POWER_SAV,
+    SETT_DISP_OFF_EN,
     SETT_DISP_OFF,
+    SETT_POWER_OFF_EN,
     SETT_POWER_OFF,
     SETT_BRIGHTNESS,
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
@@ -39,8 +40,9 @@ private:
   };
 
   String _nameSub;
-  String _powerSavSub;
+  String _dispOffEnSub;
   String _dispOffSub;
+  String _powerOffEnSub;
   String _powerOffSub;
   String _brightSub;
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
@@ -56,9 +58,10 @@ private:
 
   ListItem _items[SETT_COUNT] = {
     {"Name",             ""},
-    {"Power Saving",     ""},
+    {"Auto Display Off", ""},
     {"Display Off",      ""},
     {"Auto Power Off",   ""},
+    {"Power Off",        ""},
     {"Brightness",       ""},
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
     {"Volume",           ""},
