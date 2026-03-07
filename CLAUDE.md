@@ -326,7 +326,7 @@ All hardware differences are isolated in board-specific folders.
       }
 
       void onBack() override;           // implement in .cpp to avoid circular includes
-      bool hasBackItem() override { return false; }  // omit "< Back" on root screens
+      // do NOT override hasBackItem() — only MainMenuScreen overrides it (false)
 
     private:
       ListItem _items[2] = {
@@ -347,7 +347,8 @@ All hardware differences are isolated in board-specific folders.
         - Keyboard boards (Cardputer, ADV, T-Lora): \b key consumed by NavigationImpl → DIR_BACK
         - Encoder nav (M5StickC): BTN_A short press (<3s) → DIR_BACK
         - Default nav (M5StickC): no DIR_BACK; back via "< Back" list item
-    - hasBackItem() controls whether "< Back" appears — default true, override false for root screens
+    - hasBackItem() controls whether "< Back" appears — default true
+      Only MainMenuScreen overrides it to false; all other screens use the default
     - "< Back" is hidden on keyboard boards and encoder nav (DIR_BACK handles it instead)
     - setItems() resets _selectedIndex and _scrollOffset to 0 then calls render() — ONLY call on init or when switching item arrays
     - NEVER call setItems() to refresh sublabels after user selects an option — it resets the highlight index
@@ -484,7 +485,7 @@ All hardware differences are isolated in board-specific folders.
   bodyW/bodyH already exclude the 4px screen padding — never subtract extra padding inside a sprite
   Only draw directly on lcd (not sprite) when explicitly told to ignore body boundaries
 - Screen .h files: declarations and data members only
-  Trivial one-liners (title(), hasBackItem()) may stay inline in .h
+  Trivial one-liners (title()) may stay inline in .h
   All onInit(), onUpdate(), onItemSelected(), onBack(), and private helper bodies go in .cpp
   Only include headers needed for types used directly in the .h (base class, member variable types)
   Action headers (InputTextAction.h, ShowStatusAction.h, etc.) belong in .cpp, not .h

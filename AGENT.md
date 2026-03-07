@@ -183,6 +183,7 @@ Exception: if the very next line navigates to a different screen, render() is no
     Encoder nav:  ROT=UP/DOWN  BTN=PRESS  BTN_A<3s=BACK  AXP=LEFT  BTN_B=RIGHT
     Hold BTN_A ≥ 3s: Device::boardHook() (in M5StickC Device.cpp) resets nav to "default"
     "< Back" item hidden in ListScreen on keyboard boards and encoder nav (DIR_BACK handles it)
+    hasBackItem() default is true — only MainMenuScreen overrides it to false
 
 ---
 

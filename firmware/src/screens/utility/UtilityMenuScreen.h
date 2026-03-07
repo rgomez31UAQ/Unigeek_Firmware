@@ -6,7 +6,6 @@ class UtilityMenuScreen : public ListScreen
 {
 public:
   const char* title()    override { return "Utility"; }
-  bool hasBackItem()     override { return false; }
 
   void onInit() override;
   void onBack() override;
