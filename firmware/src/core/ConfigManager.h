@@ -30,6 +30,10 @@
 #define APP_CONFIG_NAV_MODE_DEFAULT             "default"
 #define APP_CONFIG_WEB_PASSWORD                 "web_password"
 #define APP_CONFIG_WEB_PASSWORD_DEFAULT         "admin"
+#define APP_CONFIG_WIFI_AP_SSID                 "wifi_ap_ssid"
+#define APP_CONFIG_WIFI_AP_SSID_DEFAULT         "UniGeek"
+#define APP_CONFIG_WIFI_AP_PASSWORD             "wifi_ap_password"
+#define APP_CONFIG_WIFI_AP_PASSWORD_DEFAULT     ""
 
 class ConfigManager
 {
