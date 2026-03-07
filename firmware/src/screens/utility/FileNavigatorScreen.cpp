@@ -1,0 +1,232 @@
+#include "FileNavigatorScreen.h"
+#include "core/Device.h"
+#include "core/ScreenManager.h"
+#include "screens/utility/UtilityMenuScreen.h"
+#include "ui/actions/InputTextAction.h"
+#include "ui/actions/ShowStatusAction.h"
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
+void FileNavigatorScreen::onInit()
+{
+  if (!Uni.Storage || !Uni.Storage->isAvailable()) {
+    ShowStatusAction::show("Storage not available", 1500);
+    Screen.setScreen(new UtilityMenuScreen());
+    return;
+  }
+  _loadDir("/");
+}
+
+void FileNavigatorScreen::onBack()
+{
+  if (_curPath == "/") {
+    Screen.setScreen(new UtilityMenuScreen());
+    return;
+  }
+  int slash = _curPath.lastIndexOf('/');
+  _loadDir(slash > 0 ? _curPath.substring(0, slash) : "/");
+}
+
+void FileNavigatorScreen::onItemSelected(uint8_t index)
+{
+  if (_state == STATE_FILE) {
+    if (Uni.Nav->pressDuration() >= 1500) {
+      _openMenu(index);
+    } else if (index < _fileCount && _fileIsDir[index]) {
+      _loadDir(_filePath[index]);
+    }
+  } else if (_state == STATE_MENU) {
+    _handleMenuAction(index);
+  }
+}
+
+// ── Private ─────────────────────────────────────────────────────────────────
+
+void FileNavigatorScreen::_loadDir(const String& path)
+{
+  _state     = STATE_FILE;
+  _curPath   = path;
+  _fileCount = 0;
+
+  IStorage::DirEntry entries[kMaxFiles];
+  uint8_t count = Uni.Storage->listDir(path.c_str(), entries, kMaxFiles);
+
+  String base = (path == "/") ? "" : path;
+  for (uint8_t i = 0; i < count; i++) {
+    _fileName[i]  = entries[i].name;
+    _filePath[i]  = base + "/" + entries[i].name;
+    _fileIsDir[i] = entries[i].isDir;
+    _fileItems[i] = {_fileName[i].c_str(), entries[i].isDir ? "DIR" : nullptr};
+  }
+  _fileCount = count;
+
+  _updateTitle();
+  setItems(_fileItems, _fileCount);
+}
+
+void FileNavigatorScreen::_openMenu(uint8_t fileIdx)
+{
+  if (fileIdx >= _fileCount) return;
+
+  _state      = STATE_MENU;
+  _menuSelIdx = fileIdx;
+  _menuCount  = 0;
+
+  bool isFile = !_fileIsDir[fileIdx];
+
+  _menuActions[_menuCount] = ACT_NEW_FOLDER;
+  _menuItems[_menuCount++] = {"New Folder"};
+
+  _menuActions[_menuCount] = ACT_RENAME;
+  _menuItems[_menuCount++] = {"Rename"};
+
+  _menuActions[_menuCount] = ACT_DELETE;
+  _menuItems[_menuCount++] = {"Delete"};
+
+  if (isFile) {
+    _menuActions[_menuCount] = ACT_COPY;
+    _menuItems[_menuCount++] = {"Copy"};
+
+    _menuActions[_menuCount] = ACT_CUT;
+    _menuItems[_menuCount++] = {"Cut"};
+  }
+
+  if (!_clipPath.isEmpty()) {
+    String base = (_curPath == "/") ? "" : _curPath;
+    int slash = _clipPath.lastIndexOf('/');
+    String clipName = (slash >= 0) ? _clipPath.substring(slash + 1) : _clipPath;
+    bool exists = Uni.Storage->exists((base + "/" + clipName).c_str());
+
+    _menuActions[_menuCount] = ACT_PASTE;
+    _menuItems[_menuCount++] = {exists ? "Replace" : "Paste", _clipOp.c_str()};
+
+    _menuActions[_menuCount] = ACT_CANCEL;
+    _menuItems[_menuCount++] = {"Cancel"};
+  }
+
+  _menuActions[_menuCount] = ACT_EXIT;
+  _menuItems[_menuCount++] = {"Exit"};
+
+  setItems(_menuItems, _menuCount);
+}
+
+void FileNavigatorScreen::_handleMenuAction(uint8_t index)
+{
+  if (index >= _menuCount) return;
+
+  String base       = (_curPath == "/") ? "" : _curPath;
+  String targetPath = _filePath[_menuSelIdx];
+  String targetName = _fileName[_menuSelIdx];
+
+  switch (_menuActions[index]) {
+
+    case ACT_NEW_FOLDER: {
+      String name = InputTextAction::popup("New Folder");
+      render();
+      if (!name.isEmpty()) {
+        String newPath = base + "/" + name;
+        if (Uni.Storage->exists(newPath.c_str())) {
+          ShowStatusAction::show("Already exists", 1500);
+        } else {
+          Uni.Storage->makeDir(newPath.c_str());
+        }
+      }
+      break;
+    }
+
+    case ACT_RENAME: {
+      String newName = InputTextAction::popup("Rename", targetName);
+      render();
+      if (!newName.isEmpty() && newName != targetName) {
+        String newPath = base + "/" + newName;
+        if (Uni.Storage->exists(newPath.c_str())) {
+          ShowStatusAction::show("Already exists", 1500);
+        } else if (!Uni.Storage->renameFile(targetPath.c_str(), newPath.c_str())) {
+          ShowStatusAction::show("Rename failed", 1500);
+        }
+      }
+      break;
+    }
+
+    case ACT_DELETE: {
+      ShowStatusAction::show("Deleting...", 0);
+      bool ok = _fileIsDir[_menuSelIdx]
+                  ? _removeDir(targetPath)
+                  : Uni.Storage->deleteFile(targetPath.c_str());
+      if (!ok) ShowStatusAction::show("Delete failed", 1500);
+      break;
+    }
+
+    case ACT_COPY:
+      _clipPath = targetPath;
+      _clipOp   = "Copy";
+      break;
+
+    case ACT_CUT:
+      _clipPath = targetPath;
+      _clipOp   = "Cut";
+      break;
+
+    case ACT_PASTE: {
+      int slash = _clipPath.lastIndexOf('/');
+      String clipName = (slash >= 0) ? _clipPath.substring(slash + 1) : _clipPath;
+      String destPath = base + "/" + clipName;
+      String msg = _clipOp + " File...";
+      ShowStatusAction::show(msg.c_str(), 0);
+      bool ok = false;
+      if (_clipOp == "Copy") {
+        String content = Uni.Storage->readFile(_clipPath.c_str());
+        ok = Uni.Storage->writeFile(destPath.c_str(), content.c_str());
+      } else {
+        ok = Uni.Storage->renameFile(_clipPath.c_str(), destPath.c_str());
+      }
+      if (!ok) {
+        ShowStatusAction::show("Operation failed", 1500);
+      } else {
+        _clipPath = "";
+        _clipOp   = "";
+      }
+      break;
+    }
+
+    case ACT_CANCEL:
+      _clipPath = "";
+      _clipOp   = "";
+      break;
+
+    case ACT_EXIT:
+      Screen.setScreen(new UtilityMenuScreen());
+      return;
+  }
+
+  _loadDir(_curPath);
+}
+
+bool FileNavigatorScreen::_removeDir(const String& path)
+{
+  IStorage::DirEntry entries[kMaxFiles];
+  uint8_t count = Uni.Storage->listDir(path.c_str(), entries, kMaxFiles);
+
+  String base = (path == "/") ? "" : path;
+  for (uint8_t i = 0; i < count; i++) {
+    String entryPath = base + "/" + entries[i].name;
+    if (entries[i].isDir) {
+      _removeDir(entryPath);
+    } else {
+      Uni.Storage->deleteFile(entryPath.c_str());
+    }
+  }
+  return Uni.Storage->removeDir(path.c_str());
+}
+
+void FileNavigatorScreen::_updateTitle()
+{
+  if (_curPath == "/") {
+    strncpy(_titleBuf, "Files /", sizeof(_titleBuf) - 1);
+  } else {
+    int slash = _curPath.lastIndexOf('/');
+    String name = (slash >= 0) ? _curPath.substring(slash + 1) : _curPath;
+    strncpy(_titleBuf, name.c_str(), sizeof(_titleBuf) - 1);
+  }
+  _titleBuf[sizeof(_titleBuf) - 1] = '\0';
+}

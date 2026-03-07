@@ -20,6 +20,8 @@ public:
   virtual bool    writeFile(const char* path, const char* content)       = 0;
   virtual bool    deleteFile(const char* path)                           = 0;
   virtual bool    makeDir(const char* path)                              = 0;
-  virtual uint8_t listDir(const char* path, DirEntry* out, uint8_t max) = 0;
+  virtual uint8_t listDir(const char* path, DirEntry* out, uint8_t max)  = 0;
+  virtual bool    renameFile(const char* from, const char* to)           = 0;
+  virtual bool    removeDir(const char* path)                            = 0;
   virtual ~IStorage() {}
 };

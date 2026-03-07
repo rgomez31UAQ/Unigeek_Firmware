@@ -18,10 +18,10 @@ void MainMenuScreen::onItemSelected(uint8_t index) {
   case 0: Screen.setScreen(new WifiMenuScreen());      break;
   case 1: Screen.setScreen(new BLEMenuScreen());       break;
   case 2: Screen.setScreen(new KeyboardMenuScreen());  break;
-  case 5: Screen.setScreen(new UtilityMenuScreen());   break;
-  case 7: Screen.setScreen(new SettingScreen()); break;
+  case 4: Screen.setScreen(new UtilityMenuScreen());   break;
+  case 6: Screen.setScreen(new SettingScreen());       break;
 #ifdef APP_MENU_POWER_OFF
-  case 8: Uni.Power.powerOff(); break;
+  case 7: Uni.Power.powerOff(); break;
 #endif
   }
 }

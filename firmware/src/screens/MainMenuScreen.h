@@ -18,11 +18,10 @@ public:
 
 private:
 #ifdef APP_MENU_POWER_OFF
-  ListItem _items[9] = {
+  ListItem _items[8] = {
     {"Wifi"},
     {"Bluetooth"},
     {"Keyboard"},
-    {"Files"},
     {"Modules"},
     {"Utility"},
     {"Games"},
@@ -30,11 +29,10 @@ private:
     {"Power Off"},
   };
 #else
-  ListItem _items[8] = {
+  ListItem _items[7] = {
     {"Wifi"},
     {"Bluetooth"},
     {"Keyboard"},
-    {"Files"},
     {"Modules"},
     {"Utility"},
     {"Games"},

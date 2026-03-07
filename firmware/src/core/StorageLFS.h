@@ -60,6 +60,16 @@ public:
     return true;
   }
 
+  bool renameFile(const char* from, const char* to) override {
+    if (!_available) return false;
+    return LittleFS.rename(from, to);
+  }
+
+  bool removeDir(const char* path) override {
+    if (!_available) return false;
+    return LittleFS.rmdir(path);
+  }
+
   uint8_t listDir(const char* path, DirEntry* out, uint8_t max) override {
     if (!_available) return 0;
     fs::File dir = LittleFS.open(path);
