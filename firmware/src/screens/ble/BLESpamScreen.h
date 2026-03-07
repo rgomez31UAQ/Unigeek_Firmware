@@ -1,0 +1,26 @@
+#pragma once
+
+#include "ui/templates/BaseScreen.h"
+#include <NimBLEDevice.h>
+
+class BLESpamScreen : public BaseScreen {
+public:
+  const char* title()    override { return "BLE Spam"; }
+  bool inhibitPowerOff() override { return true; }
+
+  ~BLESpamScreen() override;
+  void onInit()   override;
+  void onUpdate() override;
+  void onRender() override;
+
+private:
+  static constexpr const char* _spinner = "-\\|/";
+  uint8_t  _spinIdx    = 0;
+  uint32_t _lastSpamMs = 0;
+  uint32_t _lastDrawMs = 0;
+
+  NimBLEAdvertising* _pAdv = nullptr;
+
+  void _spam();
+  void _stop();
+};
