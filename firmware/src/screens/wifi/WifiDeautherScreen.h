@@ -50,7 +50,8 @@ private:
   static constexpr int MAX_ALL  = 30;
 
   static constexpr const char* _spinner = "-\\|/";
-  int _spinIdx = 0;
+  int     _spinIdx   = 0;
+  uint8_t _allChanHop = 0;
 
   ListItem _mainItems[3];
   String   _modeSub;

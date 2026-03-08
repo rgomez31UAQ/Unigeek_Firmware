@@ -121,6 +121,10 @@ Always null-check before using — Uni.StorageSD is nullptr on M5StickC.
 - Do NOT use unqualified File type without SD.h in scope — use fs::File (from <FS.h>) for binary access via Uni.Storage->open()
 - Do NOT use unicode characters in TFT drawString calls — TFT_eSPI only renders ASCII; use > instead of →, etc.
 - Do NOT stop deauthing an AP based on raw EAPOL frame count — validate hasM1 && hasM2 from Key Information field parsing
+- Do NOT use WIFI_MODE_AP for WiFi attacks — use WIFI_MODE_APSTA (WifiAttackUtil handles this)
+  AP-only mode causes esp_wifi_80211_tx to silently fail when promiscuous mode is active
+- Do NOT call esp_wifi_set_channel() directly when a WifiAttackUtil instance exists — use
+  attacker->setChannel() to avoid channel state conflicts
 - Do NOT use init() in screens — use onInit()
 - Do NOT include pins_arduino.h — it is auto-included by the build system
 - Do NOT call Keyboard->update() inside NavigationImpl — Device::update() does this; double-scan causes conflicts

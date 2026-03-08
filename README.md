@@ -42,7 +42,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 ### Utility
 - **I2C Detector** — Scan I2C bus and list all responding device addresses
 - **QR Code** — Generate and display a QR code from typed or file-loaded text; supports WiFi QR format
-- **File Navigator** — Browse, rename, copy, cut, paste, and delete files and folders on storage; hold to open context menu
+- **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; hold 1s to open context menu
 
 ### Games
 - **HEX Decoder** — Wordle-style game using hexadecimal characters (0–9, A–F)

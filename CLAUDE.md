@@ -128,12 +128,19 @@ All hardware differences are isolated in board-specific folders.
     │   │   └── wifi/
     │   │       ├── WifiMenuScreen.h
     │   │       ├── WifiMenuScreen.cpp
+    │   │       ├── WifiDeautherScreen.h/cpp      target + all-AP deauth modes
+    │   │       ├── WifiDeauthDetectorScreen.h/cpp  promiscuous deauth frame detector
+    │   │       ├── WifiEapolCaptureScreen.h/cpp  WPA2 handshake capture (discovery + attack phases)
+    │   │       ├── WifiEapolBruteForceScreen.h/cpp  PCAP brute force with wordlist
+    │   │       ├── WifiBeaconSpamScreen.h/cpp    fake AP beacon flood
+    │   │       ├── WifiPacketMonitorScreen.h/cpp channel packet counter
     │   │       └── network/
     │   │           ├── NetworkMenuScreen.h
     │   │           ├── NetworkMenuScreen.cpp
     │   │           ├── WorldClockScreen.h
     │   │           └── WorldClockScreen.cpp
     │   ├── utils/
+    │   │   ├── WifiAttackUtil.h/cpp   WiFi attack primitives (deauth, beacon spam, channel control)
     │   │   └── keyboard/
     │   │       ├── HIDKeyboardUtil.h/cpp   base class: KeyReport, ASCII map, press/release/write
     │   │       ├── BLEKeyboardUtil.h/cpp   NimBLE HID server (all boards)
@@ -265,6 +272,27 @@ All hardware differences are isolated in board-specific folders.
       1. Add heldDuration() check in onUpdate() override BEFORE calling ListScreen::onUpdate()
       2. Set a _holdFired flag on trigger to suppress the release event
       3. On next wasPressed(), consume it + readDirection(), clear flag, return
+
+### WifiAttackUtil (utils/)
+
+    WifiAttackUtil util;                               // sets WIFI_MODE_APSTA + softAP
+    util.deauthenticate(bssid, channel);               // broadcast deauth + disassoc
+    util.deauthenticate(targetMac, bssid, channel);    // directed deauth
+    util.beaconSpam("SSID", channel);                  // fake beacon (3 frames)
+    util.setChannel(channel);                           // channel hop for promiscuous scanning
+
+    Constructor: WiFi.mode(WIFI_MODE_APSTA) + WiFi.softAP() — APSTA mode required so
+    AP interface (esp_wifi_80211_tx) and STA interface (promiscuous sniffing) coexist.
+    WIFI_MODE_AP alone causes deauth frames to silently fail when promiscuous is active.
+
+    Destructor: softAPdisconnect + disconnect + WIFI_OFF
+
+    Channel management: all channel switching MUST go through WifiAttackUtil when an
+    attacker instance exists. Never call esp_wifi_set_channel() directly alongside
+    WifiAttackUtil — use setChannel() instead.
+
+    ieee80211_raw_frame_sanity_check override in WifiAttackUtil.cpp bypasses ESP-IDF
+    frame validation to allow sending deauth/disassoc frames.
 
 ### Migration from puteros
 
@@ -581,6 +609,11 @@ All hardware differences are isolated in board-specific folders.
   Fix: define them as static constexpr locals inside methods
 - TFT_eSPI cannot render unicode characters (e.g. →, ✓, ×) — only ASCII printable chars work
   Fix: use ASCII equivalents (>, v, x, etc.) in all drawString / log messages
+- WiFi attack mode must be WIFI_MODE_APSTA — AP interface for esp_wifi_80211_tx frame injection,
+  STA interface for promiscuous mode sniffing. WIFI_MODE_AP alone causes deauth TX to silently fail
+  when promiscuous is active. WifiAttackUtil constructor handles this automatically.
+- Never call esp_wifi_set_channel() directly when a WifiAttackUtil instance exists — use
+  setChannel() instead to avoid channel state conflicts
 - Deauth-then-wait pattern for EAPOL capture: always call _flush() BEFORE _sendDeauth() so newly
   received beacons are registered in _apTargets before the deauth fires; stay on channel 3-4s
   after deauthing to capture the reconnect handshake — hopping away immediately loses the EAPOL

