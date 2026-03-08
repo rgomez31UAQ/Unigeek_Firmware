@@ -1,4 +1,4 @@
-#include "FileNavigatorScreen.h"
+#include "FileManagerScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "screens/utility/UtilityMenuScreen.h"
@@ -7,7 +7,7 @@
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-void FileNavigatorScreen::onInit()
+void FileManagerScreen::onInit()
 {
   if (!Uni.Storage || !Uni.Storage->isAvailable()) {
     ShowStatusAction::show("Storage not available", 1500);
@@ -17,8 +17,34 @@ void FileNavigatorScreen::onInit()
   _loadDir("/");
 }
 
-void FileNavigatorScreen::onBack()
+void FileManagerScreen::onUpdate()
 {
+  // Trigger menu immediately on 1s hold in file state
+  if (_state == STATE_FILE && !_holdFired &&
+      Uni.Nav->isPressed() && Uni.Nav->heldDuration() >= 1000) {
+    _holdFired = true;
+    _openMenu(_selectedIndex);
+    return;
+  }
+
+  // Drain the release event so ListScreen doesn't fire onItemSelected
+  if (_holdFired) {
+    if (Uni.Nav->wasPressed()) {
+      Uni.Nav->readDirection();
+      _holdFired = false;
+    }
+    return;
+  }
+
+  ListScreen::onUpdate();
+}
+
+void FileManagerScreen::onBack()
+{
+  if (_state == STATE_MENU) {
+    _loadDir(_curPath);
+    return;
+  }
   if (_curPath == "/") {
     Screen.setScreen(new UtilityMenuScreen());
     return;
@@ -27,12 +53,10 @@ void FileNavigatorScreen::onBack()
   _loadDir(slash > 0 ? _curPath.substring(0, slash) : "/");
 }
 
-void FileNavigatorScreen::onItemSelected(uint8_t index)
+void FileManagerScreen::onItemSelected(uint8_t index)
 {
   if (_state == STATE_FILE) {
-    if (Uni.Nav->pressDuration() >= 1500) {
-      _openMenu(index);
-    } else if (index < _fileCount && _fileIsDir[index]) {
+    if (index < _fileCount && _fileIsDir[index]) {
       _loadDir(_filePath[index]);
     }
   } else if (_state == STATE_MENU) {
@@ -42,7 +66,7 @@ void FileNavigatorScreen::onItemSelected(uint8_t index)
 
 // ── Private ─────────────────────────────────────────────────────────────────
 
-void FileNavigatorScreen::_loadDir(const String& path)
+void FileManagerScreen::_loadDir(const String& path)
 {
   _state     = STATE_FILE;
   _curPath   = path;
@@ -64,7 +88,7 @@ void FileNavigatorScreen::_loadDir(const String& path)
   setItems(_fileItems, _fileCount);
 }
 
-void FileNavigatorScreen::_openMenu(uint8_t fileIdx)
+void FileManagerScreen::_openMenu(uint8_t fileIdx)
 {
   if (fileIdx >= _fileCount) return;
 
@@ -100,9 +124,12 @@ void FileNavigatorScreen::_openMenu(uint8_t fileIdx)
     _menuActions[_menuCount] = ACT_PASTE;
     _menuItems[_menuCount++] = {exists ? "Replace" : "Paste", _clipOp.c_str()};
 
-    _menuActions[_menuCount] = ACT_CANCEL;
-    _menuItems[_menuCount++] = {"Cancel"};
+    _menuActions[_menuCount] = ACT_CANCEL_CLIP;
+    _menuItems[_menuCount++] = {"Clear Clipboard"};
   }
+
+  _menuActions[_menuCount] = ACT_CLOSE_MENU;
+  _menuItems[_menuCount++] = {"Close"};
 
   _menuActions[_menuCount] = ACT_EXIT;
   _menuItems[_menuCount++] = {"Exit"};
@@ -110,7 +137,7 @@ void FileNavigatorScreen::_openMenu(uint8_t fileIdx)
   setItems(_menuItems, _menuCount);
 }
 
-void FileNavigatorScreen::_handleMenuAction(uint8_t index)
+void FileManagerScreen::_handleMenuAction(uint8_t index)
 {
   if (index >= _menuCount) return;
 
@@ -189,10 +216,14 @@ void FileNavigatorScreen::_handleMenuAction(uint8_t index)
       break;
     }
 
-    case ACT_CANCEL:
+    case ACT_CANCEL_CLIP:
       _clipPath = "";
       _clipOp   = "";
       break;
+
+    case ACT_CLOSE_MENU:
+      _loadDir(_curPath);
+      return;
 
     case ACT_EXIT:
       Screen.setScreen(new UtilityMenuScreen());
@@ -202,7 +233,7 @@ void FileNavigatorScreen::_handleMenuAction(uint8_t index)
   _loadDir(_curPath);
 }
 
-bool FileNavigatorScreen::_removeDir(const String& path)
+bool FileManagerScreen::_removeDir(const String& path)
 {
   IStorage::DirEntry entries[kMaxFiles];
   uint8_t count = Uni.Storage->listDir(path.c_str(), entries, kMaxFiles);
@@ -219,10 +250,10 @@ bool FileNavigatorScreen::_removeDir(const String& path)
   return Uni.Storage->removeDir(path.c_str());
 }
 
-void FileNavigatorScreen::_updateTitle()
+void FileManagerScreen::_updateTitle()
 {
   if (_curPath == "/") {
-    strncpy(_titleBuf, "Files /", sizeof(_titleBuf) - 1);
+    strncpy(_titleBuf, "File Manager", sizeof(_titleBuf) - 1);
   } else {
     int slash = _curPath.lastIndexOf('/');
     String name = (slash >= 0) ? _curPath.substring(slash + 1) : _curPath;

@@ -15,6 +15,6 @@ private:
   ListItem _items[3] = {
     {"I2C Detector"},
     {"QR Code"},
-    {"File Navigator"},
+    {"File Manager"},
   };
 };

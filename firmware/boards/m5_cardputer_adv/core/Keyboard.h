@@ -74,11 +74,15 @@ public:
     if (row == 3 && col == 0) { _ctrl  = pressed; return; }
     if (row == 3 && col == 1) { _opt   = pressed; return; }
     if (row == 3 && col == 2) { _alt   = pressed; return; }
-    if (!pressed) return;
+    if (!pressed) {
+      if (n != '\0') _keyHeld = false;  // non-modifier released
+      return;
+    }
     if (n == '\0') return;
 
     _key       = _shift ? _ADV_KB_MAP[row][col].s : n;
     _available = true;
+    _keyHeld   = true;
   }
 
   bool available() override { return _available; }
@@ -98,6 +102,8 @@ public:
     return _key;
   }
 
+  bool isKeyHeld() const override { return _keyHeld; }
+
 private:
   char _key       = 0;
   bool _available = false;
@@ -107,4 +113,5 @@ private:
   bool _alt       = false;
   bool _opt       = false;
   bool _ready     = false;
+  bool _keyHeld   = false;
 };

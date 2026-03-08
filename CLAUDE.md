@@ -117,7 +117,9 @@ All hardware differences are isolated in board-specific folders.
     │   │   │   ├── UtilityMenuScreen.h
     │   │   │   ├── UtilityMenuScreen.cpp
     │   │   │   ├── QRCodeScreen.h      prompt text via InputTextAction → ShowQRCodeAction loop
-    │   │   │   └── QRCodeScreen.cpp
+    │   │   │   ├── QRCodeScreen.cpp
+    │   │   │   ├── FileManagerScreen.h     SD/LFS file browser with long-press context menu
+    │   │   │   └── FileManagerScreen.cpp
     │   │   ├── keyboard/
     │   │   │   ├── KeyboardMenuScreen.h    mode toggle (USB/BLE, gated DEVICE_HAS_USB_HID) + Start
     │   │   │   ├── KeyboardMenuScreen.cpp
@@ -244,6 +246,25 @@ All hardware differences are isolated in board-specific folders.
     BLEKeyboardUtil conflict with BLEAnalyzerScreen / BLESpamScreen:
       Both call NimBLEDevice::deinit(true) in their destructors.
       Never run BLE keyboard and BLE scan/spam at the same time — user must navigate away first.
+
+### FileManagerScreen (screens/utility/)
+
+    Long-press context menu: overrides onUpdate() to detect heldDuration() >= 1000ms
+    and opens menu immediately without waiting for release. Uses _holdFired flag to
+    drain the subsequent wasPressed() release event so ListScreen doesn't fire onItemSelected.
+
+    States: STATE_FILE (file browser) and STATE_MENU (context menu)
+    onBack() in STATE_MENU closes menu (reloads dir), in STATE_FILE navigates to parent dir
+
+    Context menu items:
+      New Folder, Rename, Delete, Copy/Cut (files only),
+      Paste/Replace + Clear Clipboard (when clipboard has content),
+      Close (always), Exit (navigates to UtilityMenuScreen)
+
+    Long-press pattern for ListScreen subclasses:
+      1. Add heldDuration() check in onUpdate() override BEFORE calling ListScreen::onUpdate()
+      2. Set a _holdFired flag on trigger to suppress the release event
+      3. On next wasPressed(), consume it + readDirection(), clear flag, return
 
 ### Migration from puteros
 
@@ -393,6 +414,9 @@ All hardware differences are isolated in board-specific folders.
 
     Uni.Nav->wasPressed()        true once per press/direction event
     Uni.Nav->readDirection()     consumes and returns direction
+    Uni.Nav->isPressed()         true while any direction is physically held (non-consuming)
+    Uni.Nav->pressDuration()     duration of last completed press (set on release)
+    Uni.Nav->heldDuration()      duration of current ongoing press (millis since press start, 0 if not held)
     DIR_UP / DIR_DOWN / DIR_PRESS / DIR_BACK / DIR_LEFT / DIR_RIGHT
 
     ListScreen handles all six directions automatically:

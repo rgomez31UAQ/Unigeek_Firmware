@@ -25,4 +25,5 @@ public:
   virtual char peekKey()   = 0;  // read without consuming
   virtual char getKey()    = 0;
   virtual uint8_t modifiers() { return MOD_NONE; }
+  virtual bool isKeyHeld() const { return false; }  // true while the last consumed key is still physically held
 };

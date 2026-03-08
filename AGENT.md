@@ -54,7 +54,7 @@ When implementing board-specific hardware features, check these FIRST:
 4. Create config.ini (or boards.ini) with PlatformIO env config
 5. Storage: init in createInstance(), pass to Device constructor
 6. If board has keyboard:
-   - Implement Keyboard.h with IKeyboard: begin(), update(), available(), peekKey(), getKey(), modifiers()
+   - Implement Keyboard.h with IKeyboard: begin(), update(), available(), peekKey(), getKey(), modifiers(), isKeyHeld()
    - Add DEVICE_HAS_KEYBOARD to build_flags
    - peekKey() must NOT consume the key — NavigationImpl peeks first, only consumes nav keys (;  .  \n  \b  ,  /)
    - modifiers() returns a bitmask of IKeyboard::Modifier flags (MOD_SHIFT, MOD_FN, MOD_CTRL, MOD_ALT, MOD_OPT, MOD_CAPS)
@@ -171,6 +171,10 @@ Exception: if the very next line navigates to a different screen, render() is no
 ---
 
 ## Navigation Direction Values
+
+    isPressed()      true while physically held (non-consuming, safe for power-saving checks)
+    heldDuration()   ms since current press started (0 if not held) — use for long-press detection
+    pressDuration()  ms of last completed press (set on release)
 
     DIR_UP     encoder CW / AXP btn M5StickC-default / ; key Cardputer / encoder CCW T-Lora
     DIR_DOWN   encoder CCW / BTN_B M5StickC-default / . key Cardputer / encoder CW T-Lora

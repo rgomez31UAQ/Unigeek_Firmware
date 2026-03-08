@@ -40,6 +40,7 @@ public:
   }
 
   uint32_t pressDuration() const { return _pressDuration; }
+  uint32_t heldDuration()  const { return _pressed ? (millis() - _pressStart) : 0; }
 
 protected:
   void updateState(Direction currentlyHeld) {

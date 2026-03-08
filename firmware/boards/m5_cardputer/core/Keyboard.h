@@ -135,6 +135,8 @@ public:
     return _key;
   }
 
+  bool isKeyHeld() const override { return _waitRelease; }
+
 private:
   char _key        = 0;
   bool _available  = false;

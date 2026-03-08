@@ -3,7 +3,7 @@
 #include "screens/MainMenuScreen.h"
 #include "screens/utility/I2CDetectorScreen.h"
 #include "screens/utility/QRCodeScreen.h"
-#include "screens/utility/FileNavigatorScreen.h"
+#include "screens/utility/FileManagerScreen.h"
 
 void UtilityMenuScreen::onInit() {
   setItems(_items);
@@ -17,6 +17,6 @@ void UtilityMenuScreen::onItemSelected(uint8_t index) {
   switch (index) {
     case 0: Screen.setScreen(new I2CDetectorScreen()); break;
     case 1: Screen.setScreen(new QRCodeScreen());           break;
-    case 2: Screen.setScreen(new FileNavigatorScreen());   break;
+    case 2: Screen.setScreen(new FileManagerScreen());   break;
   }
 }
