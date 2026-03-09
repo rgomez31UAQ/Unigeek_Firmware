@@ -10,6 +10,7 @@ class PowerImpl : public IPower
 public:
   void begin() override {
     pinMode(BAT_ADC_PIN, INPUT);
+    analogReadMilliVolts(BAT_ADC_PIN);  // warm up ADC calibration (first call is slow)
   }
 
   uint8_t getBatteryPercentage() override {
