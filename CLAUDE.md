@@ -61,7 +61,7 @@ All hardware differences are isolated in board-specific folders.
     ├── src/
     │   ├── core/                   Device.h, I*.h interfaces, Storage*.h, SpeakerI2S.h, RtcManager.h, ScreenManager.h, ConfigManager.h
     │   ├── screens/                MainMenuScreen, SettingScreen, wifi/, keyboard/, utility/
-    │   ├── utils/                  WifiAttackUtil, keyboard/ (HID/BLE/USB/DuckScript utils)
+    │   ├── utils/                  WifiAttackUtil, FastWpaCrack, keyboard/ (HID/BLE/USB/DuckScript utils)
     │   ├── ui/
     │   │   ├── templates/          BaseScreen.h, ListScreen.h
     │   │   ├── components/         ScrollListView.h
@@ -256,6 +256,11 @@ All hardware differences are isolated in board-specific folders.
     1. Add heldDuration() check in onUpdate() override BEFORE calling ListScreen::onUpdate()
     2. Set a _holdFired flag on trigger to suppress the release event
     3. On next wasPressed(), consume it + readDirection(), clear flag, return
+
+### Migration from Evil-M5Project
+
+    Reference: ../Evil-M5Project/Evil-Cardputer*.ino
+    When asked to "learn from evil m5", read the relevant Evil-Cardputer .ino files for reference.
 
 ### Migration from puteros
 

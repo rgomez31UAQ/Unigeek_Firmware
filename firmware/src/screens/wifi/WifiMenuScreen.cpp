@@ -13,6 +13,7 @@
 #include "WifiBeaconSpamScreen.h"
 #include "WifiESPNowChatScreen.h"
 #include "WifiEapolCaptureScreen.h"
+#include "WifiCiwZeroclickScreen.h"
 #include "WifiEapolBruteForceScreen.h"
 
 void WifiMenuScreen::onInit() {
@@ -27,10 +28,11 @@ void WifiMenuScreen::onItemSelected(uint8_t index) {
     case 3: Screen.setScreen(new WifiPacketMonitorScreen());  break;
     case 4: Screen.setScreen(new WifiDeautherScreen());       break;
     case 5: Screen.setScreen(new WifiDeauthDetectorScreen()); break;
-    case 6: Screen.setScreen(new WifiBeaconSpamScreen());     break;
-    case 7: Screen.setScreen(new WifiESPNowChatScreen());     break;
-    case 8: Screen.setScreen(new WifiEapolCaptureScreen());    break;
-    case 9: Screen.setScreen(new WifiEapolBruteForceScreen()); break;
+    case 6: Screen.setScreen(new WifiBeaconSpamScreen());       break;
+    case 7: Screen.setScreen(new WifiCiwZeroclickScreen());    break;
+    case 8: Screen.setScreen(new WifiESPNowChatScreen());      break;
+    case 9: Screen.setScreen(new WifiEapolCaptureScreen());    break;
+    case 10: Screen.setScreen(new WifiEapolBruteForceScreen()); break;
   }
 }
 
