@@ -86,6 +86,25 @@ Always null-check — Uni.StorageSD is nullptr on M5StickC.
 
 ---
 
+## BLE Scan Pattern (NimBLE 1.4.x)
+
+    // Non-blocking scan — NEVER use start(duration, false) which blocks the main loop
+    static void scanDoneCB(NimBLEScanResults) {}
+    _bleScan = NimBLEDevice::getScan();
+    _bleScan->setAdvertisedDeviceCallbacks(new ScanCallbacks(), true);
+    _bleScan->start(1, scanDoneCB);   // 1s non-blocking scan with callback
+
+    // Re-trigger in onUpdate():
+    if (_scanning && _bleScan && !_bleScan->isScanning()) {
+      _bleScan->clearResults();
+      _bleScan->start(1, scanDoneCB);
+    }
+
+    // Use NimBLEAdvertisedDeviceCallbacks (NOT NimBLEScanCallbacks — doesn't exist in 1.4.x)
+    // Use setAdvertisedDeviceCallbacks() (NOT setScanCallbacks())
+
+---
+
 ## Common Mistakes to Avoid
 
 - Do NOT put IRAM_ATTR functions inline in .h files — put in .cpp
@@ -106,6 +125,7 @@ Always null-check — Uni.StorageSD is nullptr on M5StickC.
 - Do NOT forget Device::boardHook() in every board's Device.cpp — linker requires it
 - Do NOT call lcd.fillRect() before pushing a sprite — the push already overwrites (causes flash)
 - Do NOT call Uni.Speaker directly — always null-check: if (Uni.Speaker) Uni.Speaker->beep()
+- Do NOT worry about sound overlap — SpeakerI2S and SpeakerBuzzer have built-in `if (_taskHandle) return` guards
 - Do NOT handle only DIR_BACK in custom states — M5StickC default nav never emits DIR_BACK;
   always handle both DIR_BACK and DIR_PRESS as "back/stop"
 - Do NOT check DIR_BACK after early-return guard in ListScreen onUpdate() — check DIR_BACK first

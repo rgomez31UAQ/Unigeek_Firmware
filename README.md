@@ -26,6 +26,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **WiFi Deauther** — Send deauthentication frames to a target network
 - **Deauther Detector** — Monitor and list detected deauthentication attacks
 - **Beacon Spam** — Broadcast fake SSIDs repeatedly
+- **CIW Zeroclick** — Broadcast crafted SSIDs containing injection payloads (command injection, XSS, CRLF, JNDI, buffer overflow, format string, etc.) to test how nearby devices handle untrusted network names; tracks which devices connect and flags potential crashes
 - **ESPNOW Chat** — Peer-to-peer text chat over ESP-NOW (no router required)
 - **EAPOL Capture** — Passive WPA2 handshake capture; auto-discovers APs, deauths clients, waits for M1+M2 reconnect handshake, saves to PCAP on storage
 - **EAPOL Brute Force** — Offline WPA2 password cracking from a captured PCAP; select wordlist from storage or use a built-in test list; runs PBKDF2-HMAC-SHA1 + PTK/MIC verification on-device
@@ -33,6 +34,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 ### Bluetooth
 - **BLE Analyzer** — Scan nearby BLE devices, display RSSI, name, address, and advertisement data
 - **BLE Spam** — Spam BLE advertisement packets
+- **BLE Detector** — Passive BLE scanner that detects Flipper Zero devices (by service UUID, checks for spoofed MAC vs legit OUI), credit card skimmers (by known module names like HC-05/HC-06 and suspicious MAC prefixes), Apple AirTags/FindMy trackers (by manufacturer data signature, with distance estimation and movement trend), and BLE spam attacks (Apple, Android, Samsung, Windows patterns matched against manufacturer data)
 
 ### Keyboard (HID)
 - **BLE Keyboard** — Act as a wireless Bluetooth HID keyboard (all devices)

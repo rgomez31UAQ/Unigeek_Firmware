@@ -23,6 +23,19 @@ const BLEDetectorScreen::SpamPattern BLEDetectorScreen::_patterns[] = {
 const int BLEDetectorScreen::_patternCount =
   sizeof(_patterns) / sizeof(_patterns[0]);
 
+// ── Skimmer detection ────────────────────────────────────────────────────────
+
+static const char* const kSkimmerNames[] = {
+  "HC-03", "HC-05", "HC-06", "HC-08", "BT04-A", "BT05"
+};
+static const int kSkimmerNameCount = sizeof(kSkimmerNames) / sizeof(kSkimmerNames[0]);
+
+static const char* const kSkimmerMacPrefixes[] = {
+  "00:11:22", "00:18:E4", "20:16:04",
+  "00:11:22", "00:18:e4", "20:16:04"   // lowercase variants
+};
+static const int kSkimmerMacPrefixCount = sizeof(kSkimmerMacPrefixes) / sizeof(kSkimmerMacPrefixes[0]);
+
 // ── Flipper Zero service UUIDs ──────────────────────────────────────────────
 
 static const NimBLEUUID kFlipperWhite("00003082-0000-1000-8000-00805f9b34fb");
@@ -133,43 +146,81 @@ void BLEDetectorScreen::_purgeOld()
 
 void BLEDetectorScreen::_onDevice(NimBLEAdvertisedDevice* dev)
 {
-  // Check for Flipper Zero
-  bool isFlipper = false;
-  const char* flipType = "Flipper";
-  if (dev->isAdvertisingService(kFlipperWhite)) { isFlipper = true; flipType = "Flipper White"; }
-  else if (dev->isAdvertisingService(kFlipperBlack)) { isFlipper = true; flipType = "Flipper Black"; }
-  else if (dev->isAdvertisingService(kFlipperTrans)) { isFlipper = true; flipType = "Flipper Trans"; }
+  const char* devType = nullptr;
+  bool spoofed = false;
+  float distance = 0;
 
-  // Check manufacturer data against spam patterns
+  // Check for Flipper Zero
+  if (dev->isAdvertisingService(kFlipperWhite))      devType = "Flipper White";
+  else if (dev->isAdvertisingService(kFlipperBlack)) devType = "Flipper Black";
+  else if (dev->isAdvertisingService(kFlipperTrans)) devType = "Flipper Trans";
+
+  // Check manufacturer data against spam patterns + AirTag
   if (dev->getManufacturerDataCount() > 0) {
     std::string mfr = dev->getManufacturerData(0);
     const uint8_t* payload = reinterpret_cast<const uint8_t*>(mfr.data());
     size_t len = mfr.size();
+
+    // Spam pattern matching
     for (int i = 0; i < _patternCount; i++) {
       if (_matchPattern(_patterns[i].pattern, payload, len)) {
         _pushAlert(_patterns[i].type);
         break;
       }
     }
+
+    // AirTag / FindMy detection: 4C 00 12 19
+    if (len >= 4 && payload[0] == 0x4C && payload[1] == 0x00 &&
+        payload[2] == 0x12 && payload[3] == 0x19) {
+      if (!devType) devType = "AirTag";
+      // Distance estimation
+      int8_t txPower = -59;
+      int rssi = dev->getRSSI();
+      distance = pow(10.0f, (float)(txPower - rssi) / 20.0f);
+    }
   }
 
-  if (!isFlipper) return;
+  // Check for skimmer by name
+  std::string name = dev->getName();
+  if (!devType && name.length() > 0) {
+    for (int i = 0; i < kSkimmerNameCount; i++) {
+      if (name == kSkimmerNames[i]) {
+        devType = "Skimmer";
+        break;
+      }
+    }
+  }
 
-  // Add/update device
+  // Check for skimmer by MAC prefix
   char mac[18];
   snprintf(mac, sizeof(mac), "%s", dev->getAddress().toString().c_str());
-
-  // Check if MAC is a known Flipper OUI (legit vs spoofed)
-  bool spoofed = true;
-  if (strncmp(mac, "80:e1:26", 8) == 0 ||
-      strncmp(mac, "80:e1:27", 8) == 0 ||
-      strncmp(mac, "0c:fa:22", 8) == 0 ||
-      strncmp(mac, "80:E1:26", 8) == 0 ||
-      strncmp(mac, "80:E1:27", 8) == 0 ||
-      strncmp(mac, "0C:FA:22", 8) == 0) {
-    spoofed = false;
+  if (!devType) {
+    for (int i = 0; i < kSkimmerMacPrefixCount; i++) {
+      if (strncmp(mac, kSkimmerMacPrefixes[i], 8) == 0) {
+        devType = "Skimmer";
+        break;
+      }
+    }
   }
 
+  if (!devType) return; // Not a device we care about
+
+  // Alert on skimmer detection
+  if (strcmp(devType, "Skimmer") == 0) {
+    _pushAlert("Skimmer Found!");
+  }
+
+  // Check Flipper OUI for spoofed status
+  if (strncmp(devType, "Flipper", 7) == 0) {
+    spoofed = true;
+    if (strncmp(mac, "80:e1:26", 8) == 0 || strncmp(mac, "80:e1:27", 8) == 0 ||
+        strncmp(mac, "0c:fa:22", 8) == 0 || strncmp(mac, "80:E1:26", 8) == 0 ||
+        strncmp(mac, "80:E1:27", 8) == 0 || strncmp(mac, "0C:FA:22", 8) == 0) {
+      spoofed = false;
+    }
+  }
+
+  // Add/update device
   int idx = _findByMac(mac);
   if (idx < 0) {
     if (_deviceCount >= kMaxDevices) return;
@@ -180,7 +231,6 @@ void BLEDetectorScreen::_onDevice(NimBLEAdvertisedDevice* dev)
   strncpy(d.mac, mac, sizeof(d.mac) - 1);
   d.mac[sizeof(d.mac) - 1] = '\0';
 
-  std::string name = dev->getName();
   if (name.length() > 0) {
     strncpy(d.name, name.c_str(), sizeof(d.name) - 1);
     d.name[sizeof(d.name) - 1] = '\0';
@@ -188,10 +238,12 @@ void BLEDetectorScreen::_onDevice(NimBLEAdvertisedDevice* dev)
     strncpy(d.name, "Unknown", sizeof(d.name));
   }
 
-  strncpy(d.type, flipType, sizeof(d.type) - 1);
+  strncpy(d.type, devType, sizeof(d.type) - 1);
   d.type[sizeof(d.type) - 1] = '\0';
+  d.prevRssi = d.rssi;
   d.rssi = dev->getRSSI();
   d.spoofed = spoofed;
+  d.distance = distance;
   d.lastSeen = millis();
 }
 
@@ -238,15 +290,17 @@ void BLEDetectorScreen::_draw()
   int row = 0;
   int visibleRows = bodyH() / 14;
 
-  // Header: counts
+  // Header: counts by type
   if (row >= _scrollOffset && row < _scrollOffset + visibleRows) {
     sp.setTextColor(TFT_CYAN, TFT_BLACK);
-    char hdr[40];
-    int ok = 0, spoof = 0;
+    char hdr[48];
+    int flp = 0, skim = 0, atag = 0;
     for (int i = 0; i < _deviceCount; i++) {
-      if (_devices[i].spoofed) spoof++; else ok++;
+      if (strncmp(_devices[i].type, "Flipper", 7) == 0) flp++;
+      else if (strcmp(_devices[i].type, "Skimmer") == 0) skim++;
+      else if (strcmp(_devices[i].type, "AirTag") == 0) atag++;
     }
-    snprintf(hdr, sizeof(hdr), "Flippers:%d OK:%d SP:%d", _deviceCount, ok, spoof);
+    snprintf(hdr, sizeof(hdr), "F:%d S:%d A:%d", flp, skim, atag);
     sp.drawString(hdr, 2, y);
     y += 14;
   }
@@ -259,14 +313,29 @@ void BLEDetectorScreen::_draw()
 
     auto& d = _devices[i];
 
-    // Color dot: green=legit, red=spoofed
-    uint16_t dotColor = d.spoofed ? TFT_RED : TFT_GREEN;
+    // Color dot by type
+    uint16_t dotColor = TFT_WHITE;
+    if (strncmp(d.type, "Flipper", 7) == 0)
+      dotColor = d.spoofed ? TFT_RED : TFT_GREEN;
+    else if (strcmp(d.type, "Skimmer") == 0)
+      dotColor = TFT_RED;
+    else if (strcmp(d.type, "AirTag") == 0)
+      dotColor = TFT_BLUE;
     sp.fillCircle(4, y + 6, 3, dotColor);
 
-    // Name (truncated)
+    // Name or type (truncated)
     sp.setTextColor(TFT_WHITE, TFT_BLACK);
     char label[24];
-    snprintf(label, sizeof(label), "%.12s", d.name);
+    if (strcmp(d.type, "AirTag") == 0) {
+      // Show distance for AirTags
+      char trend = '=';
+      int delta = d.rssi - d.prevRssi;
+      if (delta > 3) trend = '+';
+      else if (delta < -3) trend = '-';
+      snprintf(label, sizeof(label), "AT %.1fm %c", d.distance, trend);
+    } else {
+      snprintf(label, sizeof(label), "%.12s", d.name);
+    }
     sp.drawString(label, 10, y);
 
     // RSSI on right

@@ -262,6 +262,11 @@ All hardware differences are isolated in board-specific folders.
     Reference: ../Evil-M5Project/Evil-Cardputer*.ino
     When asked to "learn from evil m5", read the relevant Evil-Cardputer .ino files for reference.
 
+    Not yet ported:
+      - Karma Attack         → WiFi (rogue AP that responds to probe requests)
+      - Evil Twin            → WiFi (captive portal phishing)
+      - Full Network Analysis → WiFi (ARP scan + port scan on connected network)
+
 ### Migration from puteros
 
     Reference: ../puteros/firmware/src/os/screens/

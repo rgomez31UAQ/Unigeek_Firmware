@@ -26,6 +26,8 @@ private:
     char type[16];
     int8_t rssi;
     bool spoofed;
+    float distance;
+    int8_t prevRssi;
     unsigned long lastSeen;
   };
 
@@ -34,8 +36,8 @@ private:
     unsigned long timestamp;
   };
 
-  static constexpr int kMaxDevices = 20;
-  static constexpr int kMaxAlerts  = 10;
+  static constexpr int kMaxDevices = 30;
+  static constexpr int kMaxAlerts  = 20;
 
   bool _scanning = false;
   NimBLEScan* _bleScan = nullptr;
