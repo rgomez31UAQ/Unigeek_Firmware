@@ -7,7 +7,7 @@ typedef uint8_t MacAddr[6];
 class WifiAttackUtil
 {
 public:
-  WifiAttackUtil();
+  WifiAttackUtil(bool initAP = true);
   ~WifiAttackUtil();
   esp_err_t deauthenticate(const MacAddr bssid, uint8_t channel);
   esp_err_t deauthenticate(const MacAddr ap, const MacAddr bssid, uint8_t channel);

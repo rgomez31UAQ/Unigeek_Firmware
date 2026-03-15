@@ -6,10 +6,12 @@ extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32
   return 0;
 }
 
-WifiAttackUtil::WifiAttackUtil()
+WifiAttackUtil::WifiAttackUtil(bool initAP)
 {
   WiFi.mode(WIFI_MODE_APSTA);
-  WiFi.softAP("No Internet", "12345678", 1, true);
+  if (initAP) {
+    WiFi.softAP("No Internet", "12345678", 1, true);
+  }
 }
 
 WifiAttackUtil::~WifiAttackUtil()

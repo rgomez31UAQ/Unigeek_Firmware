@@ -15,9 +15,11 @@ public:
   }
 
 private:
-  static constexpr int PAD   = 6;
-  static constexpr int BAR_H = 10;
-  static constexpr int MIN_W = 120;
+  static constexpr int PAD      = 6;
+  static constexpr int BAR_H    = 10;
+  static constexpr int MIN_W    = 120;
+  static constexpr int LINE_H   = 10;
+  static constexpr int MAX_LINES = 3;
 
   const char* _message;
   uint8_t     _percent;
@@ -31,9 +33,45 @@ private:
     auto& lcd = Uni.Lcd;
     lcd.setTextSize(1);
 
-    int textW = lcd.textWidth(_message);
-    int w = max(textW + PAD * 4, MIN_W);
-    int h = PAD + 12 + PAD + BAR_H + PAD;  // top + text + gap + bar + bottom
+    // Split message into lines, max 3
+    String lines[MAX_LINES];
+    int lineCount = 0;
+    int maxTextW = lcd.width() - 8 - PAD * 4;
+
+    String msg = _message;
+    int pos = 0;
+    while (pos < (int)msg.length() && lineCount < MAX_LINES) {
+      int nl = msg.indexOf('\n', pos);
+      if (nl == -1) nl = msg.length();
+      String line = msg.substring(pos, nl);
+
+      // Truncate line to fit width
+      while (line.length() > 0 && lcd.textWidth(line) > maxTextW) {
+        line = line.substring(0, line.length() - 1);
+      }
+
+      // If this is the last allowed line and there's more text, add ellipsis
+      if (lineCount == MAX_LINES - 1 && nl < (int)msg.length()) {
+        if (line.length() > 3) line = line.substring(0, line.length() - 3) + "...";
+      }
+
+      lines[lineCount++] = line;
+      pos = nl + 1;
+    }
+
+    if (lineCount == 0) { lines[0] = ""; lineCount = 1; }
+
+    // Calculate widest line for box width
+    int widest = 0;
+    for (int i = 0; i < lineCount; i++) {
+      int tw = lcd.textWidth(lines[i]);
+      if (tw > widest) widest = tw;
+    }
+
+    int w = max(widest + PAD * 4, MIN_W);
+    if (w > lcd.width() - 8) w = lcd.width() - 8;
+    int textH = lineCount * LINE_H;
+    int h = PAD + textH + PAD + BAR_H + PAD;
     int x = (lcd.width()  - w) / 2;
     int y = (lcd.height() - h) / 2;
 
@@ -47,11 +85,14 @@ private:
     _spr.setTextColor(TFT_WHITE, TFT_BLACK);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextSize(1);
-    _spr.drawString(_message, w / 2, PAD + 6);
+    for (int i = 0; i < lineCount; i++) {
+      int ly = PAD + i * LINE_H + LINE_H / 2;
+      _spr.drawString(lines[i], w / 2, ly);
+    }
 
     // Progress bar outline + fill
     int barX = PAD * 2;
-    int barY = PAD + 12 + PAD;
+    int barY = PAD + textH + PAD;
     int barW = w - PAD * 4;
     _spr.drawRect(barX, barY, barW, BAR_H, barColor);
     int fillW = (int)(barW * _percent / 100.0f);
