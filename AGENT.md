@@ -83,6 +83,7 @@ When implementing board-specific hardware features, check these FIRST.
 
 Use Uni.StorageSD or Uni.StorageLFS only when the feature explicitly requires one.
 Always null-check — Uni.StorageSD is nullptr on M5StickC.
+sdcard/ directory contains sample SD card data (portals, duckyscript, passwords, qrcodes) — copy to SD root.
 
 ---
 
@@ -141,6 +142,7 @@ Always null-check — Uni.StorageSD is nullptr on M5StickC.
     const char* result = InputSelectAction::popup("Title", opts, count, default);
     void               ShowStatusAction::show("Message", durationMs);
     void               ShowQRCodeAction::show("Label", "content");
+    void               ShowProgressAction::show("Message", percent);  // non-blocking, max 3 lines, auto-truncate
 
     // Always call render() after a popup returns to restore the screen
 

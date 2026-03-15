@@ -1,7 +1,6 @@
 #include "utils/WebFileManager.h"
 #include <WiFi.h>
 #include <ESPmDNS.h>
-#include <LittleFS.h>
 #include "core/Device.h"
 #include "core/ConfigManager.h"
 
@@ -10,17 +9,15 @@ bool WebFileManager::begin() {
     _lastError = "WiFi not connected";
     return false;
   }
-  if (Uni.StorageSD && Uni.StorageSD->isAvailable()) {
-    _fs = &SD;
-  } else if (Uni.StorageLFS && Uni.StorageLFS->isAvailable()) {
-    _fs = &LittleFS;
+  if (Uni.Storage && Uni.Storage->isAvailable()) {
+    _fs = &Uni.Storage->getFS();
   } else {
     _lastError = "No storage available";
     return false;
   }
   const String indexPath = String(WEB_PATH) + "/index.htm";
   if (!_fs->exists(indexPath)) {
-    _lastError = "Web page not installed\nWiFi > Network > Download";
+    _lastError = "Web page not installed\nWiFi > Network > Download\n> Web File Manager";
     return false;
   }
 
@@ -185,10 +182,8 @@ void WebFileManager::_prepareServer() {
       request->send(200, "text/plain", resp);
 
     } else if (command == "sysinfo") {
-      uint64_t total = Uni.StorageSD && Uni.StorageSD->isAvailable()
-        ? SD.totalBytes() : LittleFS.totalBytes();
-      uint64_t used  = Uni.StorageSD && Uni.StorageSD->isAvailable()
-        ? SD.usedBytes()  : LittleFS.usedBytes();
+      uint64_t total = Uni.Storage ? Uni.Storage->totalBytes() : 0;
+      uint64_t used  = Uni.Storage ? Uni.Storage->usedBytes()  : 0;
       String resp = "UniGeek File Manager\n";
       resp += "FS:" + String(total - used) + "\n";
       resp += "US:" + String(used) + "\n";

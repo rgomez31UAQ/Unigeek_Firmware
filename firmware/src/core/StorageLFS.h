@@ -17,11 +17,11 @@ public:
   }
 
   bool     isAvailable() override { return _available; }
+  uint64_t totalBytes()  override { return _available ? LittleFS.totalBytes() : 0; }
+  uint64_t usedBytes()   override { return _available ? LittleFS.usedBytes()  : 0; }
   uint64_t freeBytes()   override {
-    if (!_available) return 0;
-    uint64_t total = LittleFS.totalBytes();
-    uint64_t used  = LittleFS.usedBytes();
-    return (used < total) ? (total - used) : 0;
+    uint64_t t = totalBytes(), u = usedBytes();
+    return (u < t) ? (t - u) : 0;
   }
   fs::File open(const char* path, const char* mode) override {
     if (!_available) return fs::File();
@@ -96,6 +96,8 @@ public:
     dir.close();
     return count;
   }
+
+  fs::FS& getFS() override { return LittleFS; }
 
 private:
   bool _available = false;

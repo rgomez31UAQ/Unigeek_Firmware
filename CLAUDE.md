@@ -65,8 +65,13 @@ All hardware differences are isolated in board-specific folders.
     │   ├── ui/
     │   │   ├── templates/          BaseScreen.h, ListScreen.h
     │   │   ├── components/         ScrollListView.h
-    │   │   └── actions/            InputTextAction.h, InputNumberAction.h, InputSelectAction.h, ShowStatusAction.h, ShowQRCodeAction.h
+    │   │   └── actions/            InputTextAction.h, InputNumberAction.h, InputSelectAction.h, ShowStatusAction.h, ShowQRCodeAction.h, ShowProgressAction.h
     │   └── main.cpp
+    sdcard/                         sample SD card data — copy contents to SD root
+    ├── unigeek/keyboard/duckyscript/   sample DuckyScript payloads
+    ├── unigeek/qrcode/                 sample QR code content files
+    ├── unigeek/utility/passwords/      sample password wordlists (8+ chars for WiFi)
+    └── unigeek/wifi/portals/           Evil Twin captive portal templates (google, facebook, wifi)
 
 ---
 
@@ -209,6 +214,7 @@ All hardware differences are isolated in board-specific folders.
     void        ShowStatusAction::show("Message", 0)        show and return immediately, no wipe
     void        ShowStatusAction::show("Message", 1500)     show, block ms, then wipe
     void        ShowQRCodeAction::show("Label", "content")  blocking QR code overlay
+    void        ShowProgressAction::show("Message", pct)   non-blocking progress bar (supports \n, max 3 lines, auto-truncate)
 
     // After any popup, call render() to restore the screen — actions only wipe their overlay area
     // InputSelectAction: DIR_BACK dismisses and returns nullptr
@@ -264,7 +270,6 @@ All hardware differences are isolated in board-specific folders.
 
     Not yet ported:
       - Karma Attack         → WiFi (rogue AP that responds to probe requests)
-      - Evil Twin            → WiFi (captive portal phishing)
       - Full Network Analysis → WiFi (ARP scan + port scan on connected network)
 
 ### Migration from puteros

@@ -2,7 +2,6 @@
 
 #include <ESPAsyncWebServer.h>
 #include <FS.h>
-#include <SD.h>
 
 class WebFileManager {
 public:

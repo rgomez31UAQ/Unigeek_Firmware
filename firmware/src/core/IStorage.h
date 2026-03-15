@@ -16,6 +16,8 @@ public:
   };
 
   virtual bool     isAvailable()                                          = 0;
+  virtual uint64_t totalBytes()                                           = 0;
+  virtual uint64_t usedBytes()                                            = 0;
   virtual uint64_t freeBytes()                                            = 0;
   virtual fs::File open(const char* path, const char* mode)               = 0;
   virtual bool    exists(const char* path)                               = 0;
@@ -26,5 +28,6 @@ public:
   virtual uint8_t listDir(const char* path, DirEntry* out, uint8_t max)  = 0;
   virtual bool    renameFile(const char* from, const char* to)           = 0;
   virtual bool    removeDir(const char* path)                            = 0;
+  virtual fs::FS& getFS()                                                = 0;
   virtual ~IStorage() {}
 };
