@@ -16,14 +16,12 @@ private:
   State  _state = STATE_MENU;
 
   String _passwordSub;
-  String _versionSub;
 
   WebFileManager _server;
 
-  ListItem _menuItems[3];
+  ListItem _menuItems[2];
 
   void _showMenu();
   void _start();
   void _stop();
-  void _downloadWebPage();
 };

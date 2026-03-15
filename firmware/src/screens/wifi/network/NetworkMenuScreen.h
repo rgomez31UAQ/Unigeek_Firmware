@@ -46,13 +46,14 @@ private:
   uint8_t     _scannedCount = 0;
   ListItem    _scannedItems[MAX_WIFI];
 
-  ListItem _menuItems[6] = {
+  ListItem _menuItems[7] = {
     {"Information"},
     {"WiFi QRCode"},
     {"World Clock"},
     {"IP Scanner"},
     {"Port Scanner"},
     {"Web File Manager"},
+    {"Download"},
   };
 
   String _buildPasswordPath(const char* bssid, const char* ssid);

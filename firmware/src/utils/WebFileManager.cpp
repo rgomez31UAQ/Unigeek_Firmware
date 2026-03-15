@@ -20,7 +20,7 @@ bool WebFileManager::begin() {
   }
   const String indexPath = String(WEB_PATH) + "/index.htm";
   if (!_fs->exists(indexPath)) {
-    _lastError = indexPath + " not found";
+    _lastError = "Web page not installed\nWiFi > Network > Download";
     return false;
   }
 
