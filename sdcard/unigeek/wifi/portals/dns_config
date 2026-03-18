@@ -1,0 +1,6 @@
+# Rogue DNS Configuration
+# Format: domain:storage_path
+# Listed domains resolve to ESP32 IP, others forwarded to real DNS
+
+google.com:/unigeek/wifi/portals/google
+facebook.com:/unigeek/wifi/portals/facebook
