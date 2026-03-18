@@ -1,7 +1,21 @@
 from os import remove, rename
 from os.path import isfile, join
+import sys
 
 Import("env")  # type: ignore
+
+# Verify platform version matches expected
+EXPECTED_PLATFORM_VERSION = "6.13.0"
+installed_version = env.PioPlatform().version
+if installed_version != EXPECTED_PLATFORM_VERSION:
+    sys.stderr.write(
+        "\n[ERROR] espressif32 platform version mismatch!\n"
+        "  Expected: %s\n"
+        "  Installed: %s\n"
+        "  Run: pio pkg update -p espressif32@%s\n\n"
+        % (EXPECTED_PLATFORM_VERSION, installed_version, EXPECTED_PLATFORM_VERSION)
+    )
+    env.Exit(1)
 
 FRAMEWORK_DIR = env.PioPlatform().get_package_dir("framework-arduinoespressif32")
 board_mcu = env.BoardConfig()
