@@ -10,11 +10,9 @@
 #include "screens/wifi/network/PortScannerScreen.h"
 #include "screens/wifi/network/WebFileManagerScreen.h"
 #include "screens/wifi/network/DownloadScreen.h"
-#include "ui/actions/InputTextAction.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowQRCodeAction.h"
 #include <WiFi.h>
-#include <esp_wifi.h>
 
 NetworkMenuScreen::NetworkMenuScreen() {
   memset(_scanned,      0, sizeof(_scanned));
@@ -68,28 +66,6 @@ void NetworkMenuScreen::onItemSelected(uint8_t index) {
   }
 }
 
-// ── helpers ────────────────────────────────────────────
-
-String NetworkMenuScreen::_buildPasswordPath(const char* bssid, const char* ssid) {
-  String cleanBssid = bssid;
-  cleanBssid.replace(":", "");
-  return String(_passwordPath) + "/" + cleanBssid + "_" + ssid + ".pass";
-}
-
-String NetworkMenuScreen::_readPassword(const char* bssid, const char* ssid) {
-  if (!Uni.Storage) return "";
-  String path = _buildPasswordPath(bssid, ssid);
-  if (!Uni.Storage->exists(path.c_str())) return "";
-  return Uni.Storage->readFile(path.c_str());
-}
-
-void NetworkMenuScreen::_savePassword(const char* bssid, const char* ssid, const char* password) {
-  if (!Uni.Storage) return;
-  String path = _buildPasswordPath(bssid, ssid);
-  Uni.Storage->makeDir(_passwordPath);
-  Uni.Storage->writeFile(path.c_str(), password);
-}
-
 // ── states ─────────────────────────────────────────────
 
 void NetworkMenuScreen::_showMenu() {
@@ -102,16 +78,9 @@ void NetworkMenuScreen::_showWifiList() {
   _scanning = true;
   ShowStatusAction::show("Scanning...", 0);
 
-  WiFi.scanDelete();
-  int total = WiFi.scanNetworks();
-  if (total > MAX_WIFI) total = MAX_WIFI;
-  _scannedCount = total;
+  _scannedCount = WifiUtility::scan(_scanned, WifiUtility::MAX_WIFI);
 
-  for (int i = 0; i < total; i++) {
-    snprintf(_scanned[i].label, sizeof(_scanned[i].label),
-             "[%d] %s", WiFi.RSSI(i), WiFi.SSID(i).c_str());
-    strncpy(_scanned[i].bssid, WiFi.BSSIDstr(i).c_str(), sizeof(_scanned[i].bssid));
-    strncpy(_scanned[i].ssid,  WiFi.SSID(i).c_str(),     sizeof(_scanned[i].ssid));
+  for (int i = 0; i < _scannedCount; i++) {
     _scannedItems[i] = { _scanned[i].label };
   }
 
@@ -122,38 +91,18 @@ void NetworkMenuScreen::_showWifiList() {
 void NetworkMenuScreen::_connectToSelected(uint8_t index) {
   if (index >= _scannedCount) return;
 
-  const char* bssid = _scanned[index].bssid;
-  const char* ssid  = _scanned[index].ssid;
+  ShowStatusAction::show(("Connecting to " + String(_scanned[index].ssid) + "...").c_str(), 0);
+  auto result = WifiUtility::connectWithPrompt(_scanned[index].bssid, _scanned[index].ssid);
 
-  String saved = _readPassword(bssid, ssid);
-  if (saved.length() > 0 && _connect(bssid, ssid, saved.c_str())) return;
-
-  String password = InputTextAction::popup(ssid);
-  if (password.length() == 0) { render(); return; }
-
-  if (!_connect(bssid, ssid, password.c_str())) {
-    ShowStatusAction::show("Connection Failed!", 1500);
-  }
-}
-
-bool NetworkMenuScreen::_connect(const char* bssid, const char* ssid, const char* password) {
-  ShowStatusAction::show(("Connecting to " + String(ssid) + "...").c_str(), 0);
-
-  WiFi.begin(ssid, password);
-  uint8_t res = WiFi.waitForConnectResult(10000);
-
-  if (res == WL_CONNECTED) {
-    _savePassword(bssid, ssid, password);
+  if (result == WifiUtility::CONNECT_OK) {
+    ShowStatusAction::show(("Connected to " + String(_scanned[index].ssid)).c_str(), 1500);
     _showMenu();
-    return true;
+  } else if (result == WifiUtility::CONNECT_CANCELLED) {
+    render();
+  } else {
+    ShowStatusAction::show("Connection Failed!", 1500);
+    _showWifiList();
   }
-
-  if (res == WL_CONNECT_FAILED)      ShowStatusAction::show("Connection Failed!",   1500);
-  else if (res == WL_NO_SSID_AVAIL)  ShowStatusAction::show("SSID Not Available!",  1500);
-  else                               ShowStatusAction::show("Connection Error!",     1500);
-
-  render();
-  return false;
 }
 
 void NetworkMenuScreen::_showWifiQR() {

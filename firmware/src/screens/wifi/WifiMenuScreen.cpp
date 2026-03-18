@@ -5,7 +5,7 @@
 #include "WifiMenuScreen.h"
 #include "screens/MainMenuScreen.h"
 #include "network/NetworkMenuScreen.h"
-#include "access_point/APMenuScreen.h"
+#include "WifiAPScreen.h"
 #include "WifiAnalyzerScreen.h"
 #include "WifiPacketMonitorScreen.h"
 #include "WifiDeautherScreen.h"
@@ -24,7 +24,7 @@ void WifiMenuScreen::onInit() {
 void WifiMenuScreen::onItemSelected(uint8_t index) {
   switch (index) {
     case 0:  Screen.setScreen(new NetworkMenuScreen());        break;
-    case 1:  Screen.setScreen(new APMenuScreen());             break;
+    case 1:  Screen.setScreen(new WifiAPScreen());             break;
     case 2:  Screen.setScreen(new WifiEvilTwinScreen());       break;
     case 3:  Screen.setScreen(new WifiAnalyzerScreen());       break;
     case 4:  Screen.setScreen(new WifiPacketMonitorScreen());  break;

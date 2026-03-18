@@ -5,7 +5,8 @@
 #include "core/ConfigManager.h"
 
 bool WebFileManager::begin() {
-  if (WiFi.status() != WL_CONNECTED) {
+  wifi_mode_t mode = WiFi.getMode();
+  if (WiFi.status() != WL_CONNECTED && mode != WIFI_MODE_AP && mode != WIFI_MODE_APSTA) {
     _lastError = "WiFi not connected";
     return false;
   }
@@ -293,6 +294,18 @@ void WebFileManager::_prepareServer() {
     const String css = ":root{--color:" + _color565ToWebHex(Config.getThemeColor()) + ";}";
     AsyncWebServerResponse* resp = request->beginResponse(200, "text/css", css);
     request->send(resp);
+  });
+
+  // Map .html requests to .htm files
+  _server.on("*.html", HTTP_GET, [this](AsyncWebServerRequest* request) {
+    String url = request->url();
+    url = url.substring(0, url.length() - 5) + ".htm";
+    String filePath = String(WEB_PATH) + url;
+    if (_fs->exists(filePath)) {
+      request->send(*_fs, filePath, "text/html");
+    } else {
+      request->send(404, "text/plain", "Not Found");
+    }
   });
 
   _server.serveStatic("/", *_fs, (String(WEB_PATH) + "/").c_str());

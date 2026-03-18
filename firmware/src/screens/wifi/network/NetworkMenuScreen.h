@@ -6,6 +6,7 @@
 
 #include "ui/templates/ListScreen.h"
 #include "ui/components/ScrollListView.h"
+#include "utils/WifiUtility.h"
 
 class NetworkMenuScreen : public ListScreen
 {
@@ -33,18 +34,9 @@ private:
   ScrollListView _scrollView;
   ScrollListView::Row _infoRows[11];
 
-  static constexpr const char* _passwordPath = "/unigeek/wifi/passwords";
-  static constexpr int         MAX_WIFI      = 20;
-
-  struct ScannedWifi {
-    char label[52];
-    char bssid[18];
-    char ssid[33];
-  };
-
-  ScannedWifi _scanned[MAX_WIFI];
+  WifiUtility::ScannedWifi _scanned[WifiUtility::MAX_WIFI];
   uint8_t     _scannedCount = 0;
-  ListItem    _scannedItems[MAX_WIFI];
+  ListItem    _scannedItems[WifiUtility::MAX_WIFI];
 
   ListItem _menuItems[7] = {
     {"Information"},
@@ -56,13 +48,9 @@ private:
     {"Download"},
   };
 
-  String _buildPasswordPath(const char* bssid, const char* ssid);
-  String _readPassword(const char* bssid, const char* ssid);
-  void   _savePassword(const char* bssid, const char* ssid, const char* password);
   void   _showMenu();
   void   _showWifiList();
   void   _connectToSelected(uint8_t index);
-  bool   _connect(const char* bssid, const char* ssid, const char* password);
   void   _showInformation();
   void   _showWifiQR();
 };
