@@ -1,3 +1,4 @@
 firmware/.pio
 .idea
 *.bin
+.DS_Store
