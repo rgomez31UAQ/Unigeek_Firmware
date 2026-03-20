@@ -16,6 +16,7 @@
 #include "WifiCiwZeroclickScreen.h"
 #include "WifiEapolBruteForceScreen.h"
 #include "WifiEvilTwinScreen.h"
+#include "WifiKarmaScreen.h"
 
 void WifiMenuScreen::onInit() {
   setItems(_items);
@@ -26,15 +27,16 @@ void WifiMenuScreen::onItemSelected(uint8_t index) {
     case 0:  Screen.setScreen(new NetworkMenuScreen());        break;
     case 1:  Screen.setScreen(new WifiAPScreen());             break;
     case 2:  Screen.setScreen(new WifiEvilTwinScreen());       break;
-    case 3:  Screen.setScreen(new WifiAnalyzerScreen());       break;
-    case 4:  Screen.setScreen(new WifiPacketMonitorScreen());  break;
-    case 5:  Screen.setScreen(new WifiDeautherScreen());       break;
-    case 6:  Screen.setScreen(new WifiDeauthDetectorScreen()); break;
-    case 7:  Screen.setScreen(new WifiBeaconSpamScreen());     break;
-    case 8:  Screen.setScreen(new WifiCiwZeroclickScreen());   break;
-    case 9:  Screen.setScreen(new WifiESPNowChatScreen());     break;
-    case 10: Screen.setScreen(new WifiEapolCaptureScreen());   break;
-    case 11: Screen.setScreen(new WifiEapolBruteForceScreen()); break;
+    case 3:  Screen.setScreen(new WifiKarmaScreen());          break;
+    case 4:  Screen.setScreen(new WifiAnalyzerScreen());       break;
+    case 5:  Screen.setScreen(new WifiPacketMonitorScreen());  break;
+    case 6:  Screen.setScreen(new WifiDeautherScreen());       break;
+    case 7:  Screen.setScreen(new WifiDeauthDetectorScreen()); break;
+    case 8:  Screen.setScreen(new WifiBeaconSpamScreen());     break;
+    case 9:  Screen.setScreen(new WifiCiwZeroclickScreen());   break;
+    case 10: Screen.setScreen(new WifiESPNowChatScreen());     break;
+    case 11: Screen.setScreen(new WifiEapolCaptureScreen());   break;
+    case 12: Screen.setScreen(new WifiEapolBruteForceScreen()); break;
   }
 }
 

@@ -16,10 +16,11 @@ public:
   void onBack() override;
 
 private:
-  ListItem _items[12] = {
+  ListItem _items[13] = {
     {"Network"},
     {"Access Point"},
     {"Evil Twin"},
+    {"Karma Attack"},
     {"WiFi Analyzer"},
     {"Packet Monitor"},
     {"WiFi Deauther"},
