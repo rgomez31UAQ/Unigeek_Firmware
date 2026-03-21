@@ -174,6 +174,7 @@ firmware/
 
 ## TODO
 
+- CCTV
 - GPS Wardriving
 - NFC Hack
 - Lora
