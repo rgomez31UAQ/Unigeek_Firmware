@@ -3,6 +3,7 @@
 #include "core/ScreenManager.h"
 #include "screens/wifi/WifiMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
+#include "utils/StorageUtil.h"
 
 #include "utils/WifiAttackUtil.h"
 #include <cstring>
@@ -134,8 +135,8 @@ void WifiEapolCaptureScreen::onInit() {
     return;
   }
 
-  if (Uni.Storage->freeBytes() < MIN_FREE_BYTES) {
-    ShowStatusAction::show("Not enough storage.\nNeed 50 KB free.");
+  if (!StorageUtil::hasSpace()) {
+    ShowStatusAction::show("Storage full! (<20KB free)");
     Screen.setScreen(new WifiMenuScreen());
     return;
   }
@@ -400,7 +401,7 @@ bool WifiEapolCaptureScreen::_checkFreeSpace() {
   const unsigned long now = millis();
   if (now - _lastFreeCheck < 5000) return true;
   _lastFreeCheck = now;
-  if (Uni.Storage->freeBytes() < MIN_FREE_BYTES) {
+  if (!StorageUtil::hasSpace()) {
     _storageOk = false;
     _pushLog("Storage full! Stopped.", TFT_RED);
     ShowStatusAction::show("Storage full!\nCapture stopped.", 2000);

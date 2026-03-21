@@ -4,6 +4,7 @@
 #include "screens/wifi/WifiMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/InputNumberAction.h"
+#include "utils/StorageUtil.h"
 
 #include <WiFi.h>
 #include <DNSServer.h>
@@ -416,6 +417,10 @@ void WifiKarmaScreen::_startAttack()
     ShowStatusAction::show("Select a portal first!");
     return;
   }
+  if (!StorageUtil::hasSpace()) {
+    ShowStatusAction::show("Storage full! (<20KB free)");
+    return;
+  }
 
   _state = STATE_RUNNING;
   _logCount       = 0;
@@ -468,6 +473,10 @@ void WifiKarmaScreen::_stopAttack()
 void WifiKarmaScreen::_saveSSIDToFile(const char* ssid)
 {
   if (!Uni.Storage || !Uni.Storage->isAvailable()) return;
+  if (!StorageUtil::hasSpace()) {
+    _addLog("[!] Storage full, skip save");
+    return;
+  }
 
   Uni.Storage->makeDir("/unigeek/wifi/captives");
   String path = "/unigeek/wifi/captives/karma_ssid.txt";
@@ -495,6 +504,10 @@ void WifiKarmaScreen::_saveCaptured(const String& data)
   if (Uni.Speaker) Uni.Speaker->playNotification();
 
   if (!Uni.Storage || !Uni.Storage->isAvailable()) return;
+  if (!StorageUtil::hasSpace()) {
+    _addLog("[!] Storage full, skip save");
+    return;
+  }
 
   Uni.Storage->makeDir("/unigeek/wifi/captives");
 

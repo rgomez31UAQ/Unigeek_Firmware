@@ -102,7 +102,6 @@ public:
 private:
   static constexpr int      MAX_PENDING        = 8;       // max buffered EAPOL frames per AP before SSID known
   static constexpr int      MAX_DEAUTH_ATTEMPTS = 20;     // deauth bursts per AP before giving up and rescanning
-  static constexpr uint32_t MIN_FREE_BYTES      = 50 * 1024;
   static constexpr unsigned long DISCOVERY_DWELL_MS = 500;   // ms per channel during discovery scan
   static constexpr unsigned long ATTACK_DWELL_MS    = 6000;  // ms to stay on channel after deauth
 

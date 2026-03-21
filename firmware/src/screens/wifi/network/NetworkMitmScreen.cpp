@@ -3,6 +3,7 @@
 #include "core/ScreenManager.h"
 #include "screens/wifi/network/NetworkMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
+#include "utils/StorageUtil.h"
 #include <WiFi.h>
 
 NetworkMitmScreen* NetworkMitmScreen::_instance = nullptr;
@@ -167,6 +168,10 @@ void NetworkMitmScreen::_start()
 {
   if (!_rogueEnabled && !_dnsEnabled && !_fmEnabled && !_starvEnabled) {
     ShowStatusAction::show("Enable at least\none option!");
+    return;
+  }
+  if (_dnsEnabled && !StorageUtil::hasSpace()) {
+    ShowStatusAction::show("Storage full! (<20KB free)");
     return;
   }
 
@@ -364,7 +369,7 @@ void NetworkMitmScreen::_drawLog()
   char label[40];
   if (_starvRunning) {
     const auto& s = _starv.stats();
-    snprintf(label, sizeof(label), "A:%lu N:%lu T:%lu CT:%d/10",
+    snprintf(label, sizeof(label), "A:%lu N:%lu T:%lu CT:%d/20",
              (unsigned long)s.ack, (unsigned long)s.nak,
              (unsigned long)s.timeout, _starv.consecutiveTimeouts());
   } else if (_rogueEnabled) {

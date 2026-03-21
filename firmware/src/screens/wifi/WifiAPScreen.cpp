@@ -8,6 +8,7 @@
 #include "ui/actions/ShowQRCodeAction.h"
 #include "ui/components/QRCodeRenderer.h"
 #include "ui/actions/InputSelectOption.h"
+#include "utils/StorageUtil.h"
 #include <WiFi.h>
 
 // Static callback bridge for visit logging
@@ -249,6 +250,12 @@ void WifiAPScreen::_showMenu()
 
 void WifiAPScreen::_startAP()
 {
+  if ((_dnsSpoofEnabled || _captiveEnabled) && !StorageUtil::hasSpace()) {
+    ShowStatusAction::show("Storage full! (<20KB free)");
+    render();
+    return;
+  }
+
   String ssid = Config.get(APP_CONFIG_WIFI_AP_SSID, APP_CONFIG_WIFI_AP_SSID_DEFAULT);
   String pwd  = Config.get(APP_CONFIG_WIFI_AP_PASSWORD, APP_CONFIG_WIFI_AP_PASSWORD_DEFAULT);
 

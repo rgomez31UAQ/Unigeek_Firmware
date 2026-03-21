@@ -1,5 +1,6 @@
 #include "DnsSpoofServer.h"
 #include "core/Device.h"
+#include "utils/StorageUtil.h"
 #include <WiFi.h>
 
 // ── Public ──────────────────────────────────────────────────────────────────
@@ -244,17 +245,21 @@ void DnsSpoofServer::_startWeb()
         }
       }
 
-      if (data.length() > 0 && Uni.Storage) {
-        String cleanHost = host;
-        cleanHost.replace(".", "_");
-        String savePath = "/unigeek/wifi/captives/spoof_" + cleanHost + ".txt";
-        Uni.Storage->makeDir("/unigeek/wifi/captives");
+      if (data.length() > 0) {
+        if (Uni.Storage && StorageUtil::hasSpace()) {
+          String cleanHost = host;
+          cleanHost.replace(".", "_");
+          String savePath = "/unigeek/wifi/captives/spoof_" + cleanHost + ".txt";
+          Uni.Storage->makeDir("/unigeek/wifi/captives");
 
-        String entry = req->client()->remoteIP().toString() + " | " + data + "\n";
-        fs::File f = Uni.Storage->open(savePath.c_str(), FILE_APPEND);
-        if (f) {
-          f.print(entry);
-          f.close();
+          String entry = req->client()->remoteIP().toString() + " | " + data + "\n";
+          fs::File f = Uni.Storage->open(savePath.c_str(), FILE_APPEND);
+          if (f) {
+            f.print(entry);
+            f.close();
+          }
+        } else if (_visitCb) {
+          _visitCb("", "[!] Storage full, skip save");
         }
 
         if (_postCb) {
