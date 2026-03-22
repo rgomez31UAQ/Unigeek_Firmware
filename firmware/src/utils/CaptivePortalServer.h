@@ -69,10 +69,15 @@ public:
     if (_portalFolder.isEmpty() || !Uni.Storage || !Uni.Storage->isAvailable()) return;
 
     _portalBasePath = String(PORTALS_DIR) + "/" + _portalFolder;
+
+    // Try index.htm first, then index.html
     String indexPath = _portalBasePath + "/index.htm";
     if (!Uni.Storage->exists(indexPath.c_str())) {
-      _portalBasePath = "";
-      return;
+      indexPath = _portalBasePath + "/index.html";
+      if (!Uni.Storage->exists(indexPath.c_str())) {
+        _portalBasePath = "";
+        return;
+      }
     }
 
     _portalHtml = Uni.Storage->readFile(indexPath.c_str());
@@ -152,6 +157,11 @@ public:
     }
     _visitCount     = 0;
     _postCount      = 0;
+  }
+
+  // Call when fully done (e.g. stopping the attack) to free portal HTML memory
+  void reset() {
+    stop();
     _portalHtml     = "";
     _successHtml    = "";
     _portalBasePath = "";

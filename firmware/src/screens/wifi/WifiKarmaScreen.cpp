@@ -319,6 +319,13 @@ void WifiKarmaScreen::_startAttack()
 
   _portal.setCallbacks(_onVisit, _onPost, this);
   _portal.loadPortalHtml();
+
+  if (_portal.portalHtml().isEmpty()) {
+    ShowStatusAction::show("Portal HTML not found!");
+    _state = STATE_MENU;
+    return;
+  }
+
   _log.addLine("[*] Karma Attack started");
   _log.addLine("[*] BACK/Press to stop");
   _startSniffing();
@@ -329,7 +336,7 @@ void WifiKarmaScreen::_startAttack()
 void WifiKarmaScreen::_stopAttack()
 {
   _stopSniffing();
-  _portal.stop();
+  _portal.reset();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
 

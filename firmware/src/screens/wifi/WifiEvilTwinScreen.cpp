@@ -258,6 +258,12 @@ void WifiEvilTwinScreen::_startAttack()
   _portal.setCallbacks(_onVisit, _onPost, this);
   _portal.loadPortalHtml();
 
+  if (_portal.portalHtml().isEmpty()) {
+    ShowStatusAction::show("Portal HTML not found!");
+    _state = STATE_MENU;
+    return;
+  }
+
   // Init attacker without its own AP
   if (_deauth) {
     _attacker = new WifiAttackUtil(false);
@@ -351,7 +357,7 @@ void WifiEvilTwinScreen::_startAttack()
 
 void WifiEvilTwinScreen::_stopAttack()
 {
-  _portal.stop();
+  _portal.reset();
   if (_attacker) {
     delete _attacker;
     _attacker = nullptr;
