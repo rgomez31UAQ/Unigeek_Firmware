@@ -18,17 +18,16 @@ public:
     digitalWrite(PWR_HOLD_PIN, HIGH);
 
     // Battery ADC
-    analogSetAttenuation(ADC_ATTENDB_MAX);
     pinMode(BAT_ADC_PIN, INPUT);
+    analogReadMilliVolts(BAT_ADC_PIN);  // warm up ADC calibration
   }
 
   uint8_t getBatteryPercentage() override
   {
-    // ADC reading with 2x voltage divider
-    float voltage = analogReadMilliVolts(BAT_ADC_PIN) * 2.0 / 1000.0;
-    int pct = (int)(((voltage - 3.0) / 1.2) * 100.0);
-    if (pct < 1) pct = 1;
-    if (pct > 100) pct = 100;
+    float mv = (float)analogReadMilliVolts(BAT_ADC_PIN) * 2.0f; // voltage divider x2
+    float pct = (mv - 3300.0f) / (4150.0f - 3300.0f) * 100.0f;
+    if (pct < 0.0f)   pct = 0.0f;
+    if (pct > 100.0f) pct = 100.0f;
     return (uint8_t)pct;
   }
 
@@ -41,6 +40,7 @@ public:
 
   bool isCharging() override
   {
-    return false;  // no charging detection on Plus 2
+    // No charger IC detection on Plus 2
+    return false;
   }
 };

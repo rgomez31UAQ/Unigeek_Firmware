@@ -24,7 +24,8 @@ static const uint8_t SCL = GROVE_SCL;
 #define LCD_CS  5
 #define LCD_DC  14
 #define LCD_RST 12
-#define LCD_BL  27
+#define LCD_BL      27
+#define LCD_BL_CH   7
 
 // ─── Buttons ──────────────────────────────────────────────
 #define BTN_UP  35   // top side button (power/up)
@@ -44,7 +45,7 @@ static const uint8_t SCL = GROVE_SCL;
 #define TFT_CS      LCD_CS
 #define TFT_DC      LCD_DC
 #define TFT_RST     LCD_RST
-#define TFT_BL      LCD_BL
+#define TFT_BL      -1       // managed by Display.h via LEDC, not TFT_eSPI
 #define TFT_BACKLIGHT_ON 1
 #define TFT_INVERSION_ON
 #define TFT_DEFAULT_ORIENTATION 3

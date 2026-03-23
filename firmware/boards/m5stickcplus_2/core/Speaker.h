@@ -15,9 +15,10 @@
 class SpeakerBuzzer : public ISpeaker {
 public:
   void begin() override {
-    ledcAttach(SPK_PIN, 1000, 8);
-    ledcWrite(SPK_PIN, 0);
-    setVolume(AppConfig.get(APP_CONFIG_VOLUME, APP_CONFIG_VOLUME_DEFAULT).toInt());
+    ledcSetup(_ch, 1000, 8);
+    ledcAttachPin(SPK_PIN, _ch);
+    ledcWrite(_ch, 0);
+    setVolume(Config.get(APP_CONFIG_VOLUME, APP_CONFIG_VOLUME_DEFAULT).toInt());
   }
 
   void tone(uint16_t freq, uint32_t durationMs) override {
@@ -29,7 +30,7 @@ public:
 
   void noTone() override {
     _stopTask();
-    ledcWrite(SPK_PIN, 0);
+    ledcWrite(_ch, 0);
   }
 
   void setVolume(uint8_t vol) override {
@@ -38,7 +39,7 @@ public:
   }
 
   void beep() override {
-    if (!AppConfig.get(APP_CONFIG_NAV_SOUND, APP_CONFIG_NAV_SOUND_DEFAULT).toInt()) return;
+    if (!Config.get(APP_CONFIG_NAV_SOUND, APP_CONFIG_NAV_SOUND_DEFAULT).toInt()) return;
     if (_taskHandle) return;
     playRandomTone();
   }
@@ -91,6 +92,7 @@ public:
 private:
   struct Note { uint16_t freq; uint32_t durationMs; uint32_t delayMs; };
 
+  static constexpr uint8_t _ch = 0;
   uint16_t     _freq       = 1000;
   uint32_t     _duration   = 50;
   uint8_t      _duty       = 128;
@@ -102,21 +104,21 @@ private:
     if (_taskHandle) {
       vTaskDelete(_taskHandle);
       _taskHandle = nullptr;
-      ledcWrite(SPK_PIN, 0);
+      ledcWrite(_ch, 0);
     }
   }
 
   void _playTone(uint16_t freq) {
-    if (freq == 0 || _duty == 0) { ledcWrite(SPK_PIN, 0); return; }
-    ledcChangeFrequency(SPK_PIN, freq, 8);
-    ledcWrite(SPK_PIN, _duty);
+    if (freq == 0 || _duty == 0) { ledcWrite(_ch, 0); return; }
+    ledcSetup(_ch, freq, 8);
+    ledcWrite(_ch, _duty);
   }
 
   static void _toneTask(void* arg) {
     auto* self = static_cast<SpeakerBuzzer*>(arg);
     self->_playTone(self->_freq);
     vTaskDelay(pdMS_TO_TICKS(self->_duration));
-    ledcWrite(SPK_PIN, 0);
+    ledcWrite(_ch, 0);
     self->_taskHandle = nullptr;
     vTaskDelete(nullptr);
   }
@@ -127,7 +129,7 @@ private:
       const Note& note = self->_seq[n];
       self->_playTone(note.freq);
       vTaskDelay(pdMS_TO_TICKS(note.durationMs));
-      ledcWrite(SPK_PIN, 0);
+      ledcWrite(_ch, 0);
       if (note.delayMs > 0) vTaskDelay(pdMS_TO_TICKS(note.delayMs));
     }
     self->_taskHandle = nullptr;

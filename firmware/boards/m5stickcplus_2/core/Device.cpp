@@ -8,7 +8,6 @@
 #include "core/ConfigManager.h"
 #include "Navigation.h"
 #include "EncoderNavigation.h"
-#include "JoystickNavigation.h"
 #include "Display.h"
 #include "Power.h"
 #include "Speaker.h"
@@ -17,7 +16,6 @@
 static DisplayImpl          display;
 static NavigationImpl       navigation;
 static EncoderNavigation    encoderNavigation;
-static JoystickNavigation   joystickNavigation;
 static PowerImpl            power;
 static StorageLFS        storageLFS;
 static SpeakerBuzzer     speaker;
@@ -44,11 +42,9 @@ Device* Device::createInstance() {
 }
 
 void Device::applyNavMode() {
-  String mode = AppConfig.get(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT);
+  String mode = Config.get(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT);
   if (mode == "encoder") {
     switchNavigation(&encoderNavigation);
-  } else if (mode == "joystick") {
-    switchNavigation(&joystickNavigation);
   } else {
     switchNavigation(&navigation);
   }
@@ -60,8 +56,8 @@ void Device::boardHook() {
   if (digitalRead(BTN_A) == LOW) {
     if (_btnAHeld == 0) _btnAHeld = millis();
     else if (millis() - _btnAHeld >= 3000) {
-      AppConfig.set(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT);
-      AppConfig.save(Storage);
+      Config.set(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT);
+      Config.save(Storage);
       applyNavMode();
       _btnAHeld = 0;
     }

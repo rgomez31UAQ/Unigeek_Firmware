@@ -39,7 +39,7 @@ All hardware differences are isolated in board-specific folders.
 ### Board Environments
 
     m5stickcplus_11   M5StickC Plus 1.1, no keyboard, AXP192 power, LittleFS only
-    m5stickcplus_2    M5StickC Plus 2, no keyboard, ADC battery + GPIO power hold, JoystickNavigation (optional JoyC hat), LittleFS only
+    m5stickcplus_2    M5StickC Plus 2, no keyboard, ADC battery + GPIO power hold, EncoderNavigation (optional encoder hat), LittleFS only
     t_lora_pager      LilyGO T-Lora Pager, TCA8418 keyboard, BQ25896/BQ27220 power, SD + LittleFS
     t_display_16mb    LilyGO T-Display 16MB, 2 buttons (double-click=select), no keyboard, 16MB flash, LittleFS only
     diy_smoochie      DIY Smoochie, no keyboard, 16MB flash, LittleFS only
@@ -72,7 +72,7 @@ All hardware differences are isolated in board-specific folders.
     ├── boards/
     │   ├── _devices/               custom board JSON definitions
     │   ├── m5stickplus_11/         Device.cpp, Display.h, Navigation.h, EncoderNavigation.h, Power.h, pins_arduino.h
-    │   ├── m5stickcplus_2/         Device.cpp, Display.h, Navigation.h, EncoderNavigation.h, JoystickNavigation.h, Power.h, Speaker.h, pins_arduino.h
+    │   ├── m5stickcplus_2/         Device.cpp, Display.h, Navigation.h, EncoderNavigation.h, Power.h, Speaker.h, pins_arduino.h
     │   ├── t_lora_pager/           Device.cpp, Display.h, Navigation.h/cpp, Keyboard.h/cpp, Power.h, pins_arduino.h
     │   ├── t_display_16mb/         Device.cpp, Display.h, Navigation.h, Power.h, pins_arduino.h
     │   ├── diy_smoochie/           Device.cpp, Display.h, Navigation.h, Power.h, pins_arduino.h
@@ -373,7 +373,6 @@ All hardware differences are isolated in board-specific folders.
     mathertel/RotaryEncoder@^1.5.3        T-Lora Pager only
     lewisxhe/XPowersLib@^0.2.0            T-Lora Pager only
     m5stack/M5Hat-Mini-EncoderC            M5StickC Plus 2 (rotary encoder hat)
-    m5stack/M5Hat-Mini-JoyC                M5StickC Plus 2 (joystick hat)
     ESP32 LEDC (built-in)                 used for PWM speaker tone on Cardputer boards
 
 ---
@@ -411,9 +410,6 @@ All hardware differences are isolated in board-specific folders.
 - ListScreen DIR_BACK with empty list: check DIR_BACK first, before _effectiveCount() == 0 guard
   onRender() must always push the sprite even when empty — clears lingering overlays
 - sdcard/manifest.txt must be updated when files are added or removed from sdcard/
-- M5StickC Plus 2 JoystickNavigation: uses M5HatMiniJoyC on Grove I2C (SDA=32/SCL=33, addr=0x54)
-  Falls back to button-only nav if JoyC hat not detected on begin()
-  Joystick axis repeat: 400ms initial delay, 150ms repeat interval, deadzone ±50 from center
 - M5StickC Plus 2 power: GPIO 4 PWR_HOLD_PIN must stay HIGH to keep device powered
 
 ---

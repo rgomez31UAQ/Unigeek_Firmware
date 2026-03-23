@@ -24,7 +24,8 @@ static const uint8_t SDA = GROVE_SDA;
 static const uint8_t SCL = GROVE_SCL;
 
 // ─── LCD ──────────────────────────────────────────────────
-#define LCD_BL  4
+#define LCD_BL      4
+#define LCD_BL_CH   7
 
 // ─── ADC Power Enable ────────────────────────────────────
 #define ADC_EN  14

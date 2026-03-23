@@ -11,12 +11,12 @@ public:
 
     static bool _ready = false;
     if (!_ready) {
-      ledcSetup(7, 256, 8);
-      ledcAttachPin(LCD_BL, 7);
+      ledcSetup(LCD_BL_CH, 256, 8);
+      ledcAttachPin(LCD_BL, LCD_BL_CH);
       _ready = true;
     }
 
     uint8_t brightness = (uint8_t)((uint32_t)pct * 255 / 100);
-    ledcWrite(7, brightness);
+    ledcWrite(LCD_BL_CH, brightness);
   }
 };
