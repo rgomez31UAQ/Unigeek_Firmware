@@ -12,7 +12,9 @@ Create a new firmware release. Usage: `/release <version>` (e.g. `/release 1.3.0
 
 1. **Find the previous tag**: Run `git tag --sort=-v:refname | head -1` to get the last release version.
 
-2. **Analyze commits**: Run `git log <prev_tag>..HEAD --oneline` to see all commits since the last release. Also check what already existed at the previous tag to avoid listing mid-development upgrades as new features.
+2. **Version check**: Compare the requested version against the latest tag. If the new version is lower than or equal to the latest tag, **warn the user and stop** — do not proceed until they confirm or provide a corrected version.
+
+3. **Analyze commits**: Run `git log <prev_tag>..HEAD --oneline` to see all commits since the last release. Also check what already existed at the previous tag to avoid listing mid-development upgrades as new features.
 
 3. **Categorize changes** into:
    - **New Boards** — only genuinely new board support
