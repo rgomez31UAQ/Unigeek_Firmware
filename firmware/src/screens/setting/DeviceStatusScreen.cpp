@@ -1,5 +1,5 @@
-#include "DeviceStatusScreen.h"
-#include "SettingScreen.h"
+#include "screens/setting/DeviceStatusScreen.h"
+#include "screens/setting/SettingScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include <esp_system.h>

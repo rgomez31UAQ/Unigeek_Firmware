@@ -9,7 +9,7 @@
 #include "screens/game/GameMenuScreen.h"
 #include "screens/module/ModuleMenuScreen.h"
 #include "screens/utility/UtilityMenuScreen.h"
-#include "screens/SettingScreen.h"
+#include "screens/setting/SettingScreen.h"
 
 void MainMenuScreen::onInit() {
   setItems(_items);

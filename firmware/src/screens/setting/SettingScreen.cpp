@@ -2,7 +2,7 @@
 // Created by L Shaf on 2026-03-02.
 //
 
-#include "SettingScreen.h"
+#include "screens/setting/SettingScreen.h"
 #include "screens/MainMenuScreen.h"
 #include "core/Device.h"
 #include "core/ConfigManager.h"
@@ -11,8 +11,8 @@
 #include "ui/actions/InputNumberAction.h"
 #include "ui/actions/InputSelectOption.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "screens/PinSettingScreen.h"
-#include "screens/DeviceStatusScreen.h"
+#include "screens/setting/PinSettingScreen.h"
+#include "screens/setting/DeviceStatusScreen.h"
 
 void SettingScreen::onInit() {
   setItems(_items);

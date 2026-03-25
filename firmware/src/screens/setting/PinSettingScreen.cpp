@@ -1,8 +1,8 @@
-#include "PinSettingScreen.h"
+#include "screens/setting/PinSettingScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "core/PinConfigManager.h"
-#include "screens/SettingScreen.h"
+#include "screens/setting/SettingScreen.h"
 #include "ui/actions/InputNumberAction.h"
 
 void PinSettingScreen::onInit() {
