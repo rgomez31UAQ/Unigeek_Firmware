@@ -5,9 +5,8 @@
 #include "screens/module/ModuleMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowProgressAction.h"
-#ifdef BOARD_HAS_PSRAM
-#include "utils/NestedAttack.h"
-#endif
+#include "utils/nfc/StaticNestedAttack.h"
+#include "utils/nfc/DarksideAttack.h"
 
 static constexpr uint8_t I2C_ADDRESS = 0x28;
 
@@ -19,6 +18,7 @@ const char* MFRC522Screen::title() {
     case STATE_MIFARE_CLASSIC: return "MIFARE Classic";
     case STATE_SHOW_KEY:      return "Discovered Keys";
     case STATE_MEMORY_READER: return "Memory Reader";
+    case STATE_DICT_SELECT:   return "Dictionary Attack";
   }
   return "M5 RFID 2";
 }
@@ -74,10 +74,12 @@ void MFRC522Screen::onItemSelected(uint8_t index) {
     switch (index) {
       case 0: _goShowDiscoveredKeys(); break;
       case 1: _callMemoryReader();     break;
-#ifdef BOARD_HAS_PSRAM
-      case 2: _callNestedAttack();     break;
-#endif
+      case 2: _callDictionaryAttack(); break;
+      case 3: _callStaticNested();     break;
+      case 4: _callDarksideAttack();   break;
     }
+  } else if (_state == STATE_DICT_SELECT) {
+    _callDictAttackWithFile(index);
   }
 }
 
@@ -103,7 +105,7 @@ void MFRC522Screen::onBack() {
     _currentCard = {};
     _mf1AuthKeys.fill({});
     _goMainMenu();
-  } else if (_state == STATE_SHOW_KEY || _state == STATE_MEMORY_READER) {
+  } else if (_state == STATE_SHOW_KEY || _state == STATE_MEMORY_READER || _state == STATE_DICT_SELECT) {
     _goMifareClassic();
   }
 }
@@ -525,14 +527,83 @@ void MFRC522Screen::_callMemoryReader() {
   render();
 }
 
-#ifdef BOARD_HAS_PSRAM
-void MFRC522Screen::_callNestedAttack() {
-  // lfsr_recovery32 needs ~5MB PSRAM (2MB + 2MB + 1MB + 128KB)
-  uint32_t freePsram = ESP.getFreePsram();
-  if (freePsram < 5 * 1024 * 1024) {
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Not enough PSRAM\nFree: %luKB / Need: 5MB", (unsigned long)(freePsram / 1024));
-    ShowStatusAction::show(msg);
+void MFRC522Screen::_callDictionaryAttack() {
+  _state = STATE_DICT_SELECT;
+  _dictFileCount = 0;
+
+  if (!Uni.Storage || !Uni.Storage->isAvailable()) {
+    ShowStatusAction::show("Storage not available");
+    _goMifareClassic();
+    return;
+  }
+
+  IStorage::DirEntry entries[MAX_DICT_FILES];
+  uint8_t count = Uni.Storage->listDir(_dictPath, entries, MAX_DICT_FILES);
+  for (uint8_t i = 0; i < count && _dictFileCount < MAX_DICT_FILES; i++) {
+    if (!entries[i].isDir && entries[i].name.endsWith(".txt")) {
+      _dictFileNames[_dictFileCount] = entries[i].name;
+      _dictItems[_dictFileCount] = {_dictFileNames[_dictFileCount].c_str()};
+      _dictFileCount++;
+    }
+  }
+
+  if (_dictFileCount == 0) {
+    ShowStatusAction::show("No dictionary files\nin nfc/dictionaries/");
+    _goMifareClassic();
+    return;
+  }
+
+  setItems(_dictItems, _dictFileCount);
+}
+
+static bool _parseHexKey(const String& line, uint8_t* out) {
+  // Parse "FF:FF:FF:FF:FF:FF" or "FFFFFFFFFFFF"
+  String s = line;
+  s.trim();
+  if (s.length() == 0 || s.startsWith("#")) return false;
+
+  // Remove colons
+  s.replace(":", "");
+  if (s.length() != 12) return false;
+
+  for (int i = 0; i < 6; i++) {
+    char hex[3] = { s[i * 2], s[i * 2 + 1], 0 };
+    char* end;
+    unsigned long val = strtoul(hex, &end, 16);
+    if (*end != 0) return false;
+    out[i] = (uint8_t)val;
+  }
+  return true;
+}
+
+void MFRC522Screen::_callDictAttackWithFile(uint8_t fileIndex) {
+  if (fileIndex >= _dictFileCount) return;
+
+  String filePath = String(_dictPath) + "/" + _dictFileNames[fileIndex];
+  String content = Uni.Storage->readFile(filePath.c_str());
+  if (content.length() == 0) {
+    ShowStatusAction::show("Empty dictionary file");
+    render();
+    return;
+  }
+
+  // Parse keys from file
+  static constexpr uint8_t MAX_KEYS = 128;
+  uint8_t keys[MAX_KEYS][6];
+  uint8_t keyCount = 0;
+
+  int start = 0;
+  while (start < (int)content.length() && keyCount < MAX_KEYS) {
+    int nl = content.indexOf('\n', start);
+    if (nl < 0) nl = content.length();
+    String line = content.substring(start, nl);
+    if (_parseHexKey(line, keys[keyCount])) keyCount++;
+    start = nl + 1;
+  }
+
+  if (keyCount == 0) {
+    ShowStatusAction::show("No valid keys found");
+    render();
     return;
   }
 
@@ -540,6 +611,98 @@ void MFRC522Screen::_callNestedAttack() {
   auto it = _mf1CardDetails.find(piccType);
   if (it == _mf1CardDetails.end()) {
     ShowStatusAction::show("Unsupported tag");
+    _goMifareClassic();
+    return;
+  }
+
+  size_t totalSectors = it->second.first;
+  int recovered = 0;
+  int uncovered = 0;
+
+  // Count uncovered keys first
+  for (size_t s = 0; s < totalSectors; s++) {
+    if (!_mf1AuthKeys[s].first) uncovered++;
+    if (!_mf1AuthKeys[s].second) uncovered++;
+  }
+
+  if (uncovered == 0) {
+    ShowStatusAction::show("All keys already found");
+    _goMifareClassic();
+    return;
+  }
+
+  int progress = 0;
+  int totalWork = uncovered;
+
+  const MFRC522_I2C::PICC_Command keyTypes[] = {
+    MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A,
+    MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B
+  };
+
+  for (size_t sector = 0; sector < totalSectors; sector++) {
+    for (const auto& keyType : keyTypes) {
+      bool isKeyA = (keyType == MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A);
+      auto& slot = isKeyA ? _mf1AuthKeys[sector].first : _mf1AuthKeys[sector].second;
+      if (slot) continue; // already discovered
+
+      int pct = totalWork > 0 ? (progress * 100 / totalWork) : 0;
+      char msg[48];
+      snprintf(msg, sizeof(msg), "Dict S%d key %c (%d keys)",
+        (int)sector, isKeyA ? 'A' : 'B', keyCount);
+      ShowProgressAction::show(msg, pct);
+
+      int blockIndex = (sector < 32)
+        ? ((int)sector * 4 + 3)
+        : (128 + ((int)sector - 32) * 16 + 15);
+
+      for (uint8_t k = 0; k < keyCount; k++) {
+        MFRC522_I2C::MIFARE_Key mfKey = {
+          keys[k][0], keys[k][1], keys[k][2],
+          keys[k][3], keys[k][4], keys[k][5]
+        };
+
+        auto response = static_cast<MFRC522_I2C::StatusCode>(
+          _module->PCD_Authenticate(keyType, blockIndex, &mfKey, &_currentCard));
+
+        if (response == MFRC522_I2C::STATUS_OK) {
+          slot = NFCUtility::MIFARE_Key(
+            keys[k][0], keys[k][1], keys[k][2],
+            keys[k][3], keys[k][4], keys[k][5]);
+          recovered++;
+          break;
+        }
+
+        // Reset card state for next attempt
+        int counter = 0;
+        do {
+          counter++;
+          delay(100);
+          if (counter > 5) {
+            char err[48];
+            snprintf(err, sizeof(err), "Card reset failed\nRecovered %d keys", recovered);
+            ShowStatusAction::show(err);
+            _goMifareClassic();
+            return;
+          }
+        } while (!_resetCardState());
+      }
+
+      progress++;
+    }
+  }
+
+  char msg[48];
+  snprintf(msg, sizeof(msg), "Recovered %d keys", recovered);
+  ShowStatusAction::show(msg);
+  _goMifareClassic();
+}
+
+void MFRC522Screen::_callStaticNested() {
+  auto piccType = static_cast<MFRC522_I2C::PICC_Type>(_module->PICC_GetType(_currentCard.sak));
+  auto it = _mf1CardDetails.find(piccType);
+  if (it == _mf1CardDetails.end()) {
+    ShowStatusAction::show("Unsupported tag");
+    render();
     return;
   }
 
@@ -548,9 +711,11 @@ void MFRC522Screen::_callNestedAttack() {
   // Find exploit sector: first sector with a known key
   int exploitSector = -1;
   uint64_t exploitKey = 0;
+  uint8_t exploitCmd = MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A;
   for (size_t s = 0; s < totalSectors; s++) {
     if (_mf1AuthKeys[s].first) {
       exploitSector = (int)s;
+      exploitCmd = MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A;
       auto kv = _mf1AuthKeys[s].first.value();
       for (int b = 0; b < 6; b++)
         exploitKey = (exploitKey << 8) | kv[b];
@@ -558,6 +723,7 @@ void MFRC522Screen::_callNestedAttack() {
     }
     if (_mf1AuthKeys[s].second) {
       exploitSector = (int)s;
+      exploitCmd = MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B;
       auto kv = _mf1AuthKeys[s].second.value();
       for (int b = 0; b < 6; b++)
         exploitKey = (exploitKey << 8) | kv[b];
@@ -567,6 +733,7 @@ void MFRC522Screen::_callNestedAttack() {
 
   if (exploitSector < 0) {
     ShowStatusAction::show("Need at least one\nknown key first!");
+    render();
     return;
   }
 
@@ -577,6 +744,15 @@ void MFRC522Screen::_callNestedAttack() {
   int exploitTrailer = (exploitSector < 32)
     ? (exploitSector * 4 + 3)
     : (128 + (exploitSector - 32) * 16 + 15);
+
+  // Check if card has static nonce
+  ShowProgressAction::show("Checking static nonce...", 5);
+  if (!StaticNestedAttack::isStaticNonce(_module, uid, exploitCmd, exploitTrailer, exploitKey)) {
+    _module->PCD_Init();
+    ShowStatusAction::show("Card does not have\nstatic nonce");
+    _goMifareClassic();
+    return;
+  }
 
   int recovered = 0;
 
@@ -589,12 +765,12 @@ void MFRC522Screen::_callNestedAttack() {
     // Attack missing key A
     if (!_mf1AuthKeys[s].first) {
       char msg[48];
-      snprintf(msg, sizeof(msg), "Nested S%d key A...", (int)s);
+      snprintf(msg, sizeof(msg), "Static nested S%d A...", (int)s);
       ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
 
-      auto result = NestedAttack::crack(
-        _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A,
-        exploitTrailer, exploitKey, targetTrailer,
+      auto result = StaticNestedAttack::crack(
+        _module, uid, exploitCmd, exploitTrailer, exploitKey,
+        MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A, targetTrailer,
         [](const char* m, int pct) -> bool {
           ShowProgressAction::show(m, pct);
           return true;
@@ -612,12 +788,12 @@ void MFRC522Screen::_callNestedAttack() {
     // Attack missing key B
     if (!_mf1AuthKeys[s].second) {
       char msg[48];
-      snprintf(msg, sizeof(msg), "Nested S%d key B...", (int)s);
+      snprintf(msg, sizeof(msg), "Static nested S%d B...", (int)s);
       ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
 
-      auto result = NestedAttack::crack(
-        _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B,
-        exploitTrailer, exploitKey, targetTrailer,
+      auto result = StaticNestedAttack::crack(
+        _module, uid, exploitCmd, exploitTrailer, exploitKey,
+        MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B, targetTrailer,
         [](const char* m, int pct) -> bool {
           ShowProgressAction::show(m, pct);
           return true;
@@ -633,13 +809,70 @@ void MFRC522Screen::_callNestedAttack() {
     }
   }
 
-  // Re-init module after raw register manipulation
   _module->PCD_Init();
 
   char msg[48];
   snprintf(msg, sizeof(msg), "Recovered %d keys", recovered);
   ShowStatusAction::show(msg);
+  _goMifareClassic();
+}
+
+void MFRC522Screen::_callDarksideAttack() {
+  auto piccType = static_cast<MFRC522_I2C::PICC_Type>(_module->PICC_GetType(_currentCard.sak));
+  auto it = _mf1CardDetails.find(piccType);
+  if (it == _mf1CardDetails.end()) {
+    ShowStatusAction::show("Unsupported tag");
+    render();
+    return;
+  }
+
+  size_t totalSectors = it->second.first;
+
+  // Check if any key is already known — if so, darkside is unnecessary
+  bool hasKnownKey = false;
+  for (size_t s = 0; s < totalSectors; s++) {
+    if (_mf1AuthKeys[s].first || _mf1AuthKeys[s].second) {
+      hasKnownKey = true;
+      break;
+    }
+  }
+
+  if (hasKnownKey) {
+    ShowStatusAction::show("Keys already known\nUse Static Nested instead");
+    render();
+    return;
+  }
+
+  uint32_t uid = 0;
+  for (int i = 0; i < 4; i++)
+    uid = (uid << 8) | _currentCard.uidByte[i];
+
+  // Attack sector 0 key A (trailer block 3)
+  ShowProgressAction::show("Darkside attack...", 0);
+
+  auto result = DarksideAttack::crack(
+    _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A, 3,
+    Uni.Storage,
+    [](const char* m, int pct) -> bool {
+      ShowProgressAction::show(m, pct);
+      return true;
+    });
+
+  _module->PCD_Init();
+
+  if (result.success) {
+    uint8_t kb[6];
+    uint64_t k = result.key;
+    for (int i = 5; i >= 0; i--) { kb[i] = (uint8_t)(k & 0xFF); k >>= 8; }
+    _mf1AuthKeys[0].first = NFCUtility::MIFARE_Key(kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
+
+    char msg[48];
+    snprintf(msg, sizeof(msg), "Found key A S0:\n%02X%02X%02X%02X%02X%02X",
+      kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
+    ShowStatusAction::show(msg);
+  } else {
+    ShowStatusAction::show("Darkside attack failed");
+  }
 
   _goMifareClassic();
 }
-#endif

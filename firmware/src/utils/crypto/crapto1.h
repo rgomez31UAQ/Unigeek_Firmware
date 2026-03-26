@@ -28,6 +28,7 @@ int nonce_distance(uint32_t from, uint32_t to);
 
 #define LF_POLY_ODD (0x29CE5C)
 #define LF_POLY_EVEN (0x870804)
+#undef BIT
 #define BIT(x, n) ((x) >> (n) & 1)
 #define BEBIT(x, n) BIT(x, (n) ^ 24)
 

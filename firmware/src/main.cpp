@@ -39,7 +39,7 @@ void _bootSplash() {
   lcd.drawRoundRect(barX, barY, barW, barH, 1, TFT_DARKGREY);
 
   uint16_t steps = barW - 2;
-  unsigned long totalMs = 2000;
+  unsigned long totalMs = 1000;
   unsigned long start = millis();
   for (int i = 0; i <= steps; i++) {
     lcd.fillRect(barX + 1, barY + 1, i, barH - 2, Config.getThemeColor());

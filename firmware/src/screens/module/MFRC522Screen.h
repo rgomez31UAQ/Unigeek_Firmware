@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include "ui/templates/ListScreen.h"
 #include "ui/components/ScrollListView.h"
-#include "utils/NFCUtility.h"
+#include "utils/nfc/NFCUtility.h"
 
 class MFRC522Screen : public ListScreen
 {
@@ -27,6 +27,7 @@ private:
     STATE_MIFARE_CLASSIC,
     STATE_SHOW_KEY,
     STATE_MEMORY_READER,
+    STATE_DICT_SELECT,
   };
 
   State_e _state = STATE_MAIN_MENU;
@@ -49,18 +50,13 @@ private:
   };
 
   // MIFARE Classic submenu
-#ifdef BOARD_HAS_PSRAM
-  ListItem _mfItems[3] = {
+  ListItem _mfItems[5] = {
     {"Discovered Keys"},
     {"Dump Memory"},
-    {"Nested Attack"},
+    {"Dictionary Attack"},
+    {"Static Nested"},
+    {"Darkside Attack"},
   };
-#else
-  ListItem _mfItems[2] = {
-    {"Discovered Keys"},
-    {"Dump Memory"},
-  };
-#endif
 
   // ScrollListView for keys/memory display
   ScrollListView _scrollView;
@@ -78,10 +74,18 @@ private:
   void _callScanUid();
   void _callAuthenticate();
   void _callMemoryReader();
-#ifdef BOARD_HAS_PSRAM
-  void _callNestedAttack();
-#endif
+  void _callDictionaryAttack();
+  void _callDictAttackWithFile(uint8_t fileIndex);
+  void _callStaticNested();
+  void _callDarksideAttack();
   bool _resetCardState();
+
+  // Dictionary attack file selection
+  static constexpr const char* _dictPath = "/unigeek/nfc/dictionaries";
+  static constexpr uint8_t MAX_DICT_FILES = 16;
+  ListItem _dictItems[MAX_DICT_FILES];
+  String _dictFileNames[MAX_DICT_FILES];
+  uint8_t _dictFileCount = 0;
 
   std::string _uidToString(byte* uid, byte len) {
     std::string s;

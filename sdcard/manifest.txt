@@ -22,3 +22,5 @@ unigeek/wifi/portals/wifi/script.js
 unigeek/wifi/portals/wifi/success.htm
 unigeek/wifi/portals/dns_config
 unigeek/wifi/portals/default/index.html
+unigeek/nfc/dictionaries/default.txt
+unigeek/nfc/dictionaries/extended.txt
