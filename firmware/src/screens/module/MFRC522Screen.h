@@ -32,6 +32,7 @@ private:
   State_e _state = STATE_MAIN_MENU;
   MFRC522_I2C* _module = nullptr;
   bool _moduleReady = false;
+  TwoWire* _activeBus = nullptr;  // which I2C bus is in use (ExI2C or InI2C)
 
   MFRC522_I2C::Uid _currentCard = {};
   std::array<std::pair<NFCUtility::MIFARE_Key, NFCUtility::MIFARE_Key>, 40> _mf1AuthKeys;

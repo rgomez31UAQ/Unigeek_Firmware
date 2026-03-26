@@ -88,10 +88,11 @@ void MFRC522Screen::_cleanup() {
     delete _module;
     _module = nullptr;
   }
-  if (_moduleReady && Uni.ExI2C) {
-    Uni.ExI2C->end();
-    _moduleReady = false;
+  if (_moduleReady && _activeBus && _activeBus != Uni.InI2C) {
+    _activeBus->end();
   }
+  _activeBus = nullptr;
+  _moduleReady = false;
 }
 
 void MFRC522Screen::onBack() {
@@ -108,34 +109,53 @@ void MFRC522Screen::onBack() {
 }
 
 void MFRC522Screen::_initModule() {
-  if (!Uni.ExI2C) {
-    ShowStatusAction::show("No external I2C bus!");
+  if (!Uni.ExI2C && !Uni.InI2C) {
+    ShowStatusAction::show("No I2C bus available!");
     Screen.setScreen(new ModuleMenuScreen());
     return;
   }
 
-  int sda = PinConfig.getInt(PIN_CONFIG_EXT_SDA, PIN_CONFIG_EXT_SDA_DEFAULT);
-  int scl = PinConfig.getInt(PIN_CONFIG_EXT_SCL, PIN_CONFIG_EXT_SCL_DEFAULT);
+  _activeBus = nullptr;
 
-  ShowProgressAction::show("Initializing I2C...", 10);
-  Uni.ExI2C->begin(sda, scl);
-  Uni.ExI2C->setTimeOut(50);
-  delay(100);
+  // Try external I2C first
+  if (Uni.ExI2C) {
+    int sda = PinConfig.getInt(PIN_CONFIG_EXT_SDA, PIN_CONFIG_EXT_SDA_DEFAULT);
+    int scl = PinConfig.getInt(PIN_CONFIG_EXT_SCL, PIN_CONFIG_EXT_SCL_DEFAULT);
 
-  ShowProgressAction::show("Scanning for RC522...", 40);
-
-  bool found = false;
-  for (int attempt = 0; attempt < 3; attempt++) {
-    Uni.ExI2C->beginTransmission(I2C_ADDRESS);
-    if (Uni.ExI2C->endTransmission() == 0) {
-      found = true;
-      break;
-    }
+    ShowProgressAction::show("Scanning external I2C...", 10);
+    Uni.ExI2C->begin(sda, scl);
+    Uni.ExI2C->setTimeOut(50);
     delay(100);
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+      Uni.ExI2C->beginTransmission(I2C_ADDRESS);
+      if (Uni.ExI2C->endTransmission() == 0) {
+        _activeBus = Uni.ExI2C;
+        break;
+      }
+      delay(100);
+    }
+
+    if (!_activeBus) Uni.ExI2C->end();
   }
 
-  if (!found) {
-    Uni.ExI2C->end();
+  // Fall back to internal I2C
+  if (!_activeBus && Uni.InI2C) {
+    ShowProgressAction::show("Scanning internal I2C...", 30);
+    Uni.InI2C->setTimeOut(50);
+    delay(100);
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+      Uni.InI2C->beginTransmission(I2C_ADDRESS);
+      if (Uni.InI2C->endTransmission() == 0) {
+        _activeBus = Uni.InI2C;
+        break;
+      }
+      delay(100);
+    }
+  }
+
+  if (!_activeBus) {
     ShowStatusAction::show("Module not found!");
     Screen.setScreen(new ModuleMenuScreen());
     return;
@@ -143,7 +163,7 @@ void MFRC522Screen::_initModule() {
 
   ShowProgressAction::show("Starting RC522...", 70);
   if (_module) delete _module;
-  _module = new MFRC522_I2C(I2C_ADDRESS, (byte)-1, Uni.ExI2C);
+  _module = new MFRC522_I2C(I2C_ADDRESS, (byte)-1, _activeBus);
   _module->PCD_Init();
   _moduleReady = true;
   delay(200);
