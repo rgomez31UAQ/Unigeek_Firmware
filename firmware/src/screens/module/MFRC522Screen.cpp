@@ -5,6 +5,9 @@
 #include "screens/module/ModuleMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowProgressAction.h"
+#ifdef BOARD_HAS_PSRAM
+#include "utils/NestedAttack.h"
+#endif
 
 static constexpr uint8_t I2C_ADDRESS = 0x28;
 
@@ -71,6 +74,9 @@ void MFRC522Screen::onItemSelected(uint8_t index) {
     switch (index) {
       case 0: _goShowDiscoveredKeys(); break;
       case 1: _callMemoryReader();     break;
+#ifdef BOARD_HAS_PSRAM
+      case 2: _callNestedAttack();     break;
+#endif
     }
   }
 }
@@ -498,3 +504,122 @@ void MFRC522Screen::_callMemoryReader() {
   _scrollView.setRows(_rows, _rowCount);
   render();
 }
+
+#ifdef BOARD_HAS_PSRAM
+void MFRC522Screen::_callNestedAttack() {
+  // lfsr_recovery32 needs ~5MB PSRAM (2MB + 2MB + 1MB + 128KB)
+  uint32_t freePsram = ESP.getFreePsram();
+  if (freePsram < 5 * 1024 * 1024) {
+    char msg[64];
+    snprintf(msg, sizeof(msg), "Not enough PSRAM\nFree: %luKB / Need: 5MB", (unsigned long)(freePsram / 1024));
+    ShowStatusAction::show(msg);
+    return;
+  }
+
+  auto piccType = static_cast<MFRC522_I2C::PICC_Type>(_module->PICC_GetType(_currentCard.sak));
+  auto it = _mf1CardDetails.find(piccType);
+  if (it == _mf1CardDetails.end()) {
+    ShowStatusAction::show("Unsupported tag");
+    return;
+  }
+
+  size_t totalSectors = it->second.first;
+
+  // Find exploit sector: first sector with a known key
+  int exploitSector = -1;
+  uint64_t exploitKey = 0;
+  for (size_t s = 0; s < totalSectors; s++) {
+    if (_mf1AuthKeys[s].first) {
+      exploitSector = (int)s;
+      auto kv = _mf1AuthKeys[s].first.value();
+      for (int b = 0; b < 6; b++)
+        exploitKey = (exploitKey << 8) | kv[b];
+      break;
+    }
+    if (_mf1AuthKeys[s].second) {
+      exploitSector = (int)s;
+      auto kv = _mf1AuthKeys[s].second.value();
+      for (int b = 0; b < 6; b++)
+        exploitKey = (exploitKey << 8) | kv[b];
+      break;
+    }
+  }
+
+  if (exploitSector < 0) {
+    ShowStatusAction::show("Need at least one\nknown key first!");
+    return;
+  }
+
+  uint32_t uid = 0;
+  for (int i = 0; i < 4; i++)
+    uid = (uid << 8) | _currentCard.uidByte[i];
+
+  int exploitTrailer = (exploitSector < 32)
+    ? (exploitSector * 4 + 3)
+    : (128 + (exploitSector - 32) * 16 + 15);
+
+  int recovered = 0;
+
+  for (size_t s = 0; s < totalSectors; s++) {
+    if (_mf1AuthKeys[s].first && _mf1AuthKeys[s].second)
+      continue;
+
+    int targetTrailer = (s < 32) ? ((int)s * 4 + 3) : (128 + ((int)s - 32) * 16 + 15);
+
+    // Attack missing key A
+    if (!_mf1AuthKeys[s].first) {
+      char msg[48];
+      snprintf(msg, sizeof(msg), "Nested S%d key A...", (int)s);
+      ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
+
+      auto result = NestedAttack::crack(
+        _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A,
+        exploitTrailer, exploitKey, targetTrailer,
+        [](const char* m, int pct) -> bool {
+          ShowProgressAction::show(m, pct);
+          return true;
+        });
+
+      if (result.success) {
+        uint8_t kb[6];
+        uint64_t k = result.key;
+        for (int i = 5; i >= 0; i--) { kb[i] = (uint8_t)(k & 0xFF); k >>= 8; }
+        _mf1AuthKeys[s].first = NFCUtility::MIFARE_Key(kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
+        recovered++;
+      }
+    }
+
+    // Attack missing key B
+    if (!_mf1AuthKeys[s].second) {
+      char msg[48];
+      snprintf(msg, sizeof(msg), "Nested S%d key B...", (int)s);
+      ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
+
+      auto result = NestedAttack::crack(
+        _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B,
+        exploitTrailer, exploitKey, targetTrailer,
+        [](const char* m, int pct) -> bool {
+          ShowProgressAction::show(m, pct);
+          return true;
+        });
+
+      if (result.success) {
+        uint8_t kb[6];
+        uint64_t k = result.key;
+        for (int i = 5; i >= 0; i--) { kb[i] = (uint8_t)(k & 0xFF); k >>= 8; }
+        _mf1AuthKeys[s].second = NFCUtility::MIFARE_Key(kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
+        recovered++;
+      }
+    }
+  }
+
+  // Re-init module after raw register manipulation
+  _module->PCD_Init();
+
+  char msg[48];
+  snprintf(msg, sizeof(msg), "Recovered %d keys", recovered);
+  ShowStatusAction::show(msg);
+
+  _goMifareClassic();
+}
+#endif

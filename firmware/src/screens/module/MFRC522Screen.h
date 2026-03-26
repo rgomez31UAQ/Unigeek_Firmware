@@ -48,10 +48,18 @@ private:
   };
 
   // MIFARE Classic submenu
+#ifdef BOARD_HAS_PSRAM
+  ListItem _mfItems[3] = {
+    {"Discovered Keys"},
+    {"Dump Memory"},
+    {"Nested Attack"},
+  };
+#else
   ListItem _mfItems[2] = {
     {"Discovered Keys"},
     {"Dump Memory"},
   };
+#endif
 
   // ScrollListView for keys/memory display
   ScrollListView _scrollView;
@@ -69,6 +77,9 @@ private:
   void _callScanUid();
   void _callAuthenticate();
   void _callMemoryReader();
+#ifdef BOARD_HAS_PSRAM
+  void _callNestedAttack();
+#endif
   bool _resetCardState();
 
   std::string _uidToString(byte* uid, byte len) {
