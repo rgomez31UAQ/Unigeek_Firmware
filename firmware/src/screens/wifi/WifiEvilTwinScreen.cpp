@@ -26,7 +26,7 @@ void WifiEvilTwinScreen::_onPost(const String& data, void* ctx)
 {
   auto* self = static_cast<WifiEvilTwinScreen*>(ctx);
   self->_pwdCount++;
-  self->_log.addLine("[+] Credential received");
+  self->_log.addLine("[+] Credential received", TFT_GREEN);
 
   // Save captured data
   char bssidStr[18];
@@ -54,11 +54,9 @@ void WifiEvilTwinScreen::_onPost(const String& data, void* ctx)
   if (self->_checkPwd && pwd.length() > 0) {
     char logBuf[60];
     snprintf(logBuf, sizeof(logBuf), "[+] Pwd: %s", pwd.c_str());
-    self->_log.addLine(logBuf);
+    self->_log.addLine(logBuf, TFT_GREEN);
     self->_pendingPwd = pwd;
     self->_pwdResult = 0;
-  } else if (!self->_checkPwd && Uni.Speaker) {
-    Uni.Speaker->playNotification();
   }
 }
 
@@ -224,12 +222,10 @@ bool WifiEvilTwinScreen::_tryPassword(const String& password)
 
   if (ok) {
     _pwdResult = 1;
-    if (Uni.Speaker) Uni.Speaker->playWin();
-    _log.addLine("[+] Password correct!");
+    _log.addLine("[+] Password correct!", TFT_GREEN);
   } else {
     _pwdResult = -1;
-    if (Uni.Speaker) Uni.Speaker->playWrongAnswer();
-    _log.addLine("[!] Password wrong");
+    _log.addLine("[!] Password wrong", TFT_RED);
   }
 
   return ok;

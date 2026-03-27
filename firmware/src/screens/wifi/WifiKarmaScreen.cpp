@@ -28,8 +28,7 @@ void WifiKarmaScreen::_onVisit(void* ctx)
 void WifiKarmaScreen::_onPost(const String& data, void* ctx)
 {
   auto* self = static_cast<WifiKarmaScreen*>(ctx);
-  self->_log.addLine("[+] Credential captured!");
-  if (Uni.Speaker) Uni.Speaker->playNotification();
+  self->_log.addLine("[+] Credential captured!", TFT_GREEN);
 
   String ssid = (self->_currentIdx < self->_ssidCount)
     ? String(self->_ssids[self->_currentIdx]) : "unknown";
@@ -113,8 +112,7 @@ void WifiKarmaScreen::onUpdate()
       _inputStartTime = now;
       char buf[60];
       snprintf(buf, sizeof(buf), "[+] Client connected to: %s", _ssids[_currentIdx]);
-      _log.addLine(buf);
-      if (Uni.Speaker) Uni.Speaker->playNotification();
+      _log.addLine(buf, TFT_GREEN);
     }
 
     // Phase 1: waiting for device to connect
@@ -353,7 +351,7 @@ void WifiKarmaScreen::_saveSSIDToFile(const char* ssid)
 {
   if (!Uni.Storage || !Uni.Storage->isAvailable()) return;
   if (!StorageUtil::hasSpace()) {
-    _log.addLine("[!] Storage full, skip save");
+    _log.addLine("[!] Storage full, skip save", TFT_RED);
     return;
   }
 

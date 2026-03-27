@@ -10,17 +10,20 @@ public:
 
   void clear() { _count = 0; }
 
-  void addLine(const char* msg) {
+  void addLine(const char* msg, uint16_t color = TFT_WHITE) {
     if (_count < MAX_LINES) {
       strncpy(_lines[_count], msg, LINE_LEN - 1);
       _lines[_count][LINE_LEN - 1] = '\0';
+      _colors[_count] = color;
       _count++;
     } else {
       for (int i = 0; i < MAX_LINES - 1; i++) {
         memcpy(_lines[i], _lines[i + 1], LINE_LEN);
+        _colors[i] = _colors[i + 1];
       }
       strncpy(_lines[MAX_LINES - 1], msg, LINE_LEN - 1);
       _lines[MAX_LINES - 1][LINE_LEN - 1] = '\0';
+      _colors[MAX_LINES - 1] = color;
     }
   }
 
@@ -38,8 +41,8 @@ public:
     int startIdx   = _count > maxVisible ? _count - maxVisible : 0;
 
     sp.setTextDatum(TL_DATUM);
-    sp.setTextColor(TFT_WHITE, TFT_BLACK);
     for (int i = startIdx; i < _count; i++) {
+      sp.setTextColor(_colors[i], TFT_BLACK);
       sp.drawString(_lines[i], 2, (i - startIdx) * lineH, 1);
     }
 
@@ -59,5 +62,6 @@ private:
   static constexpr int MAX_LINES = 30;
   static constexpr int LINE_LEN  = 60;
   char _lines[MAX_LINES][LINE_LEN] = {};
+  uint16_t _colors[MAX_LINES] = {};
   int  _count = 0;
 };

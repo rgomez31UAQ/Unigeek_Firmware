@@ -137,10 +137,9 @@ void NetworkMitmScreen::onUpdate()
 
       const auto& s = _starv.stats();
       char buf[60];
-      if (Uni.Speaker) Uni.Speaker->playWin();
       snprintf(buf, sizeof(buf), "[+] Pool exhausted! ACK:%lu NAK:%lu",
                (unsigned long)s.ack, (unsigned long)s.nak);
-      _log.addLine(buf);
+      _log.addLine(buf, TFT_GREEN);
 
       // Chain: deauth burst if enabled, then rogue DHCP
       if (_deauthBurst) {
@@ -152,8 +151,7 @@ void NetworkMitmScreen::onUpdate()
       _starvRunning = false;
       _starv.stop();
 
-      if (Uni.Speaker) Uni.Speaker->playLose();
-      _log.addLine("[!] Starvation failed (stuck)");
+      _log.addLine("[!] Starvation failed (stuck)", TFT_RED);
 
       // Still start Rogue DHCP if enabled
       _startRogueDhcp();
@@ -246,7 +244,7 @@ void NetworkMitmScreen::_start()
         _log.addLine(buf);
       }
     } else {
-      _log.addLine("[!] DNS Spoof failed");
+      _log.addLine("[!] DNS Spoof failed", TFT_RED);
       _dnsEnabled = false;
     }
   }
@@ -260,7 +258,7 @@ void NetworkMitmScreen::_start()
         _log.addLine("[+] File Manager on :8080");
       }
     } else {
-      _log.addLine("[!] File Manager failed");
+      _log.addLine("[!] File Manager failed", TFT_RED);
       _fmEnabled = false;
     }
   }
@@ -276,7 +274,7 @@ void NetworkMitmScreen::_start()
                WiFi.localIP().toString().c_str());
       _log.addLine(ipBuf2);
     } else {
-      _log.addLine("[!] Starvation failed");
+      _log.addLine("[!] Starvation failed", TFT_RED);
       _starvEnabled = false;
     }
   }
@@ -296,7 +294,7 @@ void NetworkMitmScreen::_startRogueDhcp()
     _log.addLine("[+] Rogue DHCP active");
     _log.addLine("    Gateway + DNS = us");
   } else {
-    _log.addLine("[!] Rogue DHCP failed");
+    _log.addLine("[!] Rogue DHCP failed", TFT_RED);
     _rogueEnabled = false;
   }
 }
@@ -347,7 +345,7 @@ void NetworkMitmScreen::_reconnectStaticIP()
     snprintf(buf, sizeof(buf), "[+] Reconnected: %s", WiFi.localIP().toString().c_str());
     _log.addLine(buf);
   } else {
-    _log.addLine("[!] Reconnect failed");
+    _log.addLine("[!] Reconnect failed", TFT_RED);
   }
 }
 
@@ -400,8 +398,7 @@ void NetworkMitmScreen::_onDnsPost(const char* clientIP, const char* domain, con
   if (!_instance) return;
   char buf[60];
   snprintf(buf, sizeof(buf), "[+] POST %s", domain);
-  _instance->_log.addLine(buf);
-  if (Uni.Speaker) Uni.Speaker->playNotification();
+  _instance->_log.addLine(buf, TFT_GREEN);
 }
 
 void NetworkMitmScreen::_onDhcpClient(const char* mac, const char* ip)
@@ -409,8 +406,7 @@ void NetworkMitmScreen::_onDhcpClient(const char* mac, const char* ip)
   if (!_instance) return;
   char buf[60];
   snprintf(buf, sizeof(buf), "[+] DHCP %s", ip);
-  _instance->_log.addLine(buf);
-  if (Uni.Speaker) Uni.Speaker->playNotification();
+  _instance->_log.addLine(buf, TFT_GREEN);
 }
 
 // ── Log ─────────────────────────────────────────────────────────────────────

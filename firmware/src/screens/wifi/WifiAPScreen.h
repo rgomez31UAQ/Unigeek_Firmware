@@ -16,6 +16,7 @@ public:
   void onBack() override;
 
   void logVisit(const char* msg);
+  void logPost(const char* msg);
 
 private:
   enum State { STATE_MENU, STATE_LOG, STATE_QR };

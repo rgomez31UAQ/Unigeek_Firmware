@@ -30,7 +30,7 @@ static void _onPost(const char* clientIP, const char* domain, const char* data)
   if (_activeInstance) {
     char buf[60];
     snprintf(buf, sizeof(buf), "[+] POST %s", domain);
-    _activeInstance->logVisit(buf);
+    _activeInstance->logPost(buf);
   }
 }
 
@@ -382,6 +382,11 @@ void WifiAPScreen::_showLog()
 void WifiAPScreen::logVisit(const char* msg)
 {
   _log.addLine(msg);
+}
+
+void WifiAPScreen::logPost(const char* msg)
+{
+  _log.addLine(msg, TFT_GREEN);
 }
 
 void WifiAPScreen::_drawLog()
