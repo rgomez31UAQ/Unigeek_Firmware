@@ -202,3 +202,6 @@ firmware/
 - LoRa
 - nr24lf
 - cc1101
+- use HAS_PSRAM instead of t lora pager on ble scanning wardriving.
+- use nimble for ble scanning for non psram device
+- need way to mark file been uploaded (rename or get first line of file to know when it's uploaded. think which best, easier and low cost)

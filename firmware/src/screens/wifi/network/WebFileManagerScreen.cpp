@@ -63,8 +63,8 @@ void WebFileManagerScreen::_start() {
   _state = STATE_RUNNING;
   setItems(nullptr, 0);
 
-  String ipUrl   = "http://" + WiFi.localIP().toString() + "/";
-  String mdnsUrl = "http://unigeek.local/";
+  String ipUrl   = "http://" + WiFi.localIP().toString() + ":8080/";
+  String mdnsUrl = "http://unigeek.local:8080/";
   int cx     = bodyX() + bodyW() / 2;
   int midY   = Uni.Lcd.height() / 2;
 
