@@ -17,6 +17,10 @@
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowProgressAction.h"
 #include "utils/network/WifiUtility.h"
+#include <sys/time.h>
+#ifdef DEVICE_HAS_RTC
+#include "core/RtcManager.h"
+#endif
 
 void GPSScreen::onInit() {
   _initTime = millis();
@@ -36,7 +40,30 @@ void GPSScreen::onUpdate() {
   _gps.update();
 
   if (_state == STATE_LOADING) {
+    // Re-render to animate spinner
+    if (millis() - _lastRender > 1000) {
+      _lastRender = millis();
+      render();
+    }
     if (_gps.gps.location.isValid()) {
+      // Sync device time from GPS (UTC)
+      auto& d = _gps.gps.date;
+      auto& t = _gps.gps.time;
+      if (d.isValid() && t.isValid() && d.year() >= 2020) {
+        struct tm tm = {};
+        tm.tm_year = d.year() - 1900;
+        tm.tm_mon  = d.month() - 1;
+        tm.tm_mday = d.day();
+        tm.tm_hour = t.hour();
+        tm.tm_min  = t.minute();
+        tm.tm_sec  = t.second();
+        time_t epoch = mktime(&tm);
+        struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+        settimeofday(&tv, nullptr);
+#ifdef DEVICE_HAS_RTC
+        RtcManager::syncRtcFromSystem();
+#endif
+      }
       _showMenu();
       return;
     }
@@ -46,11 +73,6 @@ void GPSScreen::onUpdate() {
       _disableGnssPower();
       Screen.setScreen(new ModuleMenuScreen());
       return;
-    }
-    // Re-render every second to update status message
-    if (millis() - _lastRender > 1000) {
-      _lastRender = millis();
-      render();
     }
     if (Uni.Nav->wasPressed()) {
       auto dir = Uni.Nav->readDirection();
@@ -78,7 +100,7 @@ void GPSScreen::onUpdate() {
 
   if (_state == STATE_WARDRIVING) {
     _gps.doWardrive(Uni.Storage);
-    if (millis() - _lastRender > 500) _renderWardriver();
+    if (millis() - _lastRender > 1000) _renderWardriver();
     if (Uni.Nav->wasPressed()) {
       auto dir = Uni.Nav->readDirection();
       if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
@@ -113,17 +135,23 @@ void GPSScreen::onRender() {
     sp.setTextDatum(MC_DATUM);
     sp.setTextSize(1);
     bool gpsFound = _gps.gps.charsProcessed() >= 10;
+    static const char spinner[] = {'/', '-', '\\', '|'};
+    uint8_t frame = (millis() / 250) % 4;
+    char anim[4] = {'[', spinner[frame], ']', '\0'};
+
     sp.setTextColor(TFT_WHITE);
     if (gpsFound) {
-      sp.drawString("GPS module found!", bodyW() / 2, bodyH() / 2 - 16);
+      sp.drawString("GPS module found!", bodyW() / 2, bodyH() / 2 - 20);
       sp.setTextColor(TFT_DARKGREY);
-      sp.drawString("Acquiring satellite fix...", bodyW() / 2, bodyH() / 2);
-      sp.drawString("This may take a few minutes", bodyW() / 2, bodyH() / 2 + 12);
+      sp.drawString("Acquiring satellite fix...", bodyW() / 2, bodyH() / 2 - 4);
+      sp.drawString("This may take a few minutes", bodyW() / 2, bodyH() / 2 + 8);
     } else {
-      sp.drawString("Waiting for GPS signal...", bodyW() / 2, bodyH() / 2 - 8);
+      sp.drawString("Waiting for GPS signal...", bodyW() / 2, bodyH() / 2 - 12);
       sp.setTextColor(TFT_DARKGREY);
-      sp.drawString("Go outside for best reception", bodyW() / 2, bodyH() / 2 + 8);
+      sp.drawString("Go outside for best reception", bodyW() / 2, bodyH() / 2 + 4);
     }
+    sp.setTextColor(TFT_YELLOW);
+    sp.drawString(anim, bodyW() / 2, bodyH() / 2 + 24);
     sp.pushSprite(bodyX(), bodyY());
     sp.deleteSprite();
     return;
@@ -140,6 +168,8 @@ void GPSScreen::onRender() {
 void GPSScreen::onBack() {
   if (_state == STATE_MENU || _state == STATE_LOADING) {
     ShowStatusAction::show("Stopping GPS...", 500);
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
     _gps.end();
     _disableGnssPower();
     Screen.setScreen(new ModuleMenuScreen());
@@ -164,6 +194,7 @@ void GPSScreen::onItemSelected(uint8_t index) {
           render();
           return;
         }
+        _wardLog.clear();
         _state = STATE_WARDRIVING;
         _renderWardriver();
         break;
@@ -173,7 +204,7 @@ void GPSScreen::onItemSelected(uint8_t index) {
         break;
       case 3:
         _editWigleToken();
-        _showMenu();
+        render();
         break;
       case 4:
         _showWigleStats();
@@ -228,63 +259,60 @@ void GPSScreen::_renderInfo() {
   _infoView.render(bodyX(), bodyY(), bodyW(), bodyH());
 }
 
+void GPSScreen::_wardStatusCb(TFT_eSprite& sp, int barY, int width, void* userData) {
+  auto* self = (GPSScreen*)userData;
+
+  sp.setTextDatum(TL_DATUM);
+  sp.setTextColor(TFT_GREEN);
+
+  float dist = self->_gps.totalDistance();
+  String distStr = dist >= 1000
+    ? String(dist / 1000.0, 1) + "km"
+    : String((int)dist) + "m";
+
+  String left = "W:" + String(self->_gps.discoveredCount()) +
+                " B:" + String(self->_gps.bleDiscoveredCount()) +
+                " " + distStr;
+  sp.drawString(left, 2, barY);
+
+  sp.setTextDatum(TR_DATUM);
+  unsigned long rt = self->_gps.wardriveRuntime() / 1000;
+  char timeBuf[9];
+  snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d:%02d",
+           (int)(rt / 3600), (int)((rt % 3600) / 60), (int)(rt % 60));
+  sp.drawString(timeBuf, width - 2, barY);
+}
+
 void GPSScreen::_renderWardriver() {
   _lastRender = millis();
 
-  TFT_eSprite sp(&Uni.Lcd);
-  sp.createSprite(bodyW(), bodyH());
-  sp.fillSprite(TFT_BLACK);
-  sp.setTextSize(1);
-  sp.setTextDatum(TL_DATUM);
-
-  int fh = sp.fontHeight();
-  int w = bodyW();
-  int h = bodyH();
-
-  // date/time top-left
-  sp.setTextColor(TFT_WHITE);
-  sp.drawString(_gps.getCurrentDate(), 0, 0);
-  sp.drawString(_gps.getCurrentTime() + " UTC", 0, fh + 2);
-
-  // coords top-right
-  sp.setTextDatum(TR_DATUM);
-  sp.drawString(String(_gps.gps.location.lat(), 6), w, 0);
-  sp.drawString(String(_gps.gps.location.lng(), 6), w, fh + 2);
-
-  // file
-  sp.setTextDatum(TL_DATUM);
-  sp.drawString("File: " + _gps.wardriveFilename(), 0, fh * 2 + 4);
-
-  // discovered count centered
-  sp.setTextDatum(MC_DATUM);
-  sp.setTextColor(TFT_CYAN);
-  sp.drawString("WiFi Discovered", w / 2, h / 2 + fh + 2);
-  sp.setTextSize(2);
-  sp.drawString(String(_gps.discoveredCount()), w / 2, h / 2 - fh / 2);
-
-  // status bottom-right
-  sp.setTextSize(1);
-  sp.setTextDatum(BR_DATUM);
-  const char* status = "Idle";
-  switch (_gps.wardriveStatus()) {
-    case GPSModule::WARDRIVE_SCANNING: status = "Scanning..."; break;
-    case GPSModule::WARDRIVE_SAVING:   status = "Saving..."; break;
-    default: break;
+  // Show waiting message if no stations found yet
+  if (_wardLog.count() == 0 && _gps.discoveredCount() == 0 && _gps.bleDiscoveredCount() == 0) {
+    _wardLog.addLine("Waiting for stations...", TFT_DARKGREY);
   }
-  sp.setTextColor(TFT_GREEN);
-  sp.drawString(status, w, h);
 
-  // exit hint bottom-left
-  sp.setTextDatum(BL_DATUM);
-  sp.setTextColor(TFT_DARKGREY);
-#ifdef DEVICE_HAS_KEYBOARD
-  sp.drawString("BACK: Exit", 0, h);
-#else
-  sp.drawString("< Back", 0, h);
-#endif
+  // Poll recent finds and add to log
+  GPSModule::FoundEntry finds[10];
+  uint8_t count = _gps.getRecentFinds(finds, 10);
+  if (count > 0 && _wardLog.count() == 1 && _gps.discoveredCount() + _gps.bleDiscoveredCount() <= count) {
+    _wardLog.clear();
+  }
+  for (uint8_t i = 0; i < count; i++) {
+    auto& f = finds[i];
+    unsigned long rt = _gps.wardriveRuntime();
+    unsigned long secs = rt / 1000;
+    char timeBuf[9];
+    snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu:%02lu", secs / 3600, (secs / 60) % 60, secs % 60);
+    String line;
+    if (f.isBle) {
+      line = String("[+] ") + timeBuf + " [BLE] " + f.name + " " + f.addr;
+    } else {
+      line = String("[+] ") + timeBuf + " " + f.name + " " + f.addr;
+    }
+    _wardLog.addLine(line.c_str(), f.isBle ? TFT_CYAN : TFT_WHITE);
+  }
 
-  sp.pushSprite(bodyX(), bodyY());
-  sp.deleteSprite();
+  _wardLog.draw(Uni.Lcd, bodyX(), bodyY(), bodyW(), bodyH(), _wardStatusCb, this);
 }
 
 // Simple JSON value extractor — finds "key":value or "key":"value"
@@ -470,6 +498,13 @@ void GPSScreen::_editWigleToken() {
   if (Uni.Storage) {
     Uni.Storage->makeDir("/unigeek");
     Uni.Storage->writeFile(_wigleTokenPath, token.c_str());
+
+    if (token.length() > 4)
+      _wigleTokenSub = "..." + token.substring(token.length() - 4);
+    else
+      _wigleTokenSub = token;
+    _menuItems[3] = {"Wigle Token", _wigleTokenSub.c_str()};
+
     ShowStatusAction::show("Token saved");
   }
 }

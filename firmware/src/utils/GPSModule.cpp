@@ -4,13 +4,132 @@
 
 #include "GPSModule.h"
 #include <WiFi.h>
+#include <esp_wifi.h>
+#include <math.h>
+#ifdef DEVICE_T_LORA_PAGER
+#include <BLEDevice.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+#endif
 #include "core/ConfigManager.h"
 
+// === Shared scan result buffer (promiscuous WiFi + BLE task) ===
+
+struct ScanResult {
+  uint8_t addr[6];
+  char name[33];
+  int8_t rssi;
+  uint8_t channel;
+  bool isBle;
+  bool hasRSN;
+  bool hasWPA;
+  bool privacy;
+};
+
+static constexpr int SCAN_BUF_SIZE = 16;
+static ScanResult s_scanBuf[SCAN_BUF_SIZE];
+static volatile int s_scanCount = 0;
+static portMUX_TYPE s_scanMux = portMUX_INITIALIZER_UNLOCKED;
+
+// === Promiscuous WiFi callback — parses beacon/probe response frames ===
+
+static void promiscCb(void* buf, wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_MGMT) return;
+
+  auto* pkt = (wifi_promiscuous_pkt_t*)buf;
+  const uint8_t* p = pkt->payload;
+  uint16_t len = pkt->rx_ctrl.sig_len;
+  if (len < 36) return;
+
+  uint8_t subtype = p[0] >> 4;
+  if (subtype != 8 && subtype != 5) return; // beacon=8, probe resp=5
+
+  ScanResult r;
+  memcpy(r.addr, &p[16], 6); // BSSID at offset 16
+  r.rssi = pkt->rx_ctrl.rssi;
+  r.channel = pkt->rx_ctrl.channel;
+  r.isBle = false;
+  memset(r.name, 0, sizeof(r.name));
+  r.hasRSN = false;
+  r.hasWPA = false;
+  r.privacy = (p[34] & 0x10) != 0; // capability info privacy bit
+
+  // Parse tagged parameters starting at offset 36
+  uint16_t pos = 36;
+  while (pos + 2 <= len) {
+    uint8_t tag = p[pos];
+    uint8_t tlen = p[pos + 1];
+    if (pos + 2 + tlen > len) break;
+    if (tag == 0 && tlen <= 32) {
+      memcpy(r.name, &p[pos + 2], tlen); // SSID
+    } else if (tag == 48) {
+      r.hasRSN = true; // RSN = WPA2
+    } else if (tag == 221 && tlen >= 4 &&
+               p[pos+2]==0x00 && p[pos+3]==0x50 &&
+               p[pos+4]==0xF2 && p[pos+5]==0x01) {
+      r.hasWPA = true; // WPA vendor IE
+    }
+    pos += 2 + tlen;
+  }
+
+  portENTER_CRITICAL(&s_scanMux);
+  if (s_scanCount < SCAN_BUF_SIZE) {
+    s_scanBuf[s_scanCount] = r;
+    s_scanCount++;
+  }
+  portEXIT_CRITICAL(&s_scanMux);
+}
+
+// === BLE scanning task (T-Lora Pager only — Bluedroid needs extra heap) ===
+
+#ifdef DEVICE_T_LORA_PAGER
+static volatile bool s_bleRunning = false;
+static volatile bool s_bleTaskDone = false;
+
+static void bleTaskFunc(void* param) {
+  s_bleTaskDone = false;
+  BLEDevice::init("");
+  BLEScan* scan = BLEDevice::getScan();
+  scan->setActiveScan(true);
+  scan->setInterval(100);
+  scan->setWindow(99);
+
+  while (s_bleRunning) {
+    BLEScanResults results = scan->start(2, false);
+
+    portENTER_CRITICAL(&s_scanMux);
+    for (int i = 0; i < results.getCount() && s_scanCount < SCAN_BUF_SIZE; i++) {
+      BLEAdvertisedDevice d = results.getDevice(i);
+      auto& entry = s_scanBuf[s_scanCount];
+      memcpy(entry.addr, d.getAddress().getNative(), 6);
+      strncpy(entry.name, d.getName().c_str(), 32);
+      entry.name[32] = '\0';
+      entry.rssi = d.getRSSI();
+      entry.channel = 0;
+      entry.isBle = true;
+      entry.hasRSN = false;
+      entry.hasWPA = false;
+      entry.privacy = false;
+      s_scanCount++;
+    }
+    portEXIT_CRITICAL(&s_scanMux);
+
+    scan->clearResults();
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+  }
+
+  scan->stop();
+  BLEDevice::deinit(false);
+  s_bleTaskDone = true;
+  vTaskDelete(NULL);
+}
+#endif
+
+// === GPSModule implementation ===
+
 void GPSModule::begin(uint8_t uartNum, uint32_t baudRate, int8_t rxPin, int8_t txPin) {
-  // Release pins from any prior SPI/peripheral use
   if (rxPin >= 0) pinMode(rxPin, INPUT);
   if (txPin >= 0) pinMode(txPin, OUTPUT);
-
   _serial = new HardwareSerial(uartNum);
   _ownSerial = true;
   _serial->begin(baudRate, SERIAL_8N1, rxPin, txPin);
@@ -46,42 +165,155 @@ String GPSModule::getCurrentTime() {
   return _pad(gps.time.hour(), 2) + ":" + _pad(gps.time.minute(), 2) + ":" + _pad(gps.time.second(), 2);
 }
 
-bool GPSModule::_isBssidScanned(const uint8_t* bssid) {
-  BSSID b;
+bool GPSModule::_isWifiScanned(const uint8_t* bssid) {
+  ADDR6 b;
   memcpy(b.data(), bssid, 6);
-  for (uint8_t i = 0; i < _bssidCount; i++) {
-    if (_bssidBuf[i] == b) return true;
+  for (uint8_t i = 0; i < _wifiCount; i++) {
+    if (_wifiBuf[i] == b) return true;
   }
-  // add to circular buffer
-  _bssidBuf[_bssidHead] = b;
-  _bssidHead = (_bssidHead + 1) % BSSID_BUF_SIZE;
-  if (_bssidCount < BSSID_BUF_SIZE) _bssidCount++;
+  _wifiBuf[_wifiHead] = b;
+  _wifiHead = (_wifiHead + 1) % DEDUP_BUF_SIZE;
+  if (_wifiCount < DEDUP_BUF_SIZE) _wifiCount++;
+  return false;
+}
+
+bool GPSModule::_isBleScanned(const uint8_t* addr) {
+  ADDR6 b;
+  memcpy(b.data(), addr, 6);
+  for (uint8_t i = 0; i < _bleCount; i++) {
+    if (_bleBuf[i] == b) return true;
+  }
+  _bleBuf[_bleHead] = b;
+  _bleHead = (_bleHead + 1) % DEDUP_BUF_SIZE;
+  if (_bleCount < DEDUP_BUF_SIZE) _bleCount++;
   return false;
 }
 
 void GPSModule::_addWigleRecord(IStorage* storage, const String& ssid, const String& bssid,
-                                 const String& authMode, int32_t rssi, int32_t channel) {
+                                 const String& authMode, int32_t rssi, int32_t channel,
+                                 const char* type) {
   String fullPath = _savePath + "/" + _filename;
   fs::File f = storage->open(fullPath.c_str(), FILE_APPEND);
   if (!f) return;
 
-  int frequency = channel != 14 ? 2407 + (channel * 5) : 2484;
+  bool isWifi = strcmp(type, "WIFI") == 0;
+  String freqStr = isWifi
+    ? String(channel != 14 ? 2407 + (channel * 5) : 2484)
+    : "";
+  String altStr = String((int)gps.altitude.meters());
+  String accStr = String(gps.hdop.hdop() * 5.0, 1); // hdop * ~5m base accuracy
+
   f.println(
     bssid + "," +
     "\"" + ssid + "\"," +
     authMode + "," +
     getCurrentDate() + " " + getCurrentTime() + "," +
     String(channel) + "," +
-    String(frequency) + "," +
+    freqStr + "," +
     String(rssi) + "," +
     String(gps.location.lat(), 6) + "," +
     String(gps.location.lng(), 6) + "," +
-    String(gps.altitude.meters(), 2) + "," +
-    String(gps.hdop.hdop() * 1.0) + "," +
-    ",,WIFI"
+    altStr + "," +
+    accStr + "," +
+    ",," + type
   );
   f.close();
 }
+
+// === Distance tracking ===
+
+double GPSModule::_haversine(double lat1, double lng1, double lat2, double lng2) {
+  constexpr double R = 6371000.0;
+  double dLat = radians(lat2 - lat1);
+  double dLng = radians(lng2 - lng1);
+  double a = sin(dLat / 2) * sin(dLat / 2) +
+             cos(radians(lat1)) * cos(radians(lat2)) *
+             sin(dLng / 2) * sin(dLng / 2);
+  return R * 2 * atan2(sqrt(a), sqrt(1 - a));
+}
+
+float GPSModule::totalDistance() {
+  if (!_hasStartPos || !gps.location.isValid()) return 0;
+  return (float)_haversine(_startLat, _startLng, gps.location.lat(), gps.location.lng());
+}
+
+// === Recent finds for log ===
+
+void GPSModule::_addRecentFind(const char* name, const char* addr, int8_t rssi, uint8_t channel, bool isBle) {
+  auto& entry = _recentFinds[_recentHead];
+  strncpy(entry.name, name, 32);
+  entry.name[32] = '\0';
+  strncpy(entry.addr, addr, 17);
+  entry.addr[17] = '\0';
+  entry.rssi = rssi;
+  entry.channel = channel;
+  entry.isBle = isBle;
+  _recentHead = (_recentHead + 1) % MAX_RECENT;
+  if (_recentCount < MAX_RECENT) _recentCount++;
+}
+
+uint8_t GPSModule::getRecentFinds(FoundEntry* out, uint8_t maxCount) {
+  if (_recentCount == 0) return 0;
+  uint8_t count = _recentCount < maxCount ? _recentCount : maxCount;
+  uint8_t start = (_recentHead + MAX_RECENT - _recentCount) % MAX_RECENT;
+  for (uint8_t i = 0; i < count; i++) {
+    out[i] = _recentFinds[(start + i) % MAX_RECENT];
+  }
+  _recentCount = 0;
+  _recentHead = 0;
+  return count;
+}
+
+unsigned long GPSModule::wardriveRuntime() {
+  if (_wardriveStartTime == 0) return 0;
+  return millis() - _wardriveStartTime;
+}
+
+// === Promiscuous mode control ===
+
+void GPSModule::_startPromiscuous() {
+  s_scanCount = 0;
+  _currentChannel = 1;
+  _lastChannelHop = millis();
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+
+  wifi_promiscuous_filter_t filter;
+  filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
+  esp_wifi_set_promiscuous_filter(&filter);
+  esp_wifi_set_promiscuous_rx_cb(promiscCb);
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(_currentChannel, WIFI_SECOND_CHAN_NONE);
+}
+
+void GPSModule::_stopPromiscuous() {
+  esp_wifi_set_promiscuous(false);
+  esp_wifi_set_promiscuous_rx_cb(nullptr);
+}
+
+// === BLE scan control ===
+
+void GPSModule::_startBleScan() {
+#ifdef DEVICE_T_LORA_PAGER
+  s_bleRunning = true;
+  s_bleTaskDone = false;
+  xTaskCreatePinnedToCore(bleTaskFunc, "ble_wd", 8192, nullptr, 1, &_bleTask, 0);
+#endif
+}
+
+void GPSModule::_stopBleScan() {
+#ifdef DEVICE_T_LORA_PAGER
+  if (!_bleTask) return;
+  s_bleRunning = false;
+  unsigned long start = millis();
+  while (!s_bleTaskDone && millis() - start < 5000) delay(100);
+  _bleTask = nullptr;
+#endif
+}
+
+// === Wardrive lifecycle ===
 
 bool GPSModule::initWardrive(IStorage* storage) {
   endWardrive();
@@ -126,51 +358,99 @@ bool GPSModule::initWardrive(IStorage* storage) {
   );
   f.close();
 
-  WiFi.mode(WIFI_STA);
+  _wardriveStartTime = millis();
+  _wardriveState = WARDRIVE_SCANNING;
+
+  _startPromiscuous();
+  _startBleScan();
   return true;
 }
 
 void GPSModule::doWardrive(IStorage* storage) {
-  if (_wardriveState == WARDRIVE_IDLE && (millis() - _lastWifiScan > 5000)) {
-    WiFi.scanNetworks(true, true);
+  // Channel hop every 200ms (13 channels, full cycle ~2.6s)
+  if (millis() - _lastChannelHop > 200) {
+    _currentChannel = (_currentChannel % 13) + 1;
+    esp_wifi_set_channel(_currentChannel, WIFI_SECOND_CHAN_NONE);
+    _lastChannelHop = millis();
+  }
+
+  // Process buffered scan results from promiscuous + BLE
+  ScanResult localBuf[SCAN_BUF_SIZE];
+  int localCount;
+
+  portENTER_CRITICAL(&s_scanMux);
+  localCount = s_scanCount;
+  if (localCount > 0) {
+    memcpy(localBuf, s_scanBuf, localCount * sizeof(ScanResult));
+    s_scanCount = 0;
+  }
+  portEXIT_CRITICAL(&s_scanMux);
+
+  if (localCount > 0) {
+    _wardriveState = WARDRIVE_SAVING;
+
+    for (int i = 0; i < localCount; i++) {
+      auto& r = localBuf[i];
+      bool dup = r.isBle ? _isBleScanned(r.addr) : _isWifiScanned(r.addr);
+      if (dup) continue;
+
+      char addrStr[18];
+      snprintf(addrStr, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+               r.addr[0], r.addr[1], r.addr[2],
+               r.addr[3], r.addr[4], r.addr[5]);
+
+      if (r.isBle) {
+        String bleName = strlen(r.name) > 0 ? String(r.name) : "";
+        _addWigleRecord(storage, bleName, String(addrStr),
+                         "Misc [LE]", r.rssi, 0, "BLE");
+        _totalBleDiscovered++;
+      } else {
+        String authMode;
+        if (r.hasRSN && r.hasWPA) authMode = "[WPA-WPA2-PSK][ESS]";
+        else if (r.hasRSN) authMode = "[WPA2-PSK][ESS]";
+        else if (r.hasWPA) authMode = "[WPA-PSK][ESS]";
+        else if (r.privacy) authMode = "[WEP][ESS]";
+        else authMode = "[OPEN][ESS]";
+
+        _addWigleRecord(storage, String(r.name), String(addrStr),
+                         authMode, r.rssi, r.channel);
+        _totalDiscovered++;
+      }
+
+      const char* displayName = r.name[0] ? r.name : "<hidden>";
+      _addRecentFind(displayName, addrStr, r.rssi, r.channel, r.isBle);
+    }
+
     _wardriveState = WARDRIVE_SCANNING;
   }
 
-  int n = WiFi.scanComplete();
-  if (n > -1) {
-    _wardriveState = WARDRIVE_SAVING;
-    for (int i = 0; i < n; i++) {
-      if (_isBssidScanned(WiFi.BSSID(i))) continue;
-
-      String authMode;
-      switch (WiFi.encryptionType(i)) {
-        case WIFI_AUTH_OPEN:            authMode = "[OPEN][ESS]"; break;
-        case WIFI_AUTH_WEP:             authMode = "[WEP][ESS]"; break;
-        case WIFI_AUTH_WPA_PSK:         authMode = "[WPA-PSK][ESS]"; break;
-        case WIFI_AUTH_WPA2_PSK:        authMode = "[WPA2-PSK][ESS]"; break;
-        case WIFI_AUTH_WPA_WPA2_PSK:    authMode = "[WPA-WPA2-PSK][ESS]"; break;
-        case WIFI_AUTH_WPA2_ENTERPRISE: authMode = "[WPA2-ENTERPRISE][ESS]"; break;
-        default:                        authMode = "[UNKNOWN]";
-      }
-
-      _addWigleRecord(storage, WiFi.SSID(i), WiFi.BSSIDstr(i), authMode,
-                       WiFi.RSSI(i), WiFi.channel(i));
-      _totalDiscovered++;
-    }
-
-    WiFi.scanDelete();
-    _wardriveState = WARDRIVE_IDLE;
-    _lastWifiScan = millis();
+  // Record start position on first valid GPS fix
+  if (!_hasStartPos && gps.location.isValid()) {
+    _startLat = gps.location.lat();
+    _startLng = gps.location.lng();
+    _hasStartPos = true;
   }
 }
 
 void GPSModule::endWardrive() {
+  _stopPromiscuous();
+  _stopBleScan();
+
   _wardriveState = WARDRIVE_IDLE;
   _lastError = "";
   _filename = "";
   _totalDiscovered = 0;
-  _bssidCount = 0;
-  _bssidHead = 0;
-  WiFi.scanDelete();
-  WiFi.mode(WIFI_STA);
+  _totalBleDiscovered = 0;
+  _hasStartPos = false;
+  _wifiCount = 0;
+  _wifiHead = 0;
+  _bleCount = 0;
+  _bleHead = 0;
+  _recentCount = 0;
+  _recentHead = 0;
+  _wardriveStartTime = 0;
+  s_scanCount = 0;
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
 }

@@ -6,6 +6,7 @@
 
 #include "ui/templates/ListScreen.h"
 #include "ui/components/ScrollListView.h"
+#include "ui/components/LogView.h"
 #include "utils/GPSModule.h"
 
 class GPSScreen : public ListScreen
@@ -76,6 +77,9 @@ private:
   void _uploadFile(uint8_t fileIndex);
   void _renderInfo();
   void _renderWardriver();
+  static void _wardStatusCb(TFT_eSprite& sp, int barY, int width, void* userData);
+  LogView _wardLog;
+
   void _enableGnssPower();
   void _disableGnssPower();
 };
