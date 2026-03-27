@@ -81,7 +81,7 @@ All hardware differences are isolated in board-specific folders.
     ├── src/
     │   ├── core/                   Device.h, I*.h interfaces, Storage*.h, SpeakerI2S.h, RtcManager.h, ScreenManager.h, ConfigManager.h
     │   ├── screens/                MainMenuScreen, SettingScreen, wifi/, keyboard/, utility/
-    │   ├── utils/                  WifiAttackUtil, FastWpaCrack, keyboard/ (HID/BLE/USB/DuckScript utils)
+    │   ├── utils/                  WifiAttackUtil, FastWpaCrack, keyboard/ (HID/BLE/USB/DuckScript utils), nfc/ (NFCUtility, StaticNestedAttack, DarksideAttack, crypto/)
     │   ├── ui/
     │   │   ├── templates/          BaseScreen.h, ListScreen.h
     │   │   ├── components/         ScrollListView.h, LogView.h
@@ -91,6 +91,7 @@ All hardware differences are isolated in board-specific folders.
     ├── unigeek/keyboard/duckyscript/   sample DuckyScript payloads
     ├── unigeek/qrcode/                 sample QR code content files
     ├── unigeek/utility/passwords/      sample password wordlists (8+ chars for WiFi)
+    ├── unigeek/nfc/dictionaries/       MIFARE Classic key dictionary files (hex format)
     └── unigeek/wifi/portals/           Evil Twin captive portal templates (google, facebook, wifi)
     release-notes/                      version announcement notes (e.g. 1.2.0.md) — one file per release
 
