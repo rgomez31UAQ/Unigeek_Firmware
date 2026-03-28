@@ -33,6 +33,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
     - **Firmware Sample Files** — Portal templates (Google, Facebook, WiFi login), DuckyScript payloads (hello world, reverse shell, WiFi password grab, rickroll, disable defender), QR code samples, DNS spoofing config, and rockyou_mini password wordlist
   - **MITM Attack** — Man-in-the-middle with DHCP starvation, deauth burst, rogue DHCP, DNS spoofing, and web file manager ([details](knowledge/network-mitm.md))
   - **CCTV Sniffer** — Discover network cameras, identify brands, test credentials, and stream live video ([details](knowledge/cctv-toolkit.md))
+  - **Wigle** — Upload wardrive logs, view user stats, and manage Wigle API token ([details](knowledge/gps-wardriving.md))
 - **Access Point** — Create a custom WiFi hotspot with optional DNS spoofing, captive portal, web file manager, and WiFi QR code for easy sharing ([details](knowledge/access-point.md))
 - **Evil Twin** — Clone a target AP's SSID with a captive portal; optional deauth and real-time password verification ([details](knowledge/evil-twin.md))
 - **Karma Attack** — Detect nearby devices searching for saved WiFi networks, then create fake APs to capture credentials ([details](knowledge/karma-attack.md))
@@ -60,6 +61,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 ### Utility
 - **I2C Detector** — Scan I2C bus and list all responding device addresses
 - **QR Code** — Generate and display a QR code from typed or file-loaded text; supports WiFi QR format
+- **Barcode** — Generate and display a Code 128 barcode from typed or file-loaded text
 - **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; hold 1s to open context menu
 
 ### Games
@@ -86,8 +88,8 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Darkside Attack** — Recover the first key when no keys are known
 - **GPS** — GPS module support with wardriving, works on all boards via external GPS ([details](knowledge/gps-wardriving.md))
   - **Live View** — Real-time satellite count, coordinates, altitude, speed, and heading
-  - **Wardriving** — Log nearby WiFi networks with GPS coordinates in Wigle CSV format
-  - **Wigle Integration** — Upload wardrive logs, view user stats, manage API token
+  - **Wardriving** — Log nearby WiFi and BLE devices with GPS coordinates in Wigle CSV format
+  - **Wigle Integration** — Connect to WiFi, upload wardrive logs, view user stats, manage API token
 
 ### Settings
 - Device name
@@ -160,6 +162,9 @@ Files are stored under `/unigeek/` on either SD card or LittleFS (fallback):
 /unigeek/wifi/portals/             Portal templates for AP, Evil Twin, Karma (HTML/CSS/JS)
 /unigeek/wifi/captives/            Captured credentials from Evil Twin / Karma / Rogue DNS
 /unigeek/qrcode/                   QR code content files
+/unigeek/barcode/                  Barcode content files
+/unigeek/gps/wardriver/            Wardrive CSV log files (Wigle format)
+/unigeek/wigle_token               Wigle API token
 /unigeek/utility/passwords/        Password wordlists for EAPOL brute force
 /unigeek/utility/cctv/             CCTV Sniffer target IP lists
 /unigeek/nfc/dictionaries/         MIFARE Classic key dictionary files
@@ -192,7 +197,7 @@ firmware/
     │   ├── game/
     │   └── setting/
     ├── ui/              templates, components, and action overlays
-    └── utils/           keyboard HID, DuckyScript, nfc/ (attacks, crypto), GPS
+    └── utils/           keyboard HID, DuckyScript, nfc/ (attacks, crypto), gps/ (GPSModule, WigleUtil)
 ```
 
 ---

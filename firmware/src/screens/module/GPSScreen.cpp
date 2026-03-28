@@ -12,7 +12,9 @@
 #include "core/PinConfigManager.h"
 #include "screens/module/ModuleMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/actions/InputTextAction.h"
+#include "ui/actions/InputSelectOption.h"
+#include "utils/network/WifiUtility.h"
 #include <sys/time.h>
 #ifdef DEVICE_HAS_RTC
 #include "core/RtcManager.h"
@@ -109,6 +111,18 @@ void GPSScreen::onUpdate() {
     return;
   }
 
+  if (_state == STATE_STATS) {
+    if (Uni.Nav->wasPressed()) {
+      auto dir = Uni.Nav->readDirection();
+      if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
+        _showMenu();
+      } else {
+        _statsView.onNav(dir);
+      }
+    }
+    return;
+  }
+
   // STATE_MENU — default list behavior
   ListScreen::onUpdate();
 }
@@ -144,12 +158,18 @@ void GPSScreen::onRender() {
   }
   if (_state == STATE_INFO) { _renderInfo(); return; }
   if (_state == STATE_WARDRIVING) { _renderWardriver(); return; }
+  if (_state == STATE_STATS) {
+    _statsView.render(bodyX(), bodyY(), bodyW(), bodyH());
+    return;
+  }
   ListScreen::onRender();
 }
 
 void GPSScreen::onBack() {
   if (_state == STATE_MENU) {
     ShowStatusAction::show("Stopping GPS...", 0);
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
     _gps.end();
     _disableGnssPower();
     Screen.setScreen(new ModuleMenuScreen());
@@ -177,13 +197,40 @@ void GPSScreen::onItemSelected(uint8_t index) {
         _renderWardriver();
         break;
       }
+      case 2:
+        _connectInternet();
+        break;
+      case 3:
+        _editWigleToken();
+        render();
+        break;
+      case 4:
+        _showWigleStats();
+        render();
+        break;
+      case 5:
+        _showUploadMenu();
+        render();
+        break;
     }
+  } else if (_state == STATE_UPLOAD) {
+    _uploadFile(index);
+    render();
   }
 }
 
 void GPSScreen::_showMenu() {
   _state = STATE_MENU;
   _infoInitialized = false;
+
+  // Internet sublabel
+  _internetSub = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "";
+  _menuItems[2] = {"Internet", _internetSub.length() ? _internetSub.c_str() : nullptr};
+
+  // Wigle Token sublabel
+  _wigleTokenSub = WigleUtil::tokenSublabel(Uni.Storage);
+  _menuItems[3] = {"Wigle Token", _wigleTokenSub.c_str()};
+
   setItems(_menuItems);
 }
 
@@ -256,6 +303,99 @@ void GPSScreen::_renderWardriver() {
   _wardLog.draw(Uni.Lcd, bodyX(), bodyY(), bodyW(), bodyH(), _wardStatusCb, this);
 }
 
+
+void GPSScreen::_connectInternet() {
+  ShowStatusAction::show("Scanning WiFi...", 0);
+  WifiUtility::ScannedWifi scanned[WifiUtility::MAX_WIFI];
+  uint8_t count = WifiUtility::scan(scanned, WifiUtility::MAX_WIFI);
+
+  if (count == 0) {
+    ShowStatusAction::show("No WiFi found");
+    _showMenu();
+    return;
+  }
+
+  static InputSelectAction::Option opts[WifiUtility::MAX_WIFI];
+  for (uint8_t i = 0; i < count; i++) {
+    opts[i] = {scanned[i].label, scanned[i].ssid};
+  }
+
+  const char* selected = InputSelectAction::popup("Select WiFi", opts, count);
+  if (!selected) { _showMenu(); return; }
+
+  for (uint8_t i = 0; i < count; i++) {
+    if (strcmp(scanned[i].ssid, selected) != 0) continue;
+
+    ShowStatusAction::show(("Connecting to\n" + String(scanned[i].ssid) + "...").c_str(), 0);
+    auto result = WifiUtility::connectWithPrompt(scanned[i].bssid, scanned[i].ssid);
+
+    if (result == WifiUtility::CONNECT_OK) {
+      ShowStatusAction::show("Checking internet...", 0);
+      if (WifiUtility::checkInternet()) {
+        ShowStatusAction::show(("Connected to\n" + WiFi.SSID()).c_str(), 1500);
+      } else {
+        ShowStatusAction::show("Connected but\nno internet access");
+      }
+    } else if (result == WifiUtility::CONNECT_FAILED) {
+      ShowStatusAction::show("Connection failed");
+    }
+    break;
+  }
+  _showMenu();
+}
+
+void GPSScreen::_editWigleToken() {
+  String current = WigleUtil::readToken(Uni.Storage);
+  String token = InputTextAction::popup("Wigle API Token", current);
+  if (token.length() == 0) return;
+  token.trim();
+  WigleUtil::saveToken(Uni.Storage, token);
+  _wigleTokenSub = WigleUtil::tokenSublabel(Uni.Storage);
+  _menuItems[3] = {"Wigle Token", _wigleTokenSub.c_str()};
+  ShowStatusAction::show("Token saved");
+}
+
+void GPSScreen::_showWigleStats() {
+  uint8_t count = WigleUtil::fetchStats(_statsRows, WigleUtil::MAX_STAT_ROWS);
+  if (count == 0) return;
+
+  _statsView.setRows(_statsRows, count);
+  _state = STATE_STATS;
+  render();
+}
+
+void GPSScreen::_showUploadMenu() {
+  if (WiFi.status() != WL_CONNECTED) {
+    ShowStatusAction::show("Connect to internet first");
+    return;
+  }
+  String token = WigleUtil::readToken(Uni.Storage);
+  if (token.length() == 0) {
+    ShowStatusAction::show("Set Wigle token first");
+    return;
+  }
+
+  _state = STATE_UPLOAD;
+  _fileCount = WigleUtil::listFiles(Uni.Storage, _fileNames, _fileLabels,
+                                     _fileUploaded, WigleUtil::MAX_FILES);
+
+  if (_fileCount == 0) {
+    ShowStatusAction::show("No wardrive files found");
+    _showMenu();
+    return;
+  }
+
+  for (uint8_t i = 0; i < _fileCount; i++) {
+    _uploadItems[i] = {_fileLabels[i].c_str(), _fileUploaded[i] ? "Uploaded" : nullptr};
+  }
+  setItems(_uploadItems, _fileCount);
+}
+
+void GPSScreen::_uploadFile(uint8_t fileIndex) {
+  if (fileIndex >= _fileCount) return;
+  WigleUtil::uploadFile(Uni.Storage, _fileNames[fileIndex]);
+  _showUploadMenu();
+}
 
 void GPSScreen::_enableGnssPower() {
 #ifdef EXPANDS_GNSS_EN

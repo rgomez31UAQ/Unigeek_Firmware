@@ -7,7 +7,6 @@
 #include <Arduino.h>
 #include <TinyGPS++.h>
 #include <array>
-#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "core/IStorage.h"
 

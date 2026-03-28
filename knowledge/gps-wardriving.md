@@ -1,6 +1,6 @@
 # GPS & Wardriving
 
-GPS module with live satellite view and WiFi wardriving. Accessed from **Modules > GPS**.
+GPS module with live satellite view and WiFi/BLE wardriving. Accessed from **Modules > GPS**.
 
 ## Setup
 
@@ -23,25 +23,35 @@ Shows real-time GPS data, updated every second:
 
 ### Wardriver
 
-Logs nearby WiFi networks with GPS coordinates. The display shows date/time, coordinates, discovered WiFi count, and current status. Press back to stop and save.
+Logs nearby WiFi networks and BLE devices with GPS coordinates. Uses NimBLE for lightweight BLE scanning on all boards (no PSRAM required). WiFi capture uses promiscuous mode with channel hopping across all 13 channels.
+
+The display shows a scrolling log of discovered devices with timestamp, name, and address, plus a status bar with WiFi count, BLE count, distance traveled, and elapsed time.
+
+Press BACK or PRESS to stop wardriving. A status message is shown during cleanup.
 
 Log files are saved to `/unigeek/gps/wardriver/` in Wigle-compatible CSV format, ready for upload.
 
+## Wigle Integration
+
+Wigle features are available in two places:
+- **Modules > GPS** — Internet connection, token, stats, and upload alongside wardriving
+- **WiFi > Network > Wigle** — Same token, stats, and upload when already connected to WiFi
+
 ### Internet
 
-Connect to a WiFi network for Wigle API features (stats and upload). Scans nearby networks, lets you pick one and enter the password.
+Connect to a WiFi network for Wigle API features. Scans nearby networks, lets you pick one and enter the password. Shows connection status with internet check.
 
 ### Wigle Token
 
-Set your Wigle API token for uploading wardrive data and viewing stats. Get your token from [wigle.net](https://wigle.net) under your account settings (API Token, encoded as Base64).
+Set your Wigle API token (Base64-encoded, from [wigle.net](https://wigle.net) account settings). The token is shared between GPS and Network > Wigle.
 
-### Wardrive Stats
+### Wardrive Stat
 
-View your Wigle profile statistics: username, rank, month rank, total WiFi/Cell/BT discovered, and upload history. Requires internet connection and a valid Wigle token.
+View your Wigle profile: username, rank, month rank, WiFi/Cell/BT discovered, WiFi locations, and upload history. Requires internet connection and a valid Wigle token.
 
 ### Upload Wardrive
 
-Lists saved wardrive CSV files and uploads the selected file to Wigle. Requires internet connection and a valid Wigle token.
+Lists wardrive CSV files sorted by name. Uploaded files are marked with "Uploaded" sublabel and renamed with `_uploaded` suffix. Requires internet connection and a valid Wigle token.
 
 ## Storage
 

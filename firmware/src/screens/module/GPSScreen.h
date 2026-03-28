@@ -8,6 +8,7 @@
 #include "ui/components/ScrollListView.h"
 #include "ui/components/LogView.h"
 #include "utils/gps/GPSModule.h"
+#include "utils/gps/WigleUtil.h"
 
 class GPSScreen : public ListScreen
 {
@@ -27,6 +28,8 @@ private:
     STATE_MENU,
     STATE_INFO,
     STATE_WARDRIVING,
+    STATE_STATS,
+    STATE_UPLOAD,
   } _state = STATE_LOADING;
 
   GPSModule _gps;
@@ -39,15 +42,38 @@ private:
   int8_t _rxPin = -1;
   uint32_t _baudRate = 9600;
 
-  ListItem _menuItems[2] = {
+  ListItem _menuItems[6] = {
     {"View GPS Info"},
     {"Wardriver"},
+    {"Internet"},
+    {"Wigle Token"},
+    {"Wardrive Stat"},
+    {"Upload Wardrive"},
   };
 
   ScrollListView _infoView;
   ScrollListView::Row _infoRows[8];
 
+  // Wigle stats
+  ScrollListView _statsView;
+  ScrollListView::Row _statsRows[WigleUtil::MAX_STAT_ROWS];
+
+  // Wigle upload
+  ListItem _uploadItems[WigleUtil::MAX_FILES];
+  String _fileNames[WigleUtil::MAX_FILES];
+  String _fileLabels[WigleUtil::MAX_FILES];
+  bool _fileUploaded[WigleUtil::MAX_FILES];
+  uint8_t _fileCount = 0;
+
+  String _wigleTokenSub;
+  String _internetSub;
+
   void _showMenu();
+  void _connectInternet();
+  void _editWigleToken();
+  void _showWigleStats();
+  void _showUploadMenu();
+  void _uploadFile(uint8_t fileIndex);
   void _renderInfo();
   void _renderWardriver();
   static void _wardStatusCb(TFT_eSprite& sp, int barY, int width, void* userData);
