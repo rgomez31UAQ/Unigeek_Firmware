@@ -6,17 +6,13 @@
 
 #include <WiFi.h>
 #include <Wire.h>
-#include <WiFiClientSecure.h>
 
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "core/PinConfigManager.h"
 #include "screens/module/ModuleMenuScreen.h"
-#include "ui/actions/InputTextAction.h"
-#include "ui/actions/InputSelectOption.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowProgressAction.h"
-#include "utils/network/WifiUtility.h"
 #include <sys/time.h>
 #ifdef DEVICE_HAS_RTC
 #include "core/RtcManager.h"
@@ -113,18 +109,6 @@ void GPSScreen::onUpdate() {
     return;
   }
 
-  if (_state == STATE_STATS) {
-    if (Uni.Nav->wasPressed()) {
-      auto dir = Uni.Nav->readDirection();
-      if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
-        _showMenu();
-      } else {
-        _statsView.onNav(dir);
-      }
-    }
-    return;
-  }
-
   // STATE_MENU — default list behavior
   ListScreen::onUpdate();
 }
@@ -160,23 +144,16 @@ void GPSScreen::onRender() {
   }
   if (_state == STATE_INFO) { _renderInfo(); return; }
   if (_state == STATE_WARDRIVING) { _renderWardriver(); return; }
-  if (_state == STATE_STATS) {
-    _statsView.render(bodyX(), bodyY(), bodyW(), bodyH());
-    return;
-  }
   ListScreen::onRender();
 }
 
 void GPSScreen::onBack() {
   if (_state == STATE_MENU) {
     ShowStatusAction::show("Stopping GPS...", 0);
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
     _gps.end();
     _disableGnssPower();
     Screen.setScreen(new ModuleMenuScreen());
   } else {
-    // STATE_UPLOAD or STATE_STATS only — all other states return early in onUpdate
     _showMenu();
   }
 }
@@ -200,46 +177,13 @@ void GPSScreen::onItemSelected(uint8_t index) {
         _renderWardriver();
         break;
       }
-      case 2:
-        _connectInternet();
-        break;
-      case 3:
-        _editWigleToken();
-        render();
-        break;
-      case 4:
-        _showWigleStats();
-        render();
-        break;
-      case 5:
-        _showUploadMenu();
-        render();
-        break;
     }
-  } else if (_state == STATE_UPLOAD) {
-    _uploadFile(index);
-    render();
   }
 }
 
 void GPSScreen::_showMenu() {
   _state = STATE_MENU;
   _infoInitialized = false;
-  _statsInitialized = false;
-
-  // Internet sublabel
-  _internetSub = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "";
-  _menuItems[2] = {"Internet", _internetSub.length() ? _internetSub.c_str() : nullptr};
-
-  // Wigle Token sublabel
-  String token = Uni.Storage ? Uni.Storage->readFile(_wigleTokenPath) : "";
-  token.trim();
-  if (token.length() > 4)
-    _wigleTokenSub = "..." + token.substring(token.length() - 4);
-  else
-    _wigleTokenSub = "No token";
-  _menuItems[3] = {"Wigle Token", _wigleTokenSub.c_str()};
-
   setItems(_menuItems);
 }
 
@@ -312,320 +256,6 @@ void GPSScreen::_renderWardriver() {
   _wardLog.draw(Uni.Lcd, bodyX(), bodyY(), bodyW(), bodyH(), _wardStatusCb, this);
 }
 
-// Simple JSON value extractor — finds "key":value or "key":"value"
-static String _jsonVal(const String& json, const char* key) {
-  char search[64];
-  snprintf(search, sizeof(search), "\"%s\":", key);
-  int pos = json.indexOf(search);
-  if (pos < 0) return "";
-  pos += strlen(search);
-  while (pos < (int)json.length() && json[pos] == ' ') pos++;
-  if (json[pos] == '"') {
-    int end = json.indexOf('"', pos + 1);
-    return (end > pos) ? json.substring(pos + 1, end) : "";
-  }
-  int end = pos;
-  while (end < (int)json.length() && json[end] != ',' && json[end] != '}') end++;
-  return json.substring(pos, end);
-}
-
-static String _wigleGet(WiFiClientSecure& client, const String& token, const String& path) {
-  client.print(
-    "GET " + path + " HTTP/1.1\r\n"
-    "Host: api.wigle.net\r\n"
-    "Authorization: Basic " + token + "\r\n"
-    "Connection: keep-alive\r\n\r\n"
-  );
-
-  unsigned long timeout = millis() + 10000;
-  while (!client.available() && millis() < timeout) delay(50);
-
-  String response;
-  response.reserve(2048);
-  while (client.available()) {
-    char tmp[256];
-    int n = client.read((uint8_t*)tmp, sizeof(tmp) - 1);
-    if (n > 0) { tmp[n] = '\0'; response += tmp; }
-  }
-
-  // Extract body after \r\n\r\n
-  int bodyStart = response.indexOf("\r\n\r\n");
-  return (bodyStart > 0) ? response.substring(bodyStart + 4) : response;
-}
-
-void GPSScreen::_showWigleStats() {
-  if (WiFi.status() != WL_CONNECTED) {
-    ShowStatusAction::show("Connect to internet first");
-    return;
-  }
-  String token = Uni.Storage ? Uni.Storage->readFile(_wigleTokenPath) : "";
-  token.trim();
-  if (token.length() == 0) {
-    ShowStatusAction::show("Set Wigle token first");
-    return;
-  }
-
-  ShowProgressAction::show("Connecting to Wigle...", 10);
-  WiFiClientSecure client;
-  client.setInsecure();
-  if (!client.connect("api.wigle.net", 443, 10000)) {
-    ShowStatusAction::show("Connection failed!");
-    return;
-  }
-
-  // Get username
-  ShowProgressAction::show("Fetching profile...", 30);
-  String profileBody = _wigleGet(client, token, "/api/v2/profile/user");
-  String username = _jsonVal(profileBody, "userid");
-  if (username.length() == 0) username = _jsonVal(profileBody, "userName");
-  if (username.length() == 0) {
-    client.stop();
-    ShowStatusAction::show("Failed to get username");
-    return;
-  }
-
-  // Get stats
-  ShowProgressAction::show("Fetching stats...", 60);
-  String statsBody = _wigleGet(client, token, "/api/v2/stats/user?user=" + username);
-  client.stop();
-
-  if (_jsonVal(statsBody, "success") != "true") {
-    ShowStatusAction::show("Failed to get stats");
-    return;
-  }
-
-  // Populate rows
-  uint8_t r = 0;
-  _statsRows[r++] = {"User",           _jsonVal(statsBody, "userName")};
-  _statsRows[r++] = {"Rank",           _jsonVal(statsBody, "rank")};
-  _statsRows[r++] = {"Month Rank",     _jsonVal(statsBody, "monthRank")};
-  _statsRows[r++] = {"WiFi (GPS)",     _jsonVal(statsBody, "discoveredWiFiGPS")};
-  _statsRows[r++] = {"WiFi Total",     _jsonVal(statsBody, "discoveredWiFi")};
-  _statsRows[r++] = {"Cell (GPS)",     _jsonVal(statsBody, "discoveredCellGPS")};
-  _statsRows[r++] = {"Cell Total",     _jsonVal(statsBody, "discoveredCell")};
-  _statsRows[r++] = {"BT (GPS)",       _jsonVal(statsBody, "discoveredBtGPS")};
-  _statsRows[r++] = {"BT Total",       _jsonVal(statsBody, "discoveredBt")};
-  _statsRows[r++] = {"WiFi Locations", _jsonVal(statsBody, "totalWiFiLocations")};
-  _statsRows[r++] = {"First Upload",   _jsonVal(statsBody, "first")};
-  _statsRows[r++] = {"Last Upload",    _jsonVal(statsBody, "last")};
-
-  _statsView.setRows(_statsRows, r);
-  _statsInitialized = true;
-  _state = STATE_STATS;
-  render();
-}
-
-void GPSScreen::_showUploadMenu() {
-  if (WiFi.status() != WL_CONNECTED) {
-    ShowStatusAction::show("Connect to internet first");
-    return;
-  }
-
-  String token = Uni.Storage ? Uni.Storage->readFile(_wigleTokenPath) : "";
-  token.trim();
-  if (token.length() == 0) {
-    ShowStatusAction::show("Set Wigle token first");
-    return;
-  }
-
-  _state = STATE_UPLOAD;
-
-  _fileCount = 0;
-  if (Uni.Storage && Uni.Storage->isAvailable()) {
-    IStorage::DirEntry entries[MAX_FILES];
-    uint8_t count = Uni.Storage->listDir(_wardrivePath, entries, MAX_FILES);
-    for (uint8_t i = 0; i < count && _fileCount < MAX_FILES; i++) {
-      if (!entries[i].isDir && entries[i].name.endsWith(".csv")) {
-        _fileNames[_fileCount] = entries[i].name;
-        _fileCount++;
-      }
-    }
-  }
-
-  // Sort by filename (ascending)
-  for (uint8_t i = 1; i < _fileCount; i++) {
-    for (uint8_t j = i; j > 0 && _fileNames[j] < _fileNames[j - 1]; j--) {
-      String tmp = _fileNames[j];
-      _fileNames[j] = _fileNames[j - 1];
-      _fileNames[j - 1] = tmp;
-    }
-  }
-
-  // Build display labels and list items
-  for (uint8_t i = 0; i < _fileCount; i++) {
-    bool uploaded = _fileNames[i].endsWith("_uploaded.csv");
-    if (uploaded)
-      _fileLabels[i] = _fileNames[i].substring(0, _fileNames[i].length() - 13); // strip _uploaded.csv
-    else
-      _fileLabels[i] = _fileNames[i].substring(0, _fileNames[i].length() - 4);  // strip .csv
-    _uploadItems[i] = {_fileLabels[i].c_str(), uploaded ? "Uploaded" : nullptr};
-  }
-
-  if (_fileCount == 0) {
-    ShowStatusAction::show("No wardrive files found");
-    _showMenu();
-    return;
-  }
-
-  setItems(_uploadItems, _fileCount);
-}
-
-void GPSScreen::_connectInternet() {
-  ShowStatusAction::show("Scanning WiFi...", 0);
-  WifiUtility::ScannedWifi scanned[WifiUtility::MAX_WIFI];
-  uint8_t count = WifiUtility::scan(scanned, WifiUtility::MAX_WIFI);
-
-  if (count == 0) {
-    ShowStatusAction::show("No WiFi found");
-    _showMenu();
-    return;
-  }
-
-  static InputSelectAction::Option opts[WifiUtility::MAX_WIFI];
-  for (uint8_t i = 0; i < count; i++) {
-    opts[i] = {scanned[i].label, scanned[i].ssid};
-  }
-
-  const char* selected = InputSelectAction::popup("Select WiFi", opts, count);
-  if (!selected) { _showMenu(); return; }
-
-  for (uint8_t i = 0; i < count; i++) {
-    if (strcmp(scanned[i].ssid, selected) != 0) continue;
-
-    ShowStatusAction::show(("Connecting to\n" + String(scanned[i].ssid) + "...").c_str(), 0);
-    auto result = WifiUtility::connectWithPrompt(scanned[i].bssid, scanned[i].ssid);
-
-    if (result == WifiUtility::CONNECT_OK) {
-      ShowStatusAction::show("Checking internet...", 0);
-      if (WifiUtility::checkInternet()) {
-        ShowStatusAction::show(("Connected to\n" + WiFi.SSID()).c_str(), 1500);
-      } else {
-        ShowStatusAction::show("Connected but\nno internet access");
-      }
-    } else if (result == WifiUtility::CONNECT_FAILED) {
-      ShowStatusAction::show("Connection failed");
-    }
-    break;
-  }
-  _showMenu();
-}
-
-void GPSScreen::_editWigleToken() {
-  String current = Uni.Storage ? Uni.Storage->readFile(_wigleTokenPath) : "";
-  current.trim();
-  String token = InputTextAction::popup("Wigle API Token", current);
-  if (token.length() == 0) { render(); return; }
-  token.trim();
-  if (Uni.Storage) {
-    Uni.Storage->makeDir("/unigeek");
-    Uni.Storage->writeFile(_wigleTokenPath, token.c_str());
-
-    if (token.length() > 4)
-      _wigleTokenSub = "..." + token.substring(token.length() - 4);
-    else
-      _wigleTokenSub = token;
-    _menuItems[3] = {"Wigle Token", _wigleTokenSub.c_str()};
-
-    ShowStatusAction::show("Token saved");
-  }
-}
-
-void GPSScreen::_uploadFile(uint8_t fileIndex) {
-  if (fileIndex >= _fileCount) return;
-
-  String token = Uni.Storage ? Uni.Storage->readFile(_wigleTokenPath) : "";
-  token.trim();
-
-  String filePath = String(_wardrivePath) + "/" + _fileNames[fileIndex];
-  if (!Uni.Storage->exists(filePath.c_str())) {
-    ShowStatusAction::show("File not found");
-    return;
-  }
-
-  ShowProgressAction::show("Reading file...", 10);
-  fs::File f = Uni.Storage->open(filePath.c_str(), FILE_READ);
-  if (!f) {
-    ShowStatusAction::show("Failed to open file");
-    return;
-  }
-  size_t fileSize = f.size();
-
-  ShowProgressAction::show("Connecting to Wigle...", 20);
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  if (!client.connect("api.wigle.net", 443, 10000)) {
-    f.close();
-    ShowStatusAction::show("Connection failed!");
-    _showUploadMenu();
-    return;
-  }
-
-  String boundary = "----UniGeek" + String(millis());
-  String head = "--" + boundary + "\r\n"
-    "Content-Disposition: form-data; name=\"file\"; filename=\"" + _fileNames[fileIndex] + "\"\r\n"
-    "Content-Type: text/csv\r\n\r\n";
-  String tail = "\r\n--" + boundary + "--\r\n";
-  size_t totalLen = head.length() + fileSize + tail.length();
-
-  ShowProgressAction::show("Uploading to Wigle...", 30);
-
-  client.print(
-    "POST /api/v2/file/upload HTTP/1.1\r\n"
-    "Host: api.wigle.net\r\n"
-    "Authorization: Basic " + token + "\r\n"
-    "Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
-    "Content-Length: " + String(totalLen) + "\r\n"
-    "Connection: close\r\n\r\n"
-  );
-  client.print(head);
-
-  // Stream file in chunks
-  uint8_t buf[512];
-  size_t sent = 0;
-  while (f.available()) {
-    size_t bytesRead = f.read(buf, sizeof(buf));
-    client.write(buf, bytesRead);
-    sent += bytesRead;
-    int pct = 30 + (int)(sent * 60 / fileSize);
-    ShowProgressAction::show("Uploading to Wigle...", pct);
-  }
-  f.close();
-
-  client.print(tail);
-
-  ShowProgressAction::show("Waiting for response...", 95);
-
-  // Read response
-  unsigned long timeout = millis() + 15000;
-  while (!client.available() && millis() < timeout) delay(50);
-
-  String response;
-  response.reserve(1024);
-  while (client.available()) {
-    char tmp[256];
-    int n = client.read((uint8_t*)tmp, sizeof(tmp) - 1);
-    if (n > 0) { tmp[n] = '\0'; response += tmp; }
-  }
-  client.stop();
-
-  if (response.indexOf("\"success\":true") >= 0 || response.indexOf("200") >= 0) {
-    // Mark file as uploaded by renaming
-    String baseName = _fileNames[fileIndex];
-    if (!baseName.endsWith("_uploaded.csv")) {
-      String newName = baseName.substring(0, baseName.length() - 4) + "_uploaded.csv";
-      String oldPath = String(_wardrivePath) + "/" + baseName;
-      String newPath = String(_wardrivePath) + "/" + newName;
-      Uni.Storage->renameFile(oldPath.c_str(), newPath.c_str());
-    }
-    ShowStatusAction::show("Upload successful!");
-  } else if (response.indexOf("401") >= 0 || response.indexOf("\"success\":false") >= 0) {
-    ShowStatusAction::show("Upload failed!\nCheck token");
-  } else {
-    ShowStatusAction::show("Upload error\nCheck connection");
-  }
-  _showUploadMenu();
-}
 
 void GPSScreen::_enableGnssPower() {
 #ifdef EXPANDS_GNSS_EN

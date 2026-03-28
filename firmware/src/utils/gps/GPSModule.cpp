@@ -2,7 +2,7 @@
 // Created by L Shaf on 2026-03-26.
 //
 
-#include "GPSModule.h"
+#include "utils/gps/GPSModule.h"
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <math.h>
