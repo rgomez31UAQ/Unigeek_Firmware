@@ -438,7 +438,8 @@ void GPSScreen::_showUploadMenu() {
     for (uint8_t i = 0; i < count && _fileCount < MAX_FILES; i++) {
       if (!entries[i].isDir && entries[i].name.endsWith(".csv")) {
         _fileNames[_fileCount] = entries[i].name;
-        _uploadItems[_fileCount] = {_fileNames[_fileCount].c_str()};
+        bool uploaded = entries[i].name.endsWith("_uploaded.csv");
+        _uploadItems[_fileCount] = {_fileNames[_fileCount].c_str(), uploaded ? "Uploaded" : nullptr};
         _fileCount++;
       }
     }
@@ -593,6 +594,14 @@ void GPSScreen::_uploadFile(uint8_t fileIndex) {
   client.stop();
 
   if (response.indexOf("\"success\":true") >= 0 || response.indexOf("200") >= 0) {
+    // Mark file as uploaded by renaming
+    String baseName = _fileNames[fileIndex];
+    if (!baseName.endsWith("_uploaded.csv")) {
+      String newName = baseName.substring(0, baseName.length() - 4) + "_uploaded.csv";
+      String oldPath = String(_wardrivePath) + "/" + baseName;
+      String newPath = String(_wardrivePath) + "/" + newName;
+      Uni.Storage->renameFile(oldPath.c_str(), newPath.c_str());
+    }
     ShowStatusAction::show("Upload successful!");
   } else if (response.indexOf("401") >= 0 || response.indexOf("\"success\":false") >= 0) {
     ShowStatusAction::show("Upload failed!\nCheck token");
