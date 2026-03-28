@@ -48,25 +48,15 @@ public:
   }
 
   void update() override {
-    if (_available) return;
+    if (_available) {
+      // Key buffered but nobody consumed it — clear if physically released
+      if (!_anyNonModHeld()) _available = false;
+      if (_available) return;
+    }
 
     // wait for all non-modifier keys released before accepting next key
     if (_waitRelease) {
-      bool anyNonMod = false;
-      for (int i = 0; i < 8; i++) {
-        _setOutput(i);
-        uint8_t bits = _readInput();
-        if (!bits) continue;
-        uint8_t yf = 3 - ((i > 3) ? (i - 4) : i);
-        bool    x1 = (i > 3);
-        for (int j = 0; j < 7; j++) {
-          if (!(bits & (1 << j))) continue;
-          uint8_t x = x1 ? _KB_X1[j] : _KB_X2[j];
-          if (_KB_MAP[yf][x].n != '\0') anyNonMod = true;
-        }
-      }
-      _setOutput(0);
-      if (anyNonMod) return;
+      if (_anyNonModHeld()) return;
       _waitRelease = false;
     }
 
@@ -146,6 +136,23 @@ private:
   bool _alt        = false;
   bool _opt        = false;
   bool _waitRelease = false;
+
+  bool _anyNonModHeld() {
+    for (int i = 0; i < 8; i++) {
+      _setOutput(i);
+      uint8_t bits = _readInput();
+      if (!bits) continue;
+      uint8_t yf = 3 - ((i > 3) ? (i - 4) : i);
+      bool    x1 = (i > 3);
+      for (int j = 0; j < 7; j++) {
+        if (!(bits & (1 << j))) continue;
+        uint8_t x = x1 ? _KB_X1[j] : _KB_X2[j];
+        if (_KB_MAP[yf][x].n != '\0') { _setOutput(0); return true; }
+      }
+    }
+    _setOutput(0);
+    return false;
+  }
 
   void _setOutput(int i) {
     gpio_set_level((gpio_num_t)_KB_OUT[0], (i >> 0) & 1);

@@ -47,7 +47,7 @@ public:
   }
 
   void update() override {
-    if (!_ready || _available) return;
+    if (!_ready) return;
     if (Adafruit_TCA8418::available() == 0) return;
 
     int raw = this->getEvent();
@@ -69,15 +69,24 @@ public:
 
     char n = _ADV_KB_MAP[row][col].n;
 
+    // Modifiers: always process regardless of _available
     if (row == 2 && col == 0) { _fn   = pressed; return; }
     if (row == 2 && col == 1) { _shift = pressed; return; }
     if (row == 3 && col == 0) { _ctrl  = pressed; return; }
     if (row == 3 && col == 1) { _opt   = pressed; return; }
     if (row == 3 && col == 2) { _alt   = pressed; return; }
+
+    // Release: always process — keeps _keyHeld accurate and unblocks stale keys
     if (!pressed) {
-      if (n != '\0') _keyHeld = false;  // non-modifier released
+      if (n != '\0') {
+        _keyHeld = false;
+        if (_available) _available = false;
+      }
       return;
     }
+
+    // Press: only buffer if nothing is already pending
+    if (_available) return;
     if (n == '\0') return;
 
     _key       = _shift ? _ADV_KB_MAP[row][col].s : n;
