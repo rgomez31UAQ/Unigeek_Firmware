@@ -83,7 +83,10 @@ void FileViewerScreen::onUpdate() {
 }
 
 void FileViewerScreen::onRender() {
-  _renderContent();
+  if (!_rendered) {
+    _renderContent();
+    _rendered = true;
+  }
 }
 
 void FileViewerScreen::_parseLines() {

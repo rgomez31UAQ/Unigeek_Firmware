@@ -22,6 +22,7 @@ private:
   uint16_t _lineCount = 0;
   uint16_t _scrollOffset = 0;
   uint16_t _visibleLines = 0;
+  bool _rendered = false;
 
   void _parseLines();
   void _renderContent();
