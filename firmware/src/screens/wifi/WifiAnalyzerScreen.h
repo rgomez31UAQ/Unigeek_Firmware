@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 
 class WifiAnalyzerScreen : public ListScreen
 {

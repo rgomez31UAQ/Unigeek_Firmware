@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/templates/BaseScreen.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 
 class DeviceStatusScreen : public BaseScreen
 {

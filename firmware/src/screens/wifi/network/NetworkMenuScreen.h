@@ -5,7 +5,7 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 #include "utils/network/WifiUtility.h"
 
 class NetworkMenuScreen : public ListScreen

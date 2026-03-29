@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 #include "utils/gps/WigleUtil.h"
 
 class WigleScreen : public ListScreen

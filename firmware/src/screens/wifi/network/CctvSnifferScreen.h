@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/LogView.h"
+#include "ui/views/LogView.h"
 #include "utils/cctv/CctvScanUtil.h"
 #include "utils/cctv/CctvStreamUtil.h"
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/LogView.h"
+#include "ui/views/LogView.h"
 #include "utils/network/DhcpStarvation.h"
 #include "utils/network/RogueDhcpServer.h"
 #include "utils/network/DnsSpoofServer.h"

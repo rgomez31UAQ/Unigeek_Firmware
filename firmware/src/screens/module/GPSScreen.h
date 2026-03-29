@@ -5,8 +5,8 @@
 #pragma once
 
 #include "ui/templates/ListScreen.h"
-#include "ui/components/ScrollListView.h"
-#include "ui/components/LogView.h"
+#include "ui/views/ScrollListView.h"
+#include "ui/views/LogView.h"
 #include "utils/gps/GPSModule.h"
 #include "utils/gps/WigleUtil.h"
 

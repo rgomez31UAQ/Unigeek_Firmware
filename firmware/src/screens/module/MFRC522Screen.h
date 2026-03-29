@@ -4,7 +4,7 @@
 #include <array>
 #include <unordered_map>
 #include "ui/templates/ListScreen.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 #include "utils/nfc/NFCUtility.h"
 
 class MFRC522Screen : public ListScreen

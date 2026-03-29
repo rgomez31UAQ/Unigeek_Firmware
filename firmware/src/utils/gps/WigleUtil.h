@@ -6,7 +6,7 @@
 
 #include <Arduino.h>
 #include "core/IStorage.h"
-#include "ui/components/ScrollListView.h"
+#include "ui/views/ScrollListView.h"
 
 class WigleUtil
 {
