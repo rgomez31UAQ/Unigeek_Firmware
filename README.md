@@ -44,8 +44,8 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Beacon Spam** — Flood the area with fake SSIDs
 - **CIW Zeroclick** — Broadcast SSIDs with injection payloads to test how nearby devices handle untrusted network names
 - **ESPNOW Chat** — Peer-to-peer text chat over ESP-NOW (no router needed)
-- **EAPOL Capture** — Capture WPA2 handshakes from nearby networks and save to storage
-- **EAPOL Brute Force** — Crack WPA2 passwords offline from captured handshakes
+- **EAPOL Capture** — Capture WPA2 handshakes from nearby networks and save to storage; configurable discovery dwell, attack dwell, and max deauth attempts before starting ([details](knowledge/eapol.md))
+- **EAPOL Brute Force** — Crack WPA2 passwords offline from captured handshakes; includes built-in 110-password test wordlist ([details](knowledge/eapol.md))
 
 ### Bluetooth
 - **BLE Analyzer** — Scan nearby BLE devices, display name, address, and signal strength
@@ -62,7 +62,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **I2C Detector** — Scan I2C bus and list all responding device addresses
 - **QR Code** — Generate and display a QR code from typed or file-loaded text; supports WiFi QR format
 - **Barcode** — Generate and display a Code 128 barcode from typed or file-loaded text
-- **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; tap a file to view its contents; hold 1s to open context menu
+- **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; directories sorted first then alphabetical; tap a file to view its contents; hold 1s to open context menu
 
 ### Games
 - **HEX Decoder** — Wordle-style game using hexadecimal characters (0–9, A–F)
