@@ -63,6 +63,7 @@ public:
   unsigned long wardriveRuntime();
 
   uint8_t getRecentFinds(FoundEntry* out, uint8_t maxCount);
+  uint8_t getCurrentChannel() { return _currentChannel; }
 
 private:
   HardwareSerial* _serial = nullptr;

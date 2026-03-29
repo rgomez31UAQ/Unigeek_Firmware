@@ -327,18 +327,20 @@ void GPSScreen::_wardStatusCb(TFT_eSprite& sp, int barY, int width, void* userDa
   sp.setTextColor(TFT_GREEN);
 
   float dist = self->_gps.totalDistance();
-  char left[40];
+  char left[48];
   auto mode = self->_scanMode;
+  bool walking = self->_wardMode == GPSModule::MODE_WALKING && mode != GPSModule::SCAN_BLE_ONLY;
+  uint8_t ch = self->_gps.getCurrentChannel();
 
   if (mode == GPSModule::SCAN_WIFI_ONLY) {
-    if (dist >= 1000) snprintf(left, sizeof(left), "W:%u %.1fkm", self->_gps.discoveredCount(), dist / 1000.0f);
-    else snprintf(left, sizeof(left), "W:%u %dm", self->_gps.discoveredCount(), (int)dist);
+    if (dist >= 1000) snprintf(left, sizeof(left), walking ? "W:%u %.1fkm CH:%u" : "W:%u %.1fkm", self->_gps.discoveredCount(), dist / 1000.0f, ch);
+    else snprintf(left, sizeof(left), walking ? "W:%u %dm CH:%u" : "W:%u %dm", self->_gps.discoveredCount(), (int)dist, ch);
   } else if (mode == GPSModule::SCAN_BLE_ONLY) {
     if (dist >= 1000) snprintf(left, sizeof(left), "B:%u %.1fkm", self->_gps.bleDiscoveredCount(), dist / 1000.0f);
     else snprintf(left, sizeof(left), "B:%u %dm", self->_gps.bleDiscoveredCount(), (int)dist);
   } else {
-    if (dist >= 1000) snprintf(left, sizeof(left), "W:%u B:%u %.1fkm", self->_gps.discoveredCount(), self->_gps.bleDiscoveredCount(), dist / 1000.0f);
-    else snprintf(left, sizeof(left), "W:%u B:%u %dm", self->_gps.discoveredCount(), self->_gps.bleDiscoveredCount(), (int)dist);
+    if (dist >= 1000) snprintf(left, sizeof(left), walking ? "W:%u B:%u %.1fkm CH:%u" : "W:%u B:%u %.1fkm", self->_gps.discoveredCount(), self->_gps.bleDiscoveredCount(), dist / 1000.0f, ch);
+    else snprintf(left, sizeof(left), walking ? "W:%u B:%u %dm CH:%u" : "W:%u B:%u %dm", self->_gps.discoveredCount(), self->_gps.bleDiscoveredCount(), (int)dist, ch);
   }
   sp.drawString(left, 2, barY);
 
