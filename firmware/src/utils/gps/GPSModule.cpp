@@ -363,7 +363,8 @@ void GPSModule::_doActiveScan(IStorage* storage) {
                        authMode, WiFi.RSSI(i), WiFi.channel(i));
       _totalDiscovered++;
 
-      const char* displayName = WiFi.SSID(i).length() > 0 ? WiFi.SSID(i).c_str() : "<hidden>";
+      String ssid = WiFi.SSID(i);
+      const char* displayName = ssid.length() > 0 ? ssid.c_str() : "<hidden>";
       _addRecentFind(displayName, addrStr, WiFi.RSSI(i), WiFi.channel(i), false);
     }
   }
