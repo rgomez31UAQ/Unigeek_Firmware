@@ -1,7 +1,7 @@
 #pragma once
 
 #include <WiFiClient.h>
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 
 // TCP port scanner for a target IP (local or internet).
 class PortScanUtil {
@@ -49,7 +49,7 @@ public:
     for (uint8_t i = 0; i < kPortCount && count < maxResults; i++) {
       uint8_t pct = (uint8_t)(i * 100 / kPortCount);
       if (pct != lastPct) {
-        ShowProgressAction::show(msg, pct);
+        ProgressView::show(msg, pct);
         lastPct = pct;
       }
       yield();
@@ -62,7 +62,7 @@ public:
         count++;
       }
     }
-    ShowProgressAction::show(msg, 100);
+    ProgressView::show(msg, 100);
     return count;
   }
 };

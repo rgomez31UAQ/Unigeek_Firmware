@@ -7,7 +7,7 @@
 #include <WiFiClientSecure.h>
 #include "core/Device.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 
 // ── Token helpers ────────────────────────────────────────
 
@@ -94,7 +94,7 @@ uint8_t WigleUtil::fetchStats(ScrollListView::Row* rows, uint8_t maxRows) {
     return 0;
   }
 
-  ShowProgressAction::show("Fetching profile...", 30);
+  ProgressView::show("Fetching profile...", 30);
   String profileBody = _httpGet(token, "/api/v2/profile/user");
   String username = jsonVal(profileBody, "userid");
   if (username.length() == 0) username = jsonVal(profileBody, "userName");
@@ -103,7 +103,7 @@ uint8_t WigleUtil::fetchStats(ScrollListView::Row* rows, uint8_t maxRows) {
     return 0;
   }
 
-  ShowProgressAction::show("Fetching stats...", 60);
+  ProgressView::show("Fetching stats...", 60);
   String statsBody = _httpGet(token, "/api/v2/stats/user?user=" + username);
 
   if (jsonVal(statsBody, "success") != "true") {
@@ -177,7 +177,7 @@ bool WigleUtil::uploadFile(IStorage* storage, const String& fileName) {
     return false;
   }
 
-  ShowProgressAction::show("Reading file...", 10);
+  ProgressView::show("Reading file...", 10);
   fs::File f = storage->open(filePath.c_str(), FILE_READ);
   if (!f) {
     ShowStatusAction::show("Failed to open file");
@@ -185,7 +185,7 @@ bool WigleUtil::uploadFile(IStorage* storage, const String& fileName) {
   }
   size_t fileSize = f.size();
 
-  ShowProgressAction::show("Connecting to Wigle...", 20);
+  ProgressView::show("Connecting to Wigle...", 20);
 
   WiFiClientSecure client;
   client.setInsecure();
@@ -202,7 +202,7 @@ bool WigleUtil::uploadFile(IStorage* storage, const String& fileName) {
   String tail = "\r\n--" + boundary + "--\r\n";
   size_t totalLen = head.length() + fileSize + tail.length();
 
-  ShowProgressAction::show("Uploading to Wigle...", 30);
+  ProgressView::show("Uploading to Wigle...", 30);
 
   client.print(
     "POST /api/v2/file/upload HTTP/1.1\r\n"
@@ -221,12 +221,12 @@ bool WigleUtil::uploadFile(IStorage* storage, const String& fileName) {
     client.write(buf, bytesRead);
     sent += bytesRead;
     int pct = 30 + (int)(sent * 60 / fileSize);
-    ShowProgressAction::show("Uploading to Wigle...", pct);
+    ProgressView::show("Uploading to Wigle...", pct);
   }
   f.close();
   client.print(tail);
 
-  ShowProgressAction::show("Waiting for response...", 95);
+  ProgressView::show("Waiting for response...", 95);
 
   unsigned long timeout = millis() + 15000;
   while (!client.available() && millis() < timeout) delay(50);

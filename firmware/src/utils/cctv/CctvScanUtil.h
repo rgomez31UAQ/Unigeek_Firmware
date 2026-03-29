@@ -2,7 +2,7 @@
 
 #include <WiFiClient.h>
 #include <HTTPClient.h>
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 
 class CctvScanUtil {
 public:

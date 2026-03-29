@@ -6,7 +6,7 @@
 #include "core/ScreenManager.h"
 #include "screens/wifi/network/NetworkMenuScreen.h"
 #include "ui/actions/InputNumberAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 
 // ── screen methods ─────────────────────────────────────
 
@@ -113,7 +113,7 @@ void IPScannerScreen::_scanIP() {
   for (int i = _startIp; i <= _endIp; i++) {
     uint8_t pct = (uint8_t)((i - _startIp) * 60 / total);
     if (pct != lastPct) {
-      ShowProgressAction::show("ARP scanning...", pct);
+      ProgressView::show("ARP scanning...", pct);
       lastPct = pct;
     }
 
@@ -126,7 +126,7 @@ void IPScannerScreen::_scanIP() {
   }
 
   // Brief wait for late ARP replies
-  ShowProgressAction::show("ARP scanning...", 62);
+  ProgressView::show("ARP scanning...", 62);
   delay(300);
 
   // Phase 2: read ARP table + resolve hostnames (65–100%)
@@ -134,7 +134,7 @@ void IPScannerScreen::_scanIP() {
   for (int i = _startIp; i <= _endIp && _foundCount < MAX_FOUND; i++) {
     uint8_t pct = 65 + (uint8_t)((i - _startIp) * 35 / total);
     if (pct != lastPct) {
-      ShowProgressAction::show("Resolving...", pct);
+      ProgressView::show("Resolving...", pct);
       lastPct = pct;
     }
 
@@ -164,7 +164,7 @@ void IPScannerScreen::_scanIP() {
     }
   }
 
-  ShowProgressAction::show("ARP scanning...", 100);
+  ProgressView::show("ARP scanning...", 100);
 
   if (_foundCount == 0) {
     _foundItems[0] = {"No devices found"};

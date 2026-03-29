@@ -5,7 +5,7 @@
 #include "ui/actions/InputTextAction.h"
 #include "ui/actions/InputSelectOption.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 #include <WiFi.h>
 #include <lwip/etharp.h>
 #include <lwip/netif.h>
@@ -261,7 +261,7 @@ void CctvSnifferScreen::_scanLAN()
     ip4_addr_t target;
     ipaddr_aton(ipStr, (ip_addr_t*)&target);
     etharp_request(nif, &target);
-    if (i % 50 == 0) ShowProgressAction::show("ARP scanning...", i * 40 / 254);
+    if (i % 50 == 0) ProgressView::show("ARP scanning...", i * 40 / 254);
     delay(5);
   }
 
@@ -290,7 +290,7 @@ void CctvSnifferScreen::_scanLAN()
       _scanHost(ipStr);
     }
 
-    if (i % 50 == 0) ShowProgressAction::show("Scanning...", 40 + i * 60 / 254);
+    if (i % 50 == 0) ProgressView::show("Scanning...", 40 + i * 60 / 254);
   }
 
   char buf[40];

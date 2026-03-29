@@ -4,7 +4,7 @@
 #include "screens/wifi/network/NetworkMenuScreen.h"
 #include "utils/network/WebFileManager.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
@@ -55,7 +55,7 @@ void DownloadScreen::_downloadWebPage() {
   HTTPClient http;
 
   // Fetch latest commit SHA
-  ShowProgressAction::show("Fetching version...", 0);
+  ProgressView::show("Fetching version...", 0);
   String sha = "";
   http.begin(client,
     "https://api.github.com/repos/lshaf/puteros-file-manager/git/ref/heads/main");
@@ -101,7 +101,7 @@ void DownloadScreen::_downloadWebPage() {
   Uni.Storage->makeDir(base.c_str());
 
   for (uint8_t i = 0; i < kFileCount; i++) {
-    ShowProgressAction::show("Downloading...", 10 + i * 28);
+    ProgressView::show("Downloading...", 10 + i * 28);
 
     http.begin(client, kFiles[i].url);
     http.addHeader("User-Agent", "ESP32");
@@ -124,11 +124,11 @@ void DownloadScreen::_downloadWebPage() {
   }
 
   // Write version.txt
-  ShowProgressAction::show("Saving version...", 95);
+  ProgressView::show("Saving version...", 95);
   String ver = sha.length() > 0 ? sha : "installed";
   Uni.Storage->writeFile((base + "/version.txt").c_str(), ver.c_str());
 
-  ShowProgressAction::show("Done!", 100);
+  ProgressView::show("Done!", 100);
   String msg = sha.length() >= 7
     ? ("Done! v" + sha.substring(0, 7))
     : "Done!";
@@ -176,7 +176,7 @@ void DownloadScreen::_downloadSampleData() {
   HTTPClient http;
 
   // Download manifest
-  ShowProgressAction::show("Fetching file list...", 0);
+  ProgressView::show("Fetching file list...", 0);
   String manifestUrl = String(REPO_BASE) + "/manifest.txt";
   http.begin(client, manifestUrl);
   http.addHeader("User-Agent", "ESP32");
@@ -227,7 +227,7 @@ void DownloadScreen::_downloadSampleData() {
     uint8_t pct = (uint8_t)((idx * 100) / fileCount);
     char label[32];
     snprintf(label, sizeof(label), "[%02d/%02d] Downloading...", idx, fileCount);
-    ShowProgressAction::show(label, pct);
+    ProgressView::show(label, pct);
 
     String url  = String(REPO_BASE) + "/" + line;
     String path = "/" + line;

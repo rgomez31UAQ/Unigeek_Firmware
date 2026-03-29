@@ -4,7 +4,7 @@
 #include "core/PinConfigManager.h"
 #include "screens/module/ModuleMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
-#include "ui/actions/ShowProgressAction.h"
+#include "ui/views/ProgressView.h"
 #include "utils/nfc/StaticNestedAttack.h"
 #include "utils/nfc/DarksideAttack.h"
 
@@ -124,7 +124,7 @@ void MFRC522Screen::_initModule() {
     int sda = PinConfig.getInt(PIN_CONFIG_EXT_SDA, PIN_CONFIG_EXT_SDA_DEFAULT);
     int scl = PinConfig.getInt(PIN_CONFIG_EXT_SCL, PIN_CONFIG_EXT_SCL_DEFAULT);
 
-    ShowProgressAction::show("Scanning external I2C...", 10);
+    ProgressView::show("Scanning external I2C...", 10);
     Uni.ExI2C->begin(sda, scl);
     Uni.ExI2C->setTimeOut(50);
     delay(100);
@@ -143,7 +143,7 @@ void MFRC522Screen::_initModule() {
 
   // Fall back to internal I2C
   if (!_activeBus && Uni.InI2C) {
-    ShowProgressAction::show("Scanning internal I2C...", 30);
+    ProgressView::show("Scanning internal I2C...", 30);
     Uni.InI2C->setTimeOut(50);
     delay(100);
 
@@ -163,7 +163,7 @@ void MFRC522Screen::_initModule() {
     return;
   }
 
-  ShowProgressAction::show("Starting RC522...", 70);
+  ProgressView::show("Starting RC522...", 70);
   if (_module) delete _module;
   _module = new MFRC522_I2C(I2C_ADDRESS, (byte)-1, _activeBus);
   _module->PCD_Init();
@@ -354,7 +354,7 @@ void MFRC522Screen::_callAuthenticate() {
       String msg = "Auth sector " + progress;
       msg += (keyType == MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A) ? " key A..." : " key B...";
       int pct = (int)((sector * 2 + (keyType == MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B ? 1 : 0)) * 100 / (totalSectors * 2));
-      ShowProgressAction::show(msg.c_str(), pct);
+      ProgressView::show(msg.c_str(), pct);
 
       for (const auto& key : NFCUtility::getDefaultKeys()) {
         const auto kv = key.value();
@@ -425,7 +425,7 @@ void MFRC522Screen::_callMemoryReader() {
   for (size_t block = 0; block < totalBlocks && _rowCount < MAX_ROWS - 1; block++) {
     int pct = (int)(block * 100 / totalBlocks);
     String msg = "Reading block " + String((int)block) + "/" + String((int)(totalBlocks - 1));
-    ShowProgressAction::show(msg.c_str(), pct);
+    ProgressView::show(msg.c_str(), pct);
 
     int currentSector = (block < 128) ? (block / 4) : ((block - 128) / 16 + 32);
     String blockLabel = "Blk " + String((int)block);
@@ -649,7 +649,7 @@ void MFRC522Screen::_callDictAttackWithFile(uint8_t fileIndex) {
       char msg[48];
       snprintf(msg, sizeof(msg), "Dict S%d key %c (%d keys)",
         (int)sector, isKeyA ? 'A' : 'B', keyCount);
-      ShowProgressAction::show(msg, pct);
+      ProgressView::show(msg, pct);
 
       int blockIndex = (sector < 32)
         ? ((int)sector * 4 + 3)
@@ -746,7 +746,7 @@ void MFRC522Screen::_callStaticNested() {
     : (128 + (exploitSector - 32) * 16 + 15);
 
   // Check if card has static nonce
-  ShowProgressAction::show("Checking static nonce...", 5);
+  ProgressView::show("Checking static nonce...", 5);
   if (!StaticNestedAttack::isStaticNonce(_module, uid, exploitCmd, exploitTrailer, exploitKey)) {
     _module->PCD_Init();
     ShowStatusAction::show("Card does not have\nstatic nonce");
@@ -766,13 +766,13 @@ void MFRC522Screen::_callStaticNested() {
     if (!_mf1AuthKeys[s].first) {
       char msg[48];
       snprintf(msg, sizeof(msg), "Static nested S%d A...", (int)s);
-      ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
+      ProgressView::show(msg, (int)(s * 100 / totalSectors));
 
       auto result = StaticNestedAttack::crack(
         _module, uid, exploitCmd, exploitTrailer, exploitKey,
         MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A, targetTrailer,
         [](const char* m, int pct) -> bool {
-          ShowProgressAction::show(m, pct);
+          ProgressView::show(m, pct);
           return true;
         });
 
@@ -789,13 +789,13 @@ void MFRC522Screen::_callStaticNested() {
     if (!_mf1AuthKeys[s].second) {
       char msg[48];
       snprintf(msg, sizeof(msg), "Static nested S%d B...", (int)s);
-      ShowProgressAction::show(msg, (int)(s * 100 / totalSectors));
+      ProgressView::show(msg, (int)(s * 100 / totalSectors));
 
       auto result = StaticNestedAttack::crack(
         _module, uid, exploitCmd, exploitTrailer, exploitKey,
         MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_B, targetTrailer,
         [](const char* m, int pct) -> bool {
-          ShowProgressAction::show(m, pct);
+          ProgressView::show(m, pct);
           return true;
         });
 
@@ -848,13 +848,13 @@ void MFRC522Screen::_callDarksideAttack() {
     uid = (uid << 8) | _currentCard.uidByte[i];
 
   // Attack sector 0 key A (trailer block 3)
-  ShowProgressAction::show("Darkside attack...", 0);
+  ProgressView::show("Darkside attack...", 0);
 
   auto result = DarksideAttack::crack(
     _module, uid, MFRC522_I2C::PICC_CMD_MF_AUTH_KEY_A, 3,
     Uni.Storage,
     [](const char* m, int pct) -> bool {
-      ShowProgressAction::show(m, pct);
+      ProgressView::show(m, pct);
       return true;
     });
 
