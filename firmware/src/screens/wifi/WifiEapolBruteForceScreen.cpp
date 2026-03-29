@@ -9,7 +9,7 @@
 #include <freertos/task.h>
 #include <cstring>
 
-// ── Built-in test wordlist (55 common passwords, all >= 8 chars) ──────────
+// ── Built-in test wordlist (common passwords, all >= 8 chars) ─────────────
 
 static const char* const kTestPasswords[] = {
   // Numeric sequences
@@ -42,6 +42,7 @@ static const char* const kTestPasswords[] = {
   "13572468",  "10203040",  "11235813",   "31415926",  "27182818",
 };
 static constexpr int kTestPasswordCount = sizeof(kTestPasswords) / sizeof(kTestPasswords[0]);
+static char _builtInSublabel[24] = {};
 
 // ── Statics ───────────────────────────────────────────────────────────────
 
@@ -113,6 +114,9 @@ void WifiEapolBruteForceScreen::onInit() {
     Screen.setScreen(new WifiMenuScreen());
     return;
   }
+
+  if (_builtInSublabel[0] == '\0')
+    snprintf(_builtInSublabel, sizeof(_builtInSublabel), "%d entries", kTestPasswordCount);
 
   Uni.Storage->makeDir(PASS_DIR);
   _selectedPcap[0]      = '\0';
@@ -221,13 +225,13 @@ void WifiEapolBruteForceScreen::onItemSelected(uint8_t index) {
   if (index >= (uint8_t)_fileCount) return;
 
   if (_state == STATE_SELECT_PCAP) {
-    strncpy(_selectedPcap, _filePaths[index], sizeof(_selectedPcap) - 1);
+    strncpy(_selectedPcap, _filePaths[index].c_str(), sizeof(_selectedPcap) - 1);
     _showMenu();
     return;
   }
 
   if (_state == STATE_SELECT_WORDLIST) {
-    strncpy(_selectedWordlist, _filePaths[index], sizeof(_selectedWordlist) - 1);
+    strncpy(_selectedWordlist, _filePaths[index].c_str(), sizeof(_selectedWordlist) - 1);
     _showMenu();
     return;
   }
@@ -240,10 +244,11 @@ bool WifiEapolBruteForceScreen::_listFiles(const char* dir, const char* ext) {
   _fileCount = 0;
   if (!Uni.Storage || !Uni.Storage->isAvailable()) return false;
 
-  IStorage::DirEntry entries[MAX_FILES];
-  uint8_t count = Uni.Storage->listDir(dir, entries, MAX_FILES);
+  static constexpr int kMaxEntries = 64;
+  IStorage::DirEntry entries[kMaxEntries];
+  uint8_t count = Uni.Storage->listDir(dir, entries, kMaxEntries);
 
-  for (uint8_t i = 0; i < count && _fileCount < MAX_FILES; i++) {
+  for (uint8_t i = 0; i < count && _fileCount < kMaxEntries; i++) {
     if (entries[i].isDir) continue;
 
     String name  = entries[i].name;
@@ -253,16 +258,16 @@ bool WifiEapolBruteForceScreen::_listFiles(const char* dir, const char* ext) {
 
     if (ext && !base.endsWith(ext)) continue;
 
-    snprintf(_fileLabels[_fileCount], sizeof(_fileLabels[0]), "%s", base.c_str());
-    snprintf(_filePaths[_fileCount],  sizeof(_filePaths[0]),  "%s", full.c_str());
-    _fileItems[_fileCount] = {_fileLabels[_fileCount], nullptr};
+    _fileLabels[_fileCount] = base;
+    _filePaths[_fileCount]  = full;
+    _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), nullptr};
     _fileCount++;
   }
   // Always append built-in test wordlist when listing passwords (no ext filter)
-  if (ext == nullptr && _fileCount < MAX_FILES) {
-    snprintf(_fileLabels[_fileCount], sizeof(_fileLabels[0]), "Test Wordlist");
-    snprintf(_filePaths[_fileCount],  sizeof(_filePaths[0]),  "__test__");
-    _fileItems[_fileCount] = {_fileLabels[_fileCount], "125 entries"};
+  if (ext == nullptr && _fileCount < kMaxEntries) {
+    _fileLabels[_fileCount] = "Built In";
+    _filePaths[_fileCount]  = "builtin";
+    _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), _builtInSublabel};
     _fileCount++;
   }
 
@@ -533,7 +538,7 @@ void WifiEapolBruteForceScreen::_crackTask(void* param) {
     return xQueueSend(ctx->queue, &entry, 0) == pdTRUE;
   };
 
-  if (strcmp(ctx->wordlistPath, "__test__") == 0) {
+  if (strcmp(ctx->wordlistPath, "builtin") == 0) {
     int i = 0;
     while (i < kTestPasswordCount && !ctx->stop && !ctx->found) {
       // Send one to worker (core 0)
@@ -610,7 +615,7 @@ void WifiEapolBruteForceScreen::_startCrack() {
   strncpy(_ctx.wordlistPath, _selectedWordlist, sizeof(_ctx.wordlistPath) - 1);
 
   // Get file size for progress bar
-  if (strcmp(_selectedWordlist, "__test__") == 0) {
+  if (strcmp(_selectedWordlist, "builtin") == 0) {
     _ctx.fileSize = kTestPasswordCount;
   } else {
     fs::File f = Uni.Storage->open(_selectedWordlist, FILE_READ);

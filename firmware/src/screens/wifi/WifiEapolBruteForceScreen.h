@@ -70,13 +70,12 @@ private:
   State _state = STATE_MENU;
 
   // ── File browser ──────────────────────────────────────────────────────────
-  static constexpr int MAX_FILES = 16;
   static const char*   PCAP_DIR;
   static const char*   PASS_DIR;
 
-  char     _fileLabels[MAX_FILES][48] = {};
-  char     _filePaths[MAX_FILES][64]  = {};
-  ListItem _fileItems[MAX_FILES]      = {};
+  String   _fileLabels[64];
+  String   _filePaths[64];
+  ListItem _fileItems[64]  = {};
   int      _fileCount = 0;
 
   char _selectedPcap[64]     = {};
