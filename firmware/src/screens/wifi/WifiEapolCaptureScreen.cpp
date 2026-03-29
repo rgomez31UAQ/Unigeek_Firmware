@@ -95,14 +95,14 @@ void WifiEapolCaptureScreen::_statusBarCb(TFT_eSprite& sp, int barY, int width, 
 
   char countBuf[24];
   snprintf(countBuf, sizeof(countBuf), "Captured: %u", self->_handshakes);
-  sp.setTextDatum(ML_DATUM);
-  sp.setTextColor(self->_handshakes > 0 ? TFT_MAGENTA : TFT_DARKGREY, TFT_BLACK);
-  sp.drawString(countBuf, 2, barY + 1, 1);
+  sp.setTextDatum(TL_DATUM);
+  sp.setTextColor(self->_handshakes > 0 ? TFT_MAGENTA : TFT_DARKGREY);
+  sp.drawString(countBuf, 2, barY);
 
   if (self->_lastEapolName[0] != '\0') {
-    sp.setTextDatum(MR_DATUM);
-    sp.setTextColor(TFT_CYAN, TFT_BLACK);
-    sp.drawString(self->_lastEapolName, width - 2, barY + 1, 1);
+    sp.setTextDatum(TR_DATUM);
+    sp.setTextColor(TFT_CYAN);
+    sp.drawString(self->_lastEapolName, width - 2, barY);
   }
 }
 
