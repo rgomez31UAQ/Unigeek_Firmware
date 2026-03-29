@@ -210,6 +210,7 @@ firmware/
 - nr24lf
 - cc1101
 - infrared
+- eapol brute force restart upon testing __test__ on 106++
 - log view and scroll list view should be on template instead of component
 - use log view on eapol capture
 - add attack counter and max attempt on eapol capture
