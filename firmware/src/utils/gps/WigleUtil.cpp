@@ -145,9 +145,9 @@ uint8_t WigleUtil::listFiles(IStorage* storage, String* names, String* labels,
     }
   }
 
-  // Sort ascending
+  // Sort descending
   for (uint8_t i = 1; i < count; i++) {
-    for (uint8_t j = i; j > 0 && names[j] < names[j - 1]; j--) {
+    for (uint8_t j = i; j > 0 && names[j] > names[j - 1]; j--) {
       String tmp = names[j];
       names[j] = names[j - 1];
       names[j - 1] = tmp;
