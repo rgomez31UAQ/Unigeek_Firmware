@@ -3,6 +3,7 @@
 #include "core/ConfigManager.h"
 #include "core/ScreenManager.h"
 #include "screens/game/GameMenuScreen.h"
+#include "ui/actions/ShowStatusAction.h"
 
 static constexpr float kGravity   = 0.35f;
 static constexpr float kFlapForce = -3.2f;
@@ -48,7 +49,7 @@ void GameFlappyScreen::onUpdate()
     if (dir == INavigation::DIR_PRESS || dir == INavigation::DIR_UP) _flap();
     else if (dir == INavigation::DIR_BACK) { _state = STATE_MENU; render(); }
   } else if (_state == STATE_RESULT) {
-    if (dir != INavigation::DIR_NONE && millis() - _resultMs >= 1000) {
+    if (dir != INavigation::DIR_NONE) {
       _state = STATE_MENU; _menuIdx = 0; render();
     }
   }
@@ -137,11 +138,12 @@ void GameFlappyScreen::_updateGame()
 
   // Collision
   if (_checkCollision()) {
-    _state     = STATE_RESULT;
-    _resultMs  = millis();
     _lastScore = _score;
     if (_score > _bestScore) _bestScore = _score;
     if (Uni.Speaker) Uni.Speaker->playLose();
+    ShowStatusAction::show("Game Over!", 1000);
+    _state     = STATE_RESULT;
+    render();
   }
 }
 

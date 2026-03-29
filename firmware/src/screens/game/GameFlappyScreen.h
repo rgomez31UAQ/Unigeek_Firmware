@@ -43,7 +43,6 @@ private:
   int      _bestScore  = 0;
   uint32_t _lastFrameMs = 0;
   uint32_t _pipeTimer   = 0;
-  uint32_t _resultMs    = 0;
 
   // Derived from screen size
   uint8_t _gapH      = 0;
