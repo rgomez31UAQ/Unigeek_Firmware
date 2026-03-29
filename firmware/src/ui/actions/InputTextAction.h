@@ -147,6 +147,7 @@ private:
 
   // ── keyboard mode ──────────────────────────────────────
   String _runKeyboard() {
+    if (Uni.Nav) Uni.Nav->setSuppressKeys(true);
     _drawKeyboard(true);
     uint32_t lastBlink = millis();
     bool cursorOn = true;
@@ -164,6 +165,13 @@ private:
         char c = Uni.Keyboard->getKey();
         if (c == '\n') {
           _done = true;
+        } else if (c == '\b') {
+          if (_input.length() > 0) {
+            _input.remove(_input.length() - 1);
+            cursorOn  = true;
+            lastBlink = millis();
+            _drawKeyboard(true);
+          }
         } else if (c != '\0') {
           if (!_numberMode || isdigit(c) || c == '.') {
             _input += c;
@@ -173,23 +181,10 @@ private:
           }
         }
       }
-
-      if (Uni.Nav->wasPressed()) {
-        auto dir = Uni.Nav->readDirection();
-        if (dir == INavigation::DIR_PRESS) {
-          _done = true;
-        } else if (dir == INavigation::DIR_BACK) {
-          if (_input.length() > 0) {
-            _input.remove(_input.length() - 1);
-            cursorOn  = true;
-            lastBlink = millis();
-            _drawKeyboard(true);
-          }
-        }
-      }
       delay(10);
     }
 
+    if (Uni.Nav) Uni.Nav->setSuppressKeys(false);
     _wipe(PAD + 4, (Uni.Lcd.height() - 80) / 2, Uni.Lcd.width() - (PAD * 2 + 8), 80);
     _overlay.deleteSprite();
     return _cancelled ? "" : _input;
