@@ -74,6 +74,7 @@ public:
   TwoWire*    ExI2C      = nullptr;  // external I2C — free state, caller must begin(sda,scl)/end()
   TwoWire*    InI2C      = nullptr;  // internal I2C — board-initialized, do not end()
   unsigned long lastActiveMs = 0;    // last user input timestamp — updated by update()
+  bool lcdOff = false;               // true while display is off — screens should skip rendering
 
   // Prevent copying
   Device(const Device&)            = delete;

@@ -115,6 +115,7 @@ All hardware differences are isolated in board-specific folders.
     Uni.StorageSD   IStorage*   direct SD access, nullptr on M5StickC
     Uni.StorageLFS  IStorage*   direct LittleFS access
     Uni.Spi         SPIClass*   shared SPI bus (HSPI on T-Lora Pager, nullptr on M5StickC/Cardputer)
+    Uni.lcdOff      bool        true while display is off (power save) — screens should skip rendering
 
 ### ISpeaker Interface
 
@@ -179,6 +180,31 @@ All hardware differences are isolated in board-specific folders.
         {"Item B", "sublabel"},
       };
     };
+
+### Rendering Rule (Screen-Off Safe)
+
+    onUpdate() runs ALWAYS — even when display is off (Uni.lcdOff == true).
+    render() is guarded by Uni.lcdOff in BaseScreen — it early-returns when display is off.
+
+    NEVER call drawing functions directly from onUpdate().
+    Instead, change state then call render(). Let onRender() dispatch by state.
+
+    ✗ BAD:  onUpdate() { _drawLog(); }
+    ✗ BAD:  onUpdate() { onRender(); }
+    ✗ BAD:  onUpdate() { _scrollView.render(...); }
+    ✓ GOOD: onUpdate() { render(); }
+
+    For ListScreen subclasses with multiple states, override onRender():
+      void MyScreen::onRender() {
+        if (_state == STATE_RUNNING) { _drawLog(); return; }
+        ListScreen::onRender();  // default list rendering for menu states
+      }
+
+    For BaseScreen subclasses, put all drawing in onRender():
+      void MyScreen::onRender() { _renderContent(); }
+
+    If a draw helper needs dynamic data (e.g. a status message), store it in a
+    member variable first, then call render() — onRender() reads the member.
 
 ### Back Navigation
 
@@ -294,6 +320,11 @@ All hardware differences are isolated in board-specific folders.
 
     Override in screen .h files. Use for active operations (scanning, streaming, attacks)
     that should not be interrupted by power management timers.
+
+    When display is off (Uni.lcdOff == true):
+    - onUpdate() still runs — background logic (GPS, EAPOL capture, Karma, etc.) keeps working
+    - render() is blocked by BaseScreen guard — no wasted sprite draws
+    - On wake-up, main.cpp forces render() to restore the display immediately
 
 ### Config System
 

@@ -200,7 +200,7 @@ void WifiCiwZeroclickScreen::onUpdate()
 
   uint32_t now = millis();
   if (now - _lastDrawMs >= 1000) {
-    _drawBroadcasting();
+    render();
     _lastDrawMs = now;
   }
 }
@@ -219,6 +219,16 @@ void WifiCiwZeroclickScreen::onBack()
 }
 
 // ── Private ─────────────────────────────────────────────────────────────────
+
+void WifiCiwZeroclickScreen::onRender()
+{
+  if (_state == STATE_BROADCASTING) { _drawBroadcasting(); return; }
+  if (_state == STATE_DEVICES || _state == STATE_ALERTS) {
+    _scrollView.render(bodyX(), bodyY(), bodyW(), bodyH());
+    return;
+  }
+  ListScreen::onRender();
+}
 
 void WifiCiwZeroclickScreen::_refreshMenu()
 {
@@ -270,7 +280,7 @@ void WifiCiwZeroclickScreen::_startBroadcast()
   _alertHead = 0;
   _state = STATE_BROADCASTING;
   _lastDrawMs = 0;
-  _drawBroadcasting();
+  render();
 }
 
 void WifiCiwZeroclickScreen::_stopBroadcast()
@@ -314,7 +324,7 @@ void WifiCiwZeroclickScreen::_showDevices()
   _state = STATE_DEVICES;
   setItems(nullptr, 0);
   _scrollView.setRows(_scrollRows, _deviceCount);
-  _scrollView.render(bodyX(), bodyY(), bodyW(), bodyH());
+  render();
 }
 
 void WifiCiwZeroclickScreen::_showAlerts()
@@ -339,7 +349,7 @@ void WifiCiwZeroclickScreen::_showAlerts()
   _state = STATE_ALERTS;
   setItems(nullptr, 0);
   _scrollView.setRows(_scrollRows, _alertCount);
-  _scrollView.render(bodyX(), bodyY(), bodyW(), bodyH());
+  render();
 }
 
 void WifiCiwZeroclickScreen::_tickBroadcast()

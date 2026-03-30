@@ -152,9 +152,15 @@ void WifiKarmaScreen::onUpdate()
 
   // Redraw
   if (now - _lastDraw > 500) {
-    _drawLog();
+    render();
     _lastDraw = now;
   }
+}
+
+void WifiKarmaScreen::onRender()
+{
+  if (_state == STATE_RUNNING) { _drawLog(); return; }
+  ListScreen::onRender();
 }
 
 void WifiKarmaScreen::onBack()

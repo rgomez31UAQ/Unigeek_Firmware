@@ -85,7 +85,7 @@ void GPSScreen::onUpdate() {
   }
 
   if (_state == STATE_INFO) {
-    if (millis() - _lastRender > 1000) _renderInfo();
+    if (millis() - _lastRender > 1000) render();
     if (Uni.Nav->wasPressed()) {
       auto dir = Uni.Nav->readDirection();
       if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
@@ -99,7 +99,7 @@ void GPSScreen::onUpdate() {
 
   if (_state == STATE_WARDRIVING) {
     _gps.doWardrive(Uni.Storage);
-    if (millis() - _lastRender > 1000) _renderWardriver();
+    if (millis() - _lastRender > 1000) render();
     if (Uni.Nav->wasPressed()) {
       auto dir = Uni.Nav->readDirection();
       if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
@@ -183,7 +183,7 @@ void GPSScreen::onItemSelected(uint8_t index) {
     switch (index) {
       case 0:
         _state = STATE_INFO;
-        _renderInfo();
+        render();
         break;
       case 1:
         _selectScanMode();
@@ -204,7 +204,7 @@ void GPSScreen::onItemSelected(uint8_t index) {
         _wardLog.clear();
         _wardLog.addLine(("File: " + _gps.wardriveFilename()).c_str(), TFT_DARKGREY);
         _state = STATE_WARDRIVING;
-        _renderWardriver();
+        render();
         break;
       }
       case 4:

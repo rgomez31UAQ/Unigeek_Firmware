@@ -81,7 +81,7 @@ void WifiBeaconSpamScreen::onUpdate()
   uint32_t now = millis();
   if (now - _lastDrawMs >= 2000) {
     _spinIdx = (_spinIdx + 1) % 4;
-    _drawSpamming();
+    render();
     _lastDrawMs = now;
   }
 }
@@ -96,6 +96,12 @@ void WifiBeaconSpamScreen::onBack()
 }
 
 // ── Private ────────────────────────────────────────────────────────────────
+
+void WifiBeaconSpamScreen::onRender()
+{
+  if (_state == STATE_SPAMMING) { _drawSpamming(); return; }
+  ListScreen::onRender();
+}
 
 void WifiBeaconSpamScreen::_refreshMenu()
 {
@@ -113,7 +119,7 @@ void WifiBeaconSpamScreen::_start()
   _rounds   = 0;
   _state    = STATE_SPAMMING;
   if (_mode == MODE_RANDOM) _makeRandomSsid();
-  _drawSpamming();
+  render();
 }
 
 void WifiBeaconSpamScreen::_stop()

@@ -73,8 +73,6 @@ void loop() {
   Uni.update();
 
   // ── Power saving ──────────────────────────────────────────────────────────
-  static bool _lcdOff = false;
-
   IScreen* _cur       = Screen.current();
   bool _psInhibit     = _cur && _cur->inhibitPowerSave();
   bool _poInhibit     = _psInhibit || (_cur && _cur->inhibitPowerOff());
@@ -83,35 +81,34 @@ void loop() {
     unsigned long idle   = millis() - Uni.lastActiveMs;
     unsigned long dispMs = (unsigned long)Config.get(APP_CONFIG_INTERVAL_DISPLAY_OFF, APP_CONFIG_INTERVAL_DISPLAY_OFF_DEFAULT).toInt() * 1000UL;
 
-    if (!_lcdOff && idle > dispMs) {
+    if (!Uni.lcdOff && idle > dispMs) {
       Uni.Lcd.setBrightness(0);
-      _lcdOff = true;
-    } else if (_lcdOff && idle <= dispMs) {
+      Uni.lcdOff = true;
+    } else if (Uni.lcdOff && idle <= dispMs) {
       Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
-      _lcdOff = false;
+      Uni.lcdOff = false;
       // Consume wake-up event then skip this frame entirely so Screen.update()
       // never sees it — avoids race between isPressed() peek and wasPressed() consume.
       Uni.Nav->wasPressed(); Uni.Nav->readDirection();
 #ifdef DEVICE_HAS_KEYBOARD
       if (Uni.Keyboard && Uni.Keyboard->available()) Uni.Keyboard->getKey();
 #endif
+      if (Screen.current()) Screen.current()->render();
       return;
     }
 
-    if (!_poInhibit && _lcdOff && Config.get(APP_CONFIG_ENABLE_POWER_OFF, APP_CONFIG_ENABLE_POWER_OFF_DEFAULT).toInt()) {
+    if (!_poInhibit && Uni.lcdOff && Config.get(APP_CONFIG_ENABLE_POWER_OFF, APP_CONFIG_ENABLE_POWER_OFF_DEFAULT).toInt()) {
       unsigned long powerMs = dispMs + (unsigned long)Config.get(APP_CONFIG_INTERVAL_POWER_OFF, APP_CONFIG_INTERVAL_POWER_OFF_DEFAULT).toInt() * 1000UL;
       if (idle > powerMs) {
         Uni.Power.powerOff();
       }
     }
-  } else if (_lcdOff) {
+  } else if (Uni.lcdOff) {
     // auto display off disabled or inhibited while display was sleeping — restore brightness
     Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
-    _lcdOff = false;
+    Uni.lcdOff = false;
   }
 
-  // ── Screen update (skipped while display is off) ──────────────────────────
-  if (!_lcdOff) {
-    Screen.update();
-  }
+  // ── Screen update ─────────────────────────────────────────────────────────
+  Screen.update();
 }

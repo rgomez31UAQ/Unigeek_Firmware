@@ -10,6 +10,7 @@ public:
 
   void onInit() override;
   void onUpdate() override;
+  void onRender() override;
 
 private:
   static constexpr uint8_t MAX_ROWS = 8;

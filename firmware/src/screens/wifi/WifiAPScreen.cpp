@@ -47,7 +47,7 @@ void WifiAPScreen::onUpdate()
   _dnsSpoofServer.update();
 
   if (_state == STATE_LOG && millis() - _lastDraw > 500) {
-    _drawLog();
+    render();
     _lastDraw = millis();
   }
 
@@ -60,7 +60,7 @@ void WifiAPScreen::onUpdate()
       Uni.Keyboard->getKey();
       QRCodeRenderer::clear();
       _state = STATE_LOG;
-      _drawLog();
+      render();
       return;
     }
 #endif
@@ -72,7 +72,7 @@ void WifiAPScreen::onUpdate()
       } else {
         QRCodeRenderer::clear();
         _state = STATE_LOG;
-        _drawLog();
+        render();
       }
     }
   } else {
@@ -97,6 +97,12 @@ void WifiAPScreen::onUpdate()
       }
     }
   }
+}
+
+void WifiAPScreen::onRender()
+{
+  if (_state == STATE_LOG || _state == STATE_QR) { _drawLog(); return; }
+  ListScreen::onRender();
 }
 
 void WifiAPScreen::onItemSelected(uint8_t index)

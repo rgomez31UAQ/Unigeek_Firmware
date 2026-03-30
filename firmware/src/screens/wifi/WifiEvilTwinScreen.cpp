@@ -141,9 +141,15 @@ void WifiEvilTwinScreen::onUpdate()
 
   // Redraw
   if (millis() - _lastDraw > 500) {
-    _drawLog();
+    render();
     _lastDraw = millis();
   }
+}
+
+void WifiEvilTwinScreen::onRender()
+{
+  if (_state == STATE_RUNNING) { _drawLog(); return; }
+  ListScreen::onRender();
 }
 
 void WifiEvilTwinScreen::onBack()

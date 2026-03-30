@@ -26,7 +26,7 @@ void WorldClockScreen::onUpdate() {
   // periodic body refresh
   if (millis() - _lastRenderTime > 500) {
     _lastRenderTime = millis();
-    onRender();
+    render();
   }
 
   if (Uni.Nav->wasPressed()) {

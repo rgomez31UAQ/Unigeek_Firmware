@@ -34,6 +34,15 @@ void WifiAnalyzerScreen::onItemSelected(uint8_t index)
   }
 }
 
+void WifiAnalyzerScreen::onRender()
+{
+  if (_state == STATE_INFO) {
+    _scrollView.render(bodyX(), bodyY(), bodyW(), bodyH());
+    return;
+  }
+  ListScreen::onRender();
+}
+
 void WifiAnalyzerScreen::onBack()
 {
   if (_state == STATE_INFO) {
@@ -109,5 +118,5 @@ void WifiAnalyzerScreen::_showInfo(int index)
 
   setItems(nullptr, 0);
   _scrollView.setRows(_infoRows, 5);
-  _scrollView.render(bodyX(), bodyY(), bodyW(), bodyH());
+  render();
 }

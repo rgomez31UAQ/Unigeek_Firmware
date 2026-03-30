@@ -10,6 +10,7 @@ public:
 
   void onInit() override;
   void onUpdate() override;
+  void onRender() override;
   void onItemSelected(uint8_t index) override;
   void onBack() override;
 

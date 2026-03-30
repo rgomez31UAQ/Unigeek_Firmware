@@ -73,13 +73,12 @@ void WifiDeautherScreen::onUpdate()
 
     if (_mode == MODE_ALL) {
       _deauthAll();
-      String msg = String("[") + _spinner[_spinIdx] + "] Deauthing " + _allCount + " APs...";
-      _drawStatus(msg.c_str());
+      _statusMsg = String("[") + _spinner[_spinIdx] + "] Deauthing " + _allCount + " APs...";
     } else if (_attacker) {
       _attacker->deauthenticate(_target.bssid, _target.channel);
-      String msg = String("[") + _spinner[_spinIdx] + "] Deauthing " + _target.ssid + "...";
-      _drawStatus(msg.c_str());
+      _statusMsg = String("[") + _spinner[_spinIdx] + "] Deauthing " + _target.ssid + "...";
     }
+    render();
 
     delay(100);
   }
@@ -97,6 +96,12 @@ void WifiDeautherScreen::onBack()
 }
 
 // ── Private ───────────────────────────────────────────────────────────────
+
+void WifiDeautherScreen::onRender()
+{
+  if (_state == STATE_DEAUTHING) { _drawStatus(_statusMsg.c_str()); return; }
+  ListScreen::onRender();
+}
 
 void WifiDeautherScreen::_showMain()
 {
@@ -164,10 +169,11 @@ void WifiDeautherScreen::_startDeauth()
 
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_promiscuous_rx_cb(&WifiDeautherScreen::_beaconCb);
-    _drawStatus("[...] Scanning for APs...");
+    _statusMsg = "[...] Scanning for APs...";
   } else {
-    _drawStatus(("Deauthing " + _target.ssid + "...").c_str());
+    _statusMsg = "Deauthing " + _target.ssid + "...";
   }
+  render();
 }
 
 
@@ -184,7 +190,8 @@ void WifiDeautherScreen::_stopDeauth()
   _spinIdx     = 0;
   _allChanHop  = 0;
   _allCount    = 0;
-  _drawStatus("Deauth stopped.");
+  _statusMsg = "Deauth stopped.";
+  render();
   delay(1000);
   _showMain();
 }

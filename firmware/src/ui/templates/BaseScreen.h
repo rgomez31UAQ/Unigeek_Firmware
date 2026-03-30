@@ -14,14 +14,16 @@ public:
   }
 
   void update() override {
+    onUpdate();
+    if (Uni.lcdOff) return;
     if (millis() - _lastStatusUpdate > 1000) {
       StatusBar::refresh();
       _lastStatusUpdate = millis();
     }
-    onUpdate();
   }
 
   void render() override {
+    if (Uni.lcdOff) return;
     _renderChrome();
     onRender();
   }

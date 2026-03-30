@@ -81,14 +81,14 @@ void BLEDetectorScreen::onUpdate()
     }
     if (dir == INavigation::DIR_UP && _scrollOffset > 0) {
       _scrollOffset--;
-      _draw();
+      render();
     }
     if (dir == INavigation::DIR_DOWN) {
       int total = _deviceCount + _alertCount;
       int visible = bodyH() / 14;
       if (_scrollOffset + visible < total + 2) {
         _scrollOffset++;
-        _draw();
+        render();
       }
     }
   }
@@ -103,7 +103,7 @@ void BLEDetectorScreen::onUpdate()
   if (now - _lastDrawMs >= 500) {
     _purgeOld();
     _lastDrawMs = now;
-    _draw();
+    render();
   }
 }
 

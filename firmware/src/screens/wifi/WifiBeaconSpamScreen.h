@@ -13,6 +13,7 @@ public:
   void onInit() override;
   void onItemSelected(uint8_t index) override;
   void onUpdate() override;
+  void onRender() override;
   void onBack() override;
 
 private:

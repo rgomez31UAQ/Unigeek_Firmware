@@ -32,7 +32,7 @@ private:
     _offsetMinutes += delta;
     if (_offsetMinutes > MAX_OFFSET) _offsetMinutes = MIN_OFFSET;
     if (_offsetMinutes < MIN_OFFSET) _offsetMinutes = MAX_OFFSET;
-    onRender();
+    render();
   }
 
   void _back();

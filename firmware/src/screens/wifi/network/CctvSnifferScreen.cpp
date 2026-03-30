@@ -170,6 +170,12 @@ void CctvSnifferScreen::onUpdate()
   ListScreen::onUpdate();
 }
 
+void CctvSnifferScreen::onRender()
+{
+  if (_state == STATE_SCANNING) { _drawLog(); return; }
+  ListScreen::onRender();
+}
+
 // ── Config ──────────────────────────────────────────────────────────────────
 
 void CctvSnifferScreen::_showConfig()
@@ -228,13 +234,13 @@ void CctvSnifferScreen::_startScan()
     _log.addLine("[!] No cameras found");
     _log.addLine("BACK/Press to return");
   }
-  _drawLog();
+  render();
 }
 
 void CctvSnifferScreen::_scanLAN()
 {
   _log.addLine("[*] ARP scanning LAN...");
-  _drawLog();
+  render();
 
   IPAddress localIP = WiFi.localIP();
   if (localIP[0] == 0) {
@@ -267,7 +273,7 @@ void CctvSnifferScreen::_scanLAN()
 
   delay(300);
   _log.addLine("[*] Scanning camera ports...");
-  _drawLog();
+  render();
 
   // Phase 2: collect ARP responses + scan camera ports
   int hostCount = 0;
@@ -286,7 +292,7 @@ void CctvSnifferScreen::_scanLAN()
       char buf[40];
       snprintf(buf, sizeof(buf), "[*] Host: %s", ipStr);
       _log.addLine(buf);
-      _drawLog();
+      render();
       _scanHost(ipStr);
     }
 
@@ -303,7 +309,7 @@ void CctvSnifferScreen::_scanSingleIP()
   char buf[40];
   snprintf(buf, sizeof(buf), "[*] Scanning %s...", _targetIp.c_str());
   _log.addLine(buf);
-  _drawLog();
+  render();
   _scanHost(_targetIp.c_str());
 }
 
@@ -335,7 +341,7 @@ void CctvSnifferScreen::_scanFileIP()
     char buf[40];
     snprintf(buf, sizeof(buf), "[*] Scanning %s...", line.c_str());
     _log.addLine(buf);
-    _drawLog();
+    render();
     _scanHost(line.c_str());
   }
 
@@ -373,7 +379,7 @@ void CctvSnifferScreen::_scanHost(const char* ip)
       snprintf(buf, sizeof(buf), "    [+] %s:%d (%s)",
                ip, tempCams[i].port, tempCams[i].brand);
       _log.addLine(buf);
-      _drawLog();
+      render();
     }
   }
 }
@@ -432,18 +438,18 @@ void CctvSnifferScreen::_startStream()
 
   char streamUrl[128];
   _log.addLine("[*] Finding stream...");
-  _drawLog();
+  render();
 
   if (!CctvScanUtil::findStream(ip, port, user, pass, streamUrl, sizeof(streamUrl))) {
     snprintf(streamUrl, sizeof(streamUrl), "http://%s:%u/mjpg/video.mjpg", ip, port);
     _log.addLine("[!] Trying default path");
-    _drawLog();
+    render();
   }
 
   char buf[60];
   snprintf(buf, sizeof(buf), "[*] Connecting %s:%u", ip, port);
   _log.addLine(buf);
-  _drawLog();
+  render();
 
   if (!_stream.begin(streamUrl, user, pass)) {
     ShowStatusAction::show("Stream failed!", 1500);

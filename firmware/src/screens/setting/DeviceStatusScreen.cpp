@@ -57,7 +57,6 @@ void DeviceStatusScreen::onInit() {
 
   _rowCount = i;
   _view.setRows(_rows, _rowCount);
-  _view.render(bodyX(), bodyY(), bodyW(), bodyH());
 }
 
 void DeviceStatusScreen::onUpdate() {
@@ -68,7 +67,11 @@ void DeviceStatusScreen::onUpdate() {
       return;
     }
     if (_view.onNav(dir)) {
-      _view.render(bodyX(), bodyY(), bodyW(), bodyH());
+      render();
     }
   }
+}
+
+void DeviceStatusScreen::onRender() {
+  _view.render(bodyX(), bodyY(), bodyW(), bodyH());
 }

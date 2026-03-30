@@ -46,7 +46,7 @@ void I2CDetectorScreen::onUpdate() {
   if (_hasBoth && (dir == INavigation::DIR_UP || dir == INavigation::DIR_DOWN)) {
     _wireIndex ^= 1;
     _scan();
-    onRender();
+    render();
   } else if (dir == INavigation::DIR_PRESS || dir == INavigation::DIR_BACK) {
     Screen.setScreen(new UtilityMenuScreen());
   }

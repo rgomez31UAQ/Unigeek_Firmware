@@ -160,10 +160,15 @@ void NetworkMitmScreen::onUpdate()
 
   // Redraw
   if (millis() - _lastDraw > 800) {
-    // Update starvation progress in status bar
-    _drawLog();
+    render();
     _lastDraw = millis();
   }
+}
+
+void NetworkMitmScreen::onRender()
+{
+  if (_state == STATE_RUNNING) { _drawLog(); return; }
+  ListScreen::onRender();
 }
 
 // ── Menu ────────────────────────────────────────────────────────────────────
@@ -266,7 +271,7 @@ void NetworkMitmScreen::_start()
   // 4. Start DHCP Starvation (last, interruptible)
   if (_starvEnabled) {
     _log.addLine("[*] DHCP Starvation...");
-    _drawLog();
+    render();
     if (_starv.begin()) {
       _starvRunning = true;
       char ipBuf2[40];

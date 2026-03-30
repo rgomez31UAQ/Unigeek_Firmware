@@ -67,26 +67,23 @@ void FileViewerScreen::onUpdate() {
 
   if (dir == INavigation::DIR_UP && _scrollOffset > 0) {
     _scrollOffset--;
-    _renderContent();
+    render();
   } else if (dir == INavigation::DIR_DOWN && _scrollOffset < maxScroll) {
     _scrollOffset++;
-    _renderContent();
+    render();
   } else if (dir == INavigation::DIR_LEFT && _scrollOffset > 0) {
     uint16_t jump = _visibleLines > 1 ? _visibleLines - 1 : 1;
     _scrollOffset = (_scrollOffset > jump) ? _scrollOffset - jump : 0;
-    _renderContent();
+    render();
   } else if (dir == INavigation::DIR_RIGHT && _scrollOffset < maxScroll) {
     uint16_t jump = _visibleLines > 1 ? _visibleLines - 1 : 1;
     _scrollOffset = (_scrollOffset + jump > maxScroll) ? maxScroll : _scrollOffset + jump;
-    _renderContent();
+    render();
   }
 }
 
 void FileViewerScreen::onRender() {
-  if (!_rendered) {
-    _renderContent();
-    _rendered = true;
-  }
+  _renderContent();
 }
 
 void FileViewerScreen::_parseLines() {

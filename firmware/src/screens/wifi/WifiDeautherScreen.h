@@ -20,6 +20,7 @@ public:
   void onInit() override;
   void onItemSelected(uint8_t index) override;
   void onUpdate() override;
+  void onRender() override;
   void onBack() override;
 
 private:
@@ -66,6 +67,8 @@ private:
   static int          _allCount;
   static portMUX_TYPE _allLock;
   static void _beaconCb(void* buf, wifi_promiscuous_pkt_type_t type);
+
+  String _statusMsg;
 
   void _showMain();
   void _selectWifi();
