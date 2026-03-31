@@ -32,6 +32,9 @@ static const uint8_t SCL = 15;
 // ─── SD Card ──────────────────────────────────────────────
 #define SD_CS  12
 
+// ─── LoRa Module (SX1262, shares SPI bus) ─────────────────
+#define LORA_CS  5
+
 // ─── Keyboard (TCA8418 via Wire1) ─────────────────────────
 #define KB_INT            11
 #define KB_I2C_SDA         8
