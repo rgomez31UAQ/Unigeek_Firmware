@@ -69,6 +69,11 @@ static const uint8_t SCL = GROVE_SCL;
 #define RTC_REG_BASE  0x02  // BM8563: seconds register at 0x02
 #define RTC_WIRE      Wire1  // shares internal I2C bus with AXP192
 
+// ─── GPS (external, default pins) ─────────────────────────
+#define GPS_TX    32
+#define GPS_RX    33
+#define GPS_BAUD  115200
+
 // ─── Firmware Feature Flags ───────────────────────────────
 #define DEVICE_HAS_SOUND          // buzzer attached — enables audio paths and sound settings
                                   // NOTE: no DEVICE_HAS_VOLUME_CONTROL — piezo buzzer has no real volume control

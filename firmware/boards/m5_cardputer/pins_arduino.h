@@ -73,6 +73,11 @@ static const uint8_t SCL = 15;
 #define SPI_FREQUENCY       20000000
 #define SPI_READ_FREQUENCY  20000000
 
+// ─── GPS (external, default pins) ─────────────────────────
+#define GPS_TX    2
+#define GPS_RX    1
+#define GPS_BAUD  115200
+
 // ─── Firmware Feature Flags ───────────────────────────────
 #define DEVICE_HAS_KEYBOARD       // keyboard attached — enables keyboard input paths
 #define DEVICE_HAS_SOUND          // speaker attached — enables audio paths and sound settings
