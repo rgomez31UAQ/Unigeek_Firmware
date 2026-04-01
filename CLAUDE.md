@@ -401,6 +401,18 @@ All hardware differences are isolated in board-specific folders.
 
 ---
 
+## Crediting References
+
+When porting or referencing features from another repository, update the "Thanks To"
+section in README.md with the specific features taken from that repo.
+Format: list the repo link and author, then sub-bullets for each feature referenced.
+
+    - [RepoName](url) by author
+      - Feature A
+      - Feature B
+
+---
+
 ## Reference Libraries (not used in build, for hardware reference only)
 
     ../M5Unified     M5Stack hardware reference — speaker, display, power, board configs
@@ -474,6 +486,7 @@ Triggers that require a CLAUDE.md or AGENT.md update:
 - Adding new library dependencies
 - Changing file placement conventions
 - Changing coding conventions
+- Porting or referencing features from another repository
 
 How to propose an update:
 1. Complete the code change first

@@ -18,6 +18,13 @@ When implementing board-specific hardware features, check these FIRST.
 
 ---
 
+## Crediting References
+
+When porting or referencing features from another repo, update README.md "Thanks To"
+section with the repo link, author, and specific features taken as sub-bullets.
+
+---
+
 ## Before Making Any Changes
 
 1. Identify the target — is the change shared or board-specific?
