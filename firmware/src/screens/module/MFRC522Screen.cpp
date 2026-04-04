@@ -67,8 +67,9 @@ void MFRC522Screen::onRender() {
 void MFRC522Screen::onItemSelected(uint8_t index) {
   if (_state == STATE_MAIN_MENU) {
     switch (index) {
-      case 0: _callScanUid();       break;
-      case 1: _callAuthenticate();   break;
+      case 0: _callScanUid();         break;
+      case 1: _callAuthenticate();     break;
+      case 2: _callDarksideAttack();   break;
     }
   } else if (_state == STATE_MIFARE_CLASSIC) {
     switch (index) {
@@ -76,7 +77,6 @@ void MFRC522Screen::onItemSelected(uint8_t index) {
       case 1: _callMemoryReader();     break;
       case 2: _callDictionaryAttack(); break;
       case 3: _callStaticNested();     break;
-      case 4: _callDarksideAttack();   break;
     }
   } else if (_state == STATE_DICT_SELECT) {
     _callDictAttackWithFile(index);
@@ -818,27 +818,42 @@ void MFRC522Screen::_callStaticNested() {
 }
 
 void MFRC522Screen::_callDarksideAttack() {
+  // Scan for card if called from main menu (no card scanned yet)
+  if (_state == STATE_MAIN_MENU) {
+    ShowStatusAction::show("Place card on reader...", 0);
+
+    const auto scanStart = millis();
+    bool found = false;
+    while (millis() - scanStart < 5000) {
+      Uni.update();
+      if (Uni.Nav->wasPressed()) {
+        auto dir = Uni.Nav->readDirection();
+        if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
+          _goMainMenu();
+          return;
+        }
+      }
+      if (_module->PICC_IsNewCardPresent() && _module->PICC_ReadCardSerial()) {
+        _currentCard.sak = _module->uid.sak;
+        _currentCard.size = _module->uid.size;
+        memcpy(_currentCard.uidByte, _module->uid.uidByte, _currentCard.size);
+        _mf1AuthKeys.fill({});
+        found = true;
+        break;
+      }
+      delay(50);
+    }
+    if (!found) {
+      ShowStatusAction::show("No card found");
+      _goMainMenu();
+      return;
+    }
+  }
+
   auto piccType = static_cast<MFRC522_I2C::PICC_Type>(_module->PICC_GetType(_currentCard.sak));
   auto it = _mf1CardDetails.find(piccType);
   if (it == _mf1CardDetails.end()) {
     ShowStatusAction::show("Unsupported tag");
-    render();
-    return;
-  }
-
-  size_t totalSectors = it->second.first;
-
-  // Check if any key is already known — if so, darkside is unnecessary
-  bool hasKnownKey = false;
-  for (size_t s = 0; s < totalSectors; s++) {
-    if (_mf1AuthKeys[s].first || _mf1AuthKeys[s].second) {
-      hasKnownKey = true;
-      break;
-    }
-  }
-
-  if (hasKnownKey) {
-    ShowStatusAction::show("Keys already known\nUse Static Nested instead");
     render();
     return;
   }
@@ -870,9 +885,9 @@ void MFRC522Screen::_callDarksideAttack() {
     snprintf(msg, sizeof(msg), "Found key A S0:\n%02X%02X%02X%02X%02X%02X",
       kb[0], kb[1], kb[2], kb[3], kb[4], kb[5]);
     ShowStatusAction::show(msg);
+    _goMifareClassic();
   } else {
     ShowStatusAction::show("Darkside attack failed");
+    _goMainMenu();
   }
-
-  _goMifareClassic();
 }

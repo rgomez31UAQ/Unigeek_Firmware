@@ -11,7 +11,7 @@ class MFRC522Screen : public ListScreen
 {
 public:
   const char* title() override;
-  bool inhibitPowerSave() override { return true; }
+  bool inhibitPowerOff() override { return true; }
 
   void onInit() override;
   void onUpdate() override;
@@ -44,18 +44,18 @@ private:
   };
 
   // Main menu
-  ListItem _mainItems[2] = {
+  ListItem _mainItems[3] = {
     {"Scan UID"},
     {"MIFARE Classic"},
+    {"Darkside Attack"},
   };
 
   // MIFARE Classic submenu
-  ListItem _mfItems[5] = {
+  ListItem _mfItems[4] = {
     {"Discovered Keys"},
     {"Dump Memory"},
     {"Dictionary Attack"},
     {"Static Nested"},
-    {"Darkside Attack"},
   };
 
   // ScrollListView for keys/memory display

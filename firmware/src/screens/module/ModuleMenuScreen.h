@@ -13,7 +13,7 @@ public:
 
 private:
   ListItem _items[3] = {
-    {"M5 RFID 2"},
+    {"MFRC522 I2C"},
     {"GPS"},
     {"IR Remote"},
   };
