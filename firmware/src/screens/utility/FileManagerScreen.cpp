@@ -110,7 +110,9 @@ void FileManagerScreen::_loadDir(const String& path)
 
 void FileManagerScreen::_openMenu(uint8_t fileIdx)
 {
-  if (fileIdx >= _fileCount) return;
+  if (fileIdx >= _fileCount) {
+    return;
+  }
 
   _state      = STATE_MENU;
   _menuSelIdx = fileIdx;
@@ -118,27 +120,25 @@ void FileManagerScreen::_openMenu(uint8_t fileIdx)
 
   bool isFile = !_fileIsDir[fileIdx];
 
-  if (isFile) {
-    _menuActions[_menuCount] = ACT_VIEW;
-    _menuItems[_menuCount++] = {"View"};
-  }
-
-  _menuActions[_menuCount] = ACT_NEW_FOLDER;
-  _menuItems[_menuCount++] = {"New Folder"};
-
-  _menuActions[_menuCount] = ACT_RENAME;
-  _menuItems[_menuCount++] = {"Rename"};
-
-  _menuActions[_menuCount] = ACT_DELETE;
-  _menuItems[_menuCount++] = {"Delete"};
+  auto addMenu = [&](MenuAction action, const char* label, const char* sublabel = nullptr,
+                     bool reserveTailSlots = true) -> bool {
+    const uint8_t reserved = reserveTailSlots ? 2 : 0; // Keep space for Close + Exit
+    const uint8_t limit = (kMaxMenu > reserved) ? (kMaxMenu - reserved) : 0;
+    if (_menuCount >= limit) {
+      return false;
+    }
+    _menuActions[_menuCount] = action;
+    _menuItems[_menuCount++] = {label, sublabel};
+    return true;
+  };
 
   if (isFile) {
-    _menuActions[_menuCount] = ACT_COPY;
-    _menuItems[_menuCount++] = {"Copy"};
-
-    _menuActions[_menuCount] = ACT_CUT;
-    _menuItems[_menuCount++] = {"Cut"};
+    addMenu(ACT_VIEW, "View");
   }
+
+  addMenu(ACT_NEW_FOLDER, "New Folder");
+  addMenu(ACT_RENAME, "Rename");
+  addMenu(ACT_DELETE, "Delete");
 
   if (!_clipPath.isEmpty()) {
     String base = (_curPath == "/") ? "" : _curPath;
@@ -146,29 +146,36 @@ void FileManagerScreen::_openMenu(uint8_t fileIdx)
     String clipName = (slash >= 0) ? _clipPath.substring(slash + 1) : _clipPath;
     bool exists = Uni.Storage->exists((base + "/" + clipName).c_str());
 
-    _menuActions[_menuCount] = ACT_PASTE;
-    _menuItems[_menuCount++] = {exists ? "Replace" : "Paste", _clipOp.c_str()};
-
-    _menuActions[_menuCount] = ACT_CANCEL_CLIP;
-    _menuItems[_menuCount++] = {"Clear Clipboard"};
+    addMenu(ACT_PASTE, exists ? "Replace" : "Paste", _clipOp.c_str());
+    addMenu(ACT_CANCEL_CLIP, "Clear Clipboard");
   }
 
-  _menuActions[_menuCount] = ACT_CLOSE_MENU;
-  _menuItems[_menuCount++] = {"Close"};
+  if (isFile) {
+    addMenu(ACT_COPY, "Copy");
+    addMenu(ACT_CUT, "Cut");
+  }
 
-  _menuActions[_menuCount] = ACT_EXIT;
-  _menuItems[_menuCount++] = {"Exit"};
-
+  // Always keep these two entries available.
+  addMenu(ACT_CLOSE_MENU, "Close", nullptr, false);
+  addMenu(ACT_EXIT, "Exit", nullptr, false);
   setItems(_menuItems, _menuCount);
 }
 
 void FileManagerScreen::_handleMenuAction(uint8_t index)
 {
-  if (index >= _menuCount) return;
+  if (index >= _menuCount) {
+    return;
+  }
+
+  if (_menuSelIdx >= _fileCount && _menuActions[index] != ACT_CLOSE_MENU && _menuActions[index] != ACT_EXIT) {
+    ShowStatusAction::show("Invalid selection", 1200);
+    _loadDir(_curPath);
+    return;
+  }
 
   String base       = (_curPath == "/") ? "" : _curPath;
-  String targetPath = _filePath[_menuSelIdx];
-  String targetName = _fileName[_menuSelIdx];
+  String targetPath = (_menuSelIdx < _fileCount) ? _filePath[_menuSelIdx] : "";
+  String targetName = (_menuSelIdx < _fileCount) ? _fileName[_menuSelIdx] : "";
 
   switch (_menuActions[index]) {
 
@@ -224,6 +231,10 @@ void FileManagerScreen::_handleMenuAction(uint8_t index)
       break;
 
     case ACT_PASTE: {
+      if (_clipPath.isEmpty()) {
+        ShowStatusAction::show("Clipboard empty", 1200);
+        break;
+      }
       int slash = _clipPath.lastIndexOf('/');
       String clipName = (slash >= 0) ? _clipPath.substring(slash + 1) : _clipPath;
       String destPath = base + "/" + clipName;
