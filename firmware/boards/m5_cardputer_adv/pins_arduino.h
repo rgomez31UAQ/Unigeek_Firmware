@@ -44,6 +44,10 @@ static const uint8_t SCL = 15;
 // ─── IR Emitter ───────────────────────────────────────────
 #define IR_TX  44
 
+// ─── CC1101 Sub-GHz ──────────────────────────────────────
+#define CC1101_CS_PIN   1   // GROVE_SCL
+#define CC1101_GDO0_PIN 2   // GROVE_SDA
+
 // ─── RGB LED (SK6812) ─────────────────────────────────────
 #define RGB_LED  21
 

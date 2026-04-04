@@ -67,6 +67,10 @@ static const uint8_t SCL = GROVE_SCL;
 // ─── IR Transmitter ──────────────────────────────────────
 #define IR_TX_PIN  19
 
+// ─── CC1101 Sub-GHz ──────────────────────────────────────
+#define CC1101_CS_PIN   26
+#define CC1101_GDO0_PIN 25
+
 // ─── Internal I2C (BM8563 RTC) ───────────────────────────
 #define INTERNAL_SDA  21
 #define INTERNAL_SCL  22

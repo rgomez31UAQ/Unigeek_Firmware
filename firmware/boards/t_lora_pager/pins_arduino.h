@@ -59,6 +59,10 @@ static const uint8_t SCL = GROVE_SCL;
 #define LORA_IRQ   14
 #define LORA_BUSY  48
 
+// ─── CC1101 Sub-GHz ──────────────────────────────────────
+#define CC1101_CS_PIN   44
+#define CC1101_GDO0_PIN 43
+
 // ─── GPS (MIA-M10Q) ───────────────────────────────────────
 #define GPS_TX    12
 #define GPS_RX     4
