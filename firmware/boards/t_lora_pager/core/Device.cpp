@@ -10,7 +10,6 @@
 #include "Power.h"
 #include "Keyboard.h"
 #include "Speaker.h"
-#include <SPI.h>
 #include <Wire.h>
 
 static DisplayImpl    display;
@@ -19,7 +18,7 @@ static NavigationImpl navigation(&keyboard);
 static PowerImpl      power;
 static StorageSD      storageSD;
 static StorageLFS     storageLFS;
-static SPIClass       sharedSpi(HSPI);
+static ExtSpiClass    sharedSpi(HSPI);
 static SpeakerLoRa    speaker;
 
 void Device::applyNavMode() {}

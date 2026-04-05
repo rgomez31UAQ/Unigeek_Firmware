@@ -6,7 +6,6 @@
 #include "Power.h"
 #include "Keyboard.h"
 #include "Speaker.h"
-#include <SPI.h>
 
 static DisplayImpl    display;
 static KeyboardImpl   keyboard;
@@ -14,7 +13,7 @@ static NavigationImpl navigation(&keyboard);
 static PowerImpl      power;
 static StorageSD      storageSD;
 static StorageLFS     storageLFS;
-static SPIClass       sdSpi(FSPI);
+static ExtSpiClass    sdSpi(FSPI);
 static SpeakerADV     speaker;
 
 void Device::applyNavMode() {}

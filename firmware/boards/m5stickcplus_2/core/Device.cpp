@@ -12,7 +12,6 @@
 #include "Power.h"
 #include "Speaker.h"
 #include <Wire.h>
-#include <SPI.h>
 
 static DisplayImpl          display;
 static NavigationImpl       navigation;
@@ -20,7 +19,7 @@ static EncoderNavigation    encoderNavigation;
 static PowerImpl            power;
 static StorageLFS           storageLFS;
 static SpeakerBuzzer        speaker;
-static SPIClass             extSpi(VSPI);  // Grove port SPI (display uses HSPI)
+static ExtSpiClass      extSpi(VSPI);  // Grove port SPI (display uses HSPI)
 
 Device* Device::createInstance() {
   pinMode(BTN_UP, INPUT);
@@ -40,7 +39,7 @@ Device* Device::createInstance() {
   storageLFS.begin();
 
   // Grove port SPI — VSPI on ESP32 (CC1101 Sub-GHz, MFRC522, etc.)
-  extSpi.begin(CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN, -1);
+  extSpi.begin(V_SPI_SCK, V_SPI_MISO, V_SPI_MOSI, -1);
 
   auto* dev = new Device(display, power, &navigation, nullptr,
                          nullptr, &storageLFS, &extSpi, &speaker);

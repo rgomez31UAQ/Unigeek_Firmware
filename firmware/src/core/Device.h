@@ -10,7 +10,7 @@
 #include "IKeyboard.h"
 #include "IStorage.h"
 #include "ISpeaker.h"
-#include <SPI.h>
+#include "ExtSpiClass.h"
 #include <Wire.h>
 
 #ifndef TFT_DEFAULT_ORIENTATION
@@ -70,7 +70,7 @@ public:
   IStorage*   StorageLFS = nullptr;  // direct LFS access (nullable)
   IKeyboard*  Keyboard   = nullptr;
   ISpeaker*   Speaker    = nullptr;
-  SPIClass*   Spi        = nullptr;  // shared SPI bus (nullable, board-specific)
+  ExtSpiClass* Spi        = nullptr;  // shared SPI bus (nullable, board-specific)
   TwoWire*    ExI2C      = nullptr;  // external I2C — free state, caller must begin(sda,scl)/end()
   TwoWire*    InI2C      = nullptr;  // internal I2C — board-initialized, do not end()
   unsigned long lastActiveMs = 0;    // last user input timestamp — updated by update()
@@ -85,7 +85,7 @@ private:
         IKeyboard* keyboard = nullptr,
         IStorage* storageSD = nullptr,
         IStorage* storageLFS = nullptr,
-        SPIClass* spi = nullptr,
+        ExtSpiClass* spi = nullptr,
         ISpeaker* sound = nullptr)
      : Lcd(lcd), Power(power), Nav(nav),
        Keyboard(keyboard),
