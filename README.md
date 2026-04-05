@@ -100,6 +100,15 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Send** — Browse and load IR remote files from storage (`/unigeek/ir/`), tap to send, hold for actions (replay, rename, delete), save changes back to file
   - **TV-B-Gone** — Send power-off codes from the WORLD_IR_CODES database (271 codes), choose North America or Europe region, with progress display and cancel support
   - Compatible with Flipper Zero and Bruce IR file formats — download IR remotes via **WiFi > Network > Download > Infrared Files**
+- **Sub-GHz (CC1101)** — Sub-GHz RF signal capture, replay, and jamming via CC1101 transceiver ([details](knowledge/sub-ghz.md))
+  - **Detect Freq** — Spectrum scanner across ~40 known frequencies (300–928 MHz); live bar chart shows RSSI per channel, highlights the strongest signal — does not change the frequency setting
+  - **Frequency** — Manually set the operating frequency (presets: 300, 315, 345, 390, 433.92, 434, 868, 915 MHz; custom 280–928 MHz)
+  - **Receive** — Capture RF signals on the configured frequency with RcSwitch decoding (Princeton/fixed code) and RAW fallback; duplicate filtering; replay, save, or delete each capture
+  - **Send** — Browse and send `.sub` signal files from storage (`/unigeek/rf/`), tap to send, hold for actions (send, rename, delete)
+  - **Jammer** — Transmit continuous noise on the configured frequency to disrupt Sub-GHz receivers
+  - Compatible with Flipper Zero and Bruce `.sub` file formats
+  - On M5StickC: CC1101 SPI (GPIO 32/33) is shared with GPS UART — the firmware manages the handoff automatically
+- **Pin Setting** — Configure GPIO pins for all external modules (GPS TX/RX/baud, external I2C SDA/SCL, CC1101 CS/GDO0); accessible from both Modules menu and Settings
 
 ### Settings
 - Device name
@@ -110,7 +119,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - Navigation sound toggle
 - Theme color
 - Web file manager password
-- Pin configuration (external I2C SDA/SCL)
+- Pin configuration (GPS TX/RX/baud, external I2C SDA/SCL, CC1101 CS/GDO0) — also accessible from Modules menu
 - Navigation mode — Default or Encoder (M5StickC Plus only)
 
 ---
@@ -178,6 +187,7 @@ Files are stored under `/unigeek/` on either SD card or LittleFS (fallback):
 /unigeek/utility/passwords/        Password wordlists for EAPOL brute force
 /unigeek/utility/cctv/             CCTV Sniffer target IP lists
 /unigeek/nfc/dictionaries/         MIFARE Classic key dictionary files
+/unigeek/rf/                       Sub-GHz signal files (.sub)
 /unigeek/web/file_manager/         Web file manager HTML files
 ```
 
@@ -229,6 +239,7 @@ This project was built with inspiration and reference from:
 - [Bruce](https://github.com/pr3y/Bruce) by pr3y
   - All boards configuration and pin definitions
   - IR Remote (receive, send, TV-B-Gone with WORLD_IR_CODES database)
+  - Sub-GHz frequency list, RSSI threshold, and CC1101 wiring for M5StickC (shared SPI/UART bus on GPIO 32/33)
 - [Flipper-IRDB](https://github.com/Flipper-XFW/Flipper-IRDB) by Flipper-XFW
   - Infrared remote database (46 categories, 2000+ IR remote files)
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
@@ -240,7 +251,6 @@ This project was built with inspiration and reference from:
 
 - LoRa
 - nr24lf
-- cc1101
 - change keyboard to HID instead, mode will be USB and BLE, while BLE and USB only have Keyboard, Mouse and Jiggle Mouse, USB has 1 more option is Mass Storage.
 
 <!-- README last synced at commit: 6dc4338 -->
