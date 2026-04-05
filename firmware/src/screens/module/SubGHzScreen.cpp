@@ -9,16 +9,6 @@
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/views/ProgressView.h"
 
-#ifndef CC1101_SCK_PIN
-  #define CC1101_SCK_PIN  SPI_SCK_PIN
-#endif
-#ifndef CC1101_MISO_PIN
-  #define CC1101_MISO_PIN SPI_MISO_PIN
-#endif
-#ifndef CC1101_MOSI_PIN
-  #define CC1101_MOSI_PIN SPI_MOSI_PIN
-#endif
-
 void SubGHzScreen::onInit() {
   _csPin   = PinConfig.get(PIN_CONFIG_CC1101_CS,   PIN_CONFIG_CC1101_CS_DEFAULT).toInt();
   _gdo0Pin = PinConfig.get(PIN_CONFIG_CC1101_GDO0, PIN_CONFIG_CC1101_GDO0_DEFAULT).toInt();
@@ -27,39 +17,26 @@ void SubGHzScreen::onInit() {
 
 void SubGHzScreen::onUpdate() {
   if (_state == STATE_RECEIVING) {
-    bool cancelled = false;
-
-    CC1101Util::Signal sig;
-    bool got = _rf.receive(sig, 10000, [&cancelled]() -> bool {
-      Uni.update();
-      if (Uni.Nav->wasPressed()) {
-        auto dir = Uni.Nav->readDirection();
-        if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
-          cancelled = true;
-          return true;
+    if (_capturedCount < kMaxCapture) {
+      CC1101Util::Signal sig;
+      if (_rf.pollReceive(sig) && !_isDuplicate(sig)) {
+        _capturedSignals[_capturedCount] = sig;
+        _capturedTimes[_capturedCount]   = _generateTimestampName();
+        _capturedSaved[_capturedCount]   = false;
+        _capturedCount++;
+        if (Uni.Speaker) Uni.Speaker->playNotification();
+        if (_capturedCount >= kMaxCapture) {
+          _rf.endReceive();
+          snprintf(_titleBuf, sizeof(_titleBuf), "Sub-GHz Full");
         }
+        _showReceiveList();
       }
-      return false;
-    });
-
-    if (cancelled) {
-      _rf.end();
-      if (_capturedCount > 0) {
-        _showCapturedList();
-      } else {
-        _showMenu();
-      }
-      return;
     }
-
-    if (got && _capturedCount < kMaxCapture) {
-      _capturedSignals[_capturedCount] = sig;
-      _capturedTimes[_capturedCount]   = _generateTimestampName();
-      _capturedSaved[_capturedCount]   = false;
-      _capturedCount++;
+    // Blink title indicator while still listening
+    if (_capturedCount < kMaxCapture && millis() - _lastRender > 500) {
+      _lastRender = millis();
       render();
     }
-    return;
   }
 
   if (_state == STATE_JAMMING) {
@@ -91,18 +68,20 @@ void SubGHzScreen::onUpdate() {
   if (_state == STATE_SEND_BROWSE) {
     if (!_holdFired && Uni.Nav->isPressed() && Uni.Nav->heldDuration() >= 1000) {
       _holdFired = true;
-      uint8_t idx = _selectedIndex;
-      if (idx < _browseCount && !_browseIsDir[idx])
-        _showBrowseOptions(idx);
-
-      Serial.println("Hold fired on index " + String(idx));
+      _pendingHoldIdx = _selectedIndex;
+      // Show popup immediately — don't wait for release
+      if (_pendingHoldIdx < _browseCount && !_browseIsDir[_pendingHoldIdx])
+        _showBrowseOptions(_pendingHoldIdx);
+      else
+        render();
       return;
     }
   }
   if (_holdFired) {
-    Uni.Nav->readDirection();
-    _holdFired = false;
-    Serial.println("Draining hold event");
+    if (Uni.Nav->wasPressed()) {
+      Uni.Nav->readDirection();  // consume the release so it doesn't trigger onItemSelected
+      _holdFired = false;
+    }
     return;
   }
 
@@ -111,42 +90,27 @@ void SubGHzScreen::onUpdate() {
 
 void SubGHzScreen::onRender() {
   if (_state == STATE_RECEIVING) {
-    TFT_eSprite sp(&Uni.Lcd);
-    sp.createSprite(bodyW(), bodyH());
-    sp.fillSprite(TFT_BLACK);
-    sp.setTextDatum(MC_DATUM);
-    sp.setTextSize(1);
-
-    if (_rf.isScanning()) {
-      sp.drawString("Scanning...", bodyW() / 2, bodyH() / 2 - 20);
-      char scanStr[32];
-      snprintf(scanStr, sizeof(scanStr), "%.2f MHz  RSSI:%d", _rf.getScanFreq(), _rf.getScanRssi());
-      sp.drawString(scanStr, bodyW() / 2, bodyH() / 2);
-    } else {
+    if (_capturedCount == 0) {
+      TFT_eSprite sp(&Uni.Lcd);
+      sp.createSprite(bodyW(), bodyH());
+      sp.fillSprite(TFT_BLACK);
+      sp.setTextDatum(MC_DATUM);
       char freqStr[24];
       snprintf(freqStr, sizeof(freqStr), "%.2f MHz", _rf.getFrequency());
       sp.drawString(freqStr, bodyW() / 2, bodyH() / 2 - 20);
       sp.drawString("Waiting for signal...", bodyW() / 2, bodyH() / 2);
-    }
-
-    char countStr[24];
-    if (_capturedCount >= kMaxCapture) {
-      snprintf(countStr, sizeof(countStr), "Full: %d/%d", _capturedCount, kMaxCapture);
+      sp.fillRect(0, bodyH() - 16, bodyW(), 16, Config.getThemeColor());
+      sp.setTextColor(TFT_WHITE, Config.getThemeColor());
+      #ifdef DEVICE_HAS_KEYBOARD
+        sp.drawString("BACK: Stop", bodyW() / 2, bodyH() - 8, 1);
+      #else
+        sp.drawString("< Stop", bodyW() / 2, bodyH() - 8, 1);
+      #endif
+      sp.pushSprite(bodyX(), bodyY());
+      sp.deleteSprite();
     } else {
-      snprintf(countStr, sizeof(countStr), "Captured: %d", _capturedCount);
+      ListScreen::onRender();
     }
-    sp.drawString(countStr, bodyW() / 2, bodyH() / 2 + 16);
-
-    sp.fillRect(0, bodyH() - 16, bodyW(), 16, Config.getThemeColor());
-    sp.setTextColor(TFT_WHITE, Config.getThemeColor());
-    #ifdef DEVICE_HAS_KEYBOARD
-      sp.drawString("BACK: Stop", bodyW() / 2, bodyH() - 8, 1);
-    #else
-      sp.drawString("< Stop", bodyW() / 2, bodyH() - 8, 1);
-    #endif
-
-    sp.pushSprite(bodyX(), bodyY());
-    sp.deleteSprite();
     return;
   }
 
@@ -184,12 +148,6 @@ void SubGHzScreen::onBack() {
     Screen.setScreen(new ModuleMenuScreen());
   } else if (_state == STATE_RECEIVING) {
     _rf.end();
-    if (_capturedCount > 0) {
-      _showCapturedList();
-    } else {
-      _showMenu();
-    }
-  } else if (_state == STATE_CAPTURED_LIST) {
     _showMenu();
   } else if (_state == STATE_JAMMING) {
     digitalWrite(_gdo0Pin, LOW);
@@ -231,25 +189,30 @@ void SubGHzScreen::onItemSelected(uint8_t index) {
         render();
         return;
       }
-      case 2: { // Receive
+      case 2: { // Frequency
+        _selectFrequency();
+        return;
+      }
+      case 3: { // Receive
         if (_csPin < 0 || _gdo0Pin < 0) {
           ShowStatusAction::show("Set CS and GDO0 pins first");
           render();
           return;
         }
-        if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin,
-                       CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN)) {
+        if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin)) {
           ShowStatusAction::show("CC1101 not found");
           render();
           return;
         }
         _capturedCount = 0;
+        _lastRender = 0;
         _state = STATE_RECEIVING;
-        strcpy(_titleBuf, "Sub-GHz RX");
-        render();
+        snprintf(_titleBuf, sizeof(_titleBuf), "Sub-GHz RX (0/%d)", kMaxCapture);
+        _rf.beginReceive();
+        setItems(_capturedItems, 0);  // prime pointer once; _showReceiveList uses setCount after this
         break;
       }
-      case 3: { // Send
+      case 4: { // Send
         if (_csPin < 0) {
           ShowStatusAction::show("Set CS pin first");
           render();
@@ -258,14 +221,13 @@ void SubGHzScreen::onItemSelected(uint8_t index) {
         _loadBrowseDir(kRootPath);
         break;
       }
-      case 4: { // Jammer
+      case 5: { // Jammer
         if (_csPin < 0 || _gdo0Pin < 0) {
           ShowStatusAction::show("Set CS and GDO0 pins first");
           render();
           return;
         }
-        if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin,
-                       CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN)) {
+        if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin)) {
           ShowStatusAction::show("CC1101 not found");
           render();
           return;
@@ -283,22 +245,12 @@ void SubGHzScreen::onItemSelected(uint8_t index) {
     return;
   }
 
-  if (_state == STATE_CAPTURED_LIST) {
-    if (index >= _capturedCount) return;
-
-    if (_capturedSaved[index]) {
-      ShowStatusAction::show("Already saved");
-      render();
-      return;
+  if (_state == STATE_RECEIVING) {
+    if (index < _capturedCount) {
+      _handleCaptureSelection(index);
+      // If a deletion freed a slot and receive was stopped, restart it
+      if (_capturedCount < kMaxCapture) _rf.beginReceive();
     }
-
-    String name = InputTextAction::popup("Save As", _capturedTimes[index].c_str());
-    if (name.length() == 0) {
-      render();
-      return;
-    }
-    _saveSignal(index, name);
-    render();
     return;
   }
 
@@ -328,8 +280,7 @@ void SubGHzScreen::_sendBrowseFile(uint8_t index) {
     render();
     return;
   }
-  if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin,
-                 CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN)) {
+  if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin)) {
     ShowStatusAction::show("CC1101 not found");
     render();
     return;
@@ -394,26 +345,133 @@ void SubGHzScreen::_updatePinSublabels() {
   _menuItems[0].sublabel = _csPinSub.c_str();
   _gdo0PinSub = (_gdo0Pin >= 0) ? ("GPIO " + String(_gdo0Pin)) : "Not set";
   _menuItems[1].sublabel = _gdo0PinSub.c_str();
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%.2f MHz", _rf.getFrequency());
+  _freqSub = buf;
+  _menuItems[2].sublabel = _freqSub.c_str();
+}
+
+void SubGHzScreen::_selectFrequency() {
+  static constexpr InputSelectAction::Option freqOpts[] = {
+    {"300 MHz",    "300"},
+    {"315 MHz",    "315"},
+    {"345 MHz",    "345"},
+    {"390 MHz",    "390"},
+    {"433.92 MHz", "433.92"},
+    {"434 MHz",    "434"},
+    {"868 MHz",    "868"},
+    {"915 MHz",    "915"},
+    {"Custom",     "custom"},
+  };
+
+  char curBuf[12];
+  snprintf(curBuf, sizeof(curBuf), "%.2f", _rf.getFrequency());
+
+  const char* choice = InputSelectAction::popup("Frequency", freqOpts, 9, curBuf);
+  if (!choice) { render(); return; }
+
+  float mhz;
+  if (strcmp(choice, "custom") == 0) {
+    int val = InputNumberAction::popup("MHz (280-928)", 280, 928, (int)_rf.getFrequency());
+    if (val < 0) { render(); return; }
+    mhz = (float)val;
+  } else {
+    mhz = atof(choice);
+  }
+
+  if (!_rf.setFrequency(mhz)) {
+    ShowStatusAction::show("Invalid frequency");
+  }
+  _updatePinSublabels();
+  render();
 }
 
 // ── Captured List ──────────────────────────────────────────────────────────
 
-void SubGHzScreen::_showCapturedList() {
-  _state = STATE_CAPTURED_LIST;
-  strcpy(_titleBuf, "Captured");
+void SubGHzScreen::_showReceiveList() {
+  snprintf(_titleBuf, sizeof(_titleBuf), "Sub-GHz RX (%d/%d)", _capturedCount, kMaxCapture);
+  _rebuildCapturedItems();   // update array in-place (SettingScreen pattern)
+  setCount(_capturedCount);  // update count, clamp selection, adjust scroll — no render
+  render();                  // one render at the current selection
+}
+
+void SubGHzScreen::_handleCaptureSelection(uint8_t index) {
+  if (index >= _capturedCount) return;
+
+  static constexpr InputSelectAction::Option captureOpts[] = {
+    {"Replay", "replay"},
+    {"Save",   "save"},
+    {"Delete", "delete"},
+  };
+  const char* choice = InputSelectAction::popup("Options", captureOpts, 3);
+  if (!choice) { render(); return; }
+
+  if (strcmp(choice, "replay") == 0) {
+    _sendCapturedSignal(index);
+
+  } else if (strcmp(choice, "save") == 0) {
+    if (_capturedSaved[index]) {
+      ShowStatusAction::show("Already saved");
+      render();
+      return;
+    }
+    String name = InputTextAction::popup("Save As", _capturedTimes[index].c_str());
+    if (name.length() == 0) { render(); return; }
+    _saveSignal(index, name);
+    _rebuildCapturedItems();
+    render();
+
+  } else if (strcmp(choice, "delete") == 0) {
+    for (uint8_t i = index; i + 1 < _capturedCount; i++) {
+      _capturedSignals[i] = _capturedSignals[i + 1];
+      _capturedTimes[i]   = _capturedTimes[i + 1];
+      _capturedSaved[i]   = _capturedSaved[i + 1];
+    }
+    _capturedCount--;
+    _showReceiveList();
+  }
+}
+
+void SubGHzScreen::_rebuildCapturedItems() {
   for (uint8_t i = 0; i < _capturedCount; i++) {
     const CC1101Util::Signal& sig = _capturedSignals[i];
-    if (!_capturedSaved[i] && sig.protocol == "RcSwitch") {
-      char keyStr[24];
-      snprintf(keyStr, sizeof(keyStr), "P%s 0x%llX",
-               sig.preset.c_str(), (unsigned long long)sig.key);
-      _capturedSubLabels[i] = String(keyStr);
+    if (_capturedSaved[i]) {
+      _capturedSubLabels[i] = "Saved";
+    } else if (sig.protocol == "RcSwitch") {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "0x%llX P%s %db",
+               (unsigned long long)sig.key, sig.preset.c_str(), sig.bit);
+      _capturedSubLabels[i] = buf;
     } else {
-      _capturedSubLabels[i] = _capturedSaved[i] ? "Saved" : "Tap to save";
+      // Count pulses in RAW data as a proxy for complexity
+      int pulses = 0;
+      for (char c : sig.rawData) { if (c == ' ') pulses++; }
+      pulses++;
+      char buf[24];
+      snprintf(buf, sizeof(buf), "RAW %d pulses", pulses);
+      _capturedSubLabels[i] = buf;
     }
     _capturedItems[i] = {_capturedTimes[i].c_str(), _capturedSubLabels[i].c_str()};
   }
-  setItems(_capturedItems, _capturedCount);
+}
+
+void SubGHzScreen::_sendCapturedSignal(uint8_t index) {
+  if (index >= _capturedCount) return;
+  if (_csPin < 0) {
+    ShowStatusAction::show("Set CS pin first");
+    render();
+    return;
+  }
+  if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin)) {
+    ShowStatusAction::show("CC1101 not found");
+    render();
+    return;
+  }
+  ProgressView::show(("Replaying " + _capturedTimes[index]).c_str(), 50);
+  _rf.sendSignal(_capturedSignals[index]);
+  _rf.end();
+  ShowStatusAction::show("Replayed", 1000);
+  render();
 }
 
 void SubGHzScreen::_saveSignal(uint8_t index, const String& name) {
@@ -434,6 +492,20 @@ void SubGHzScreen::_saveSignal(uint8_t index, const String& name) {
   } else {
     ShowStatusAction::show("Save failed");
   }
+}
+
+bool SubGHzScreen::_isDuplicate(const CC1101Util::Signal& sig) const {
+  if (sig.protocol != "RcSwitch") return false; // RAW: accept all, timing jitter makes dedup unreliable
+  for (uint8_t i = 0; i < _capturedCount; i++) {
+    const CC1101Util::Signal& s = _capturedSignals[i];
+    if (s.protocol == "RcSwitch" &&
+        s.key    == sig.key    &&
+        s.preset == sig.preset &&
+        s.bit    == sig.bit) {
+      return true;
+    }
+  }
+  return false;
 }
 
 String SubGHzScreen::_generateTimestampName() {

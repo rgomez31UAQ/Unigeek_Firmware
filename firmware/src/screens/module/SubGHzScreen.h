@@ -23,7 +23,6 @@ private:
   enum State {
     STATE_MENU,
     STATE_RECEIVING,
-    STATE_CAPTURED_LIST,
     STATE_SEND_BROWSE,
     STATE_JAMMING,
   } _state = STATE_MENU;
@@ -33,30 +32,38 @@ private:
   int8_t _gdo0Pin = -1;
   char _titleBuf[32] = "Sub-GHz";
 
-  // Menu (5 items)
-  static constexpr uint8_t kMenuCount = 5;
+  // Menu (6 items)
+  static constexpr uint8_t kMenuCount = 6;
   ListItem _menuItems[kMenuCount] = {
     {"CC1101 CS Pin"},
     {"CC1101 GDO0 Pin"},
+    {"Frequency"},
     {"Receive"},
     {"Send"},
     {"Jammer"},
   };
   String _csPinSub;
   String _gdo0PinSub;
+  String _freqSub;
   void _showMenu();
   void _updatePinSublabels();
+  void _selectFrequency();
 
-  // Receive — captured signal buffer (not auto-saved)
-  static constexpr uint8_t kMaxCapture = 10;
+  // Receive — captured signal buffer
+  static constexpr uint8_t kMaxCapture = 15;
   CC1101Util::Signal _capturedSignals[kMaxCapture];
   String _capturedTimes[kMaxCapture];
   bool   _capturedSaved[kMaxCapture];
   String _capturedSubLabels[kMaxCapture];
   ListItem _capturedItems[kMaxCapture];
   uint8_t _capturedCount = 0;
-  void _showCapturedList();
+  uint32_t _lastRender   = 0;     // for blink indicator while waiting
+  void _showReceiveList();        // rebuild items + setItems
+  void _handleCaptureSelection(uint8_t index);  // replay/save/delete popup
+  void _rebuildCapturedItems();
+  void _sendCapturedSignal(uint8_t index);
   void _saveSignal(uint8_t index, const String& name);
+  bool _isDuplicate(const CC1101Util::Signal& sig) const;
   String _generateTimestampName();
 
   // Jammer state
@@ -72,8 +79,10 @@ private:
   ListItem _browseItems[kMaxBrowse];
   uint8_t _browseCount = 0;
   bool    _holdFired = false;
+  uint8_t _pendingHoldIdx = 0;
   void _loadBrowseDir(const String& path);
   void _sendBrowseFile(uint8_t index);
   void _showBrowseOptions(uint8_t index);
   String _makeUniquePath(const String& name);
 };
+

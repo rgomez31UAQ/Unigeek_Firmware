@@ -22,12 +22,11 @@ static const float kFreqList[] = {
 };
 static constexpr uint8_t kFreqCount = sizeof(kFreqList) / sizeof(kFreqList[0]);
 static constexpr int kRssiThreshold = -65; // dBm — signal detected above this
-static constexpr uint8_t kScanHits   = 5;  // probe count before locking freq
+static constexpr uint8_t kScanHits   = 1;  // lock to first frequency with signal
 
 // ── Init / End ───────────────────────────────────────────────────────────────
 
-bool CC1101Util::begin(SPIClass* spi, int8_t csPin, int8_t gdo0Pin,
-                       int8_t spiSck, int8_t spiMiso, int8_t spiMosi) {
+bool CC1101Util::begin(ExtSpiClass* spi, int8_t csPin, int8_t gdo0Pin) {
   _csPin   = csPin;
   _gdo0Pin = gdo0Pin;
   if (csPin < 0 || gdo0Pin < 0) return false;
@@ -35,14 +34,9 @@ bool CC1101Util::begin(SPIClass* spi, int8_t csPin, int8_t gdo0Pin,
   pinMode(csPin, OUTPUT);
   digitalWrite(csPin, HIGH);
 
-  if (spi) {
-    ELECHOUSE_cc1101.setSPIinstance(spi);
-  } else {
-    ELECHOUSE_cc1101.setSPIinstance(nullptr);
-    ELECHOUSE_cc1101.setBeginEndLogic(true);
-  }
-
-  ELECHOUSE_cc1101.setSpiPin(spiSck, spiMiso, spiMosi, csPin);
+  ELECHOUSE_cc1101.setSPIinstance(spi);
+  if (spi != nullptr && spi->pinSCK() >= 0)
+    ELECHOUSE_cc1101.setSpiPin(spi->pinSCK(), spi->pinMISO(), spi->pinMOSI(), csPin);
   ELECHOUSE_cc1101.setGDO0(gdo0Pin);
   ELECHOUSE_cc1101.Init();
 
@@ -64,6 +58,7 @@ bool CC1101Util::begin(SPIClass* spi, int8_t csPin, int8_t gdo0Pin,
 }
 
 void CC1101Util::end() {
+  endReceive();
   if (_initialized) {
     ELECHOUSE_cc1101.setSidle();
     _initialized = false;
@@ -105,7 +100,7 @@ float CC1101Util::_scanForBestFreq(std::function<bool()> cancelCb) {
     ELECHOUSE_cc1101.setMHZ(f);
     _scanFreq = f;
 
-    delay(5);
+    delay(2);
 
     int rssi = ELECHOUSE_cc1101.getRssi();
     _scanRssi = rssi;
@@ -124,85 +119,62 @@ float CC1101Util::_scanForBestFreq(std::function<bool()> cancelCb) {
   return hits[best].freq;
 }
 
-bool CC1101Util::receive(Signal& out, uint32_t timeoutMs,
-                         std::function<bool()> cancelCb) {
+// ── Non-blocking receive ─────────────────────────────────────────────────
+
+bool CC1101Util::beginReceive() {
   if (!_initialized) return false;
-
-  // ── Phase 1: RSSI frequency scan ─────────────────────────────────────────
-  _scanning = true;
-  _scanFreq = _freq;
-  _scanRssi = 0;
-
-  float lockedFreq = _scanForBestFreq(cancelCb);
-  _scanning = false;
-
-  if (lockedFreq <= 0) return false; // cancelled during scan
-
-  // Lock to found frequency and restart RX
-  setFrequency(lockedFreq);
   ELECHOUSE_cc1101.setSidle();
   _initRx();
+  _sw.enableReceive(_gdo0Pin);
+  _sw.resetAvailable();
+  return true;
+}
 
-  // ── Phase 2: Wait for signal ─────────────────────────────────────────────
-  RCSwitchUtil sw;
-  sw.enableReceive(_gdo0Pin);
-  sw.resetAvailable();
+bool CC1101Util::pollReceive(Signal& out) {
+  if (!_initialized) return false;
 
-  uint32_t startWait = millis();
-  while (millis() - startWait < timeoutMs) {
-    if (cancelCb && cancelCb()) {
-      sw.disableReceive();
-      return false;
+  if (_sw.available()) {
+    uint64_t val = _sw.getReceivedValue();
+    if (val != 0) {
+      out.frequency = _freq;
+      out.key       = val;
+      out.preset    = String(_sw.getReceivedProtocol());
+      out.protocol  = "RcSwitch";
+      out.te        = (int)_sw.getReceivedDelay();
+      out.bit       = (int)_sw.getReceivedBitlength();
+      out.rawData   = "";
+      _sw.resetAvailable();
+      return true;
     }
-
-    // Prefer RcSwitch decoded signal
-    if (sw.available()) {
-      uint64_t val = sw.getReceivedValue();
-      if (val != 0) {
-        out.frequency = _freq;
-        out.key       = val;
-        out.preset    = String(sw.getReceivedProtocol());
-        out.protocol  = "RcSwitch";
-        out.te        = (int)sw.getReceivedDelay();
-        out.bit       = (int)sw.getReceivedBitlength();
-        out.rawData   = "";
-        sw.resetAvailable();
-        sw.disableReceive();
-        return true;
-      }
-      sw.resetAvailable();
-    }
-
-    // Fallback: RAW pulse data
-    if (sw.RAWavailable()) {
-      delay(400); // let full signal arrive
-
-      unsigned int* raw = sw.getRAWReceivedRawdata();
-      String rawStr;
-      for (int i = 0; raw[i] != 0; i++) {
-        if (i > 0) rawStr += ' ';
-        int sign = (i % 2 == 0) ? 1 : -1;
-        rawStr += String(sign * (int)raw[i]);
-      }
-
-      if (rawStr.length() > 0) {
-        out.frequency = _freq;
-        out.preset    = "0";
-        out.protocol  = "RAW";
-        out.rawData   = rawStr;
-        out.key = 0; out.te = 0; out.bit = 0;
-        sw.resetAvailable();
-        sw.disableReceive();
-        return true;
-      }
-      sw.resetAvailable();
-    }
-
-    delay(1);
+    _sw.resetAvailable();
   }
 
-  sw.disableReceive();
+  if (_sw.RAWavailable()) {
+    delay(400); // let full signal arrive
+    unsigned int* raw = _sw.getRAWReceivedRawdata();
+    String rawStr;
+    for (int i = 0; raw[i] != 0; i++) {
+      if (i > 0) rawStr += ' ';
+      int sign = (i % 2 == 0) ? 1 : -1;
+      rawStr += String(sign * (int)raw[i]);
+    }
+    if (rawStr.length() > 0) {
+      out.frequency = _freq;
+      out.preset    = "0";
+      out.protocol  = "RAW";
+      out.rawData   = rawStr;
+      out.key = 0; out.te = 0; out.bit = 0;
+      _sw.resetAvailable();
+      return true;
+    }
+    _sw.resetAvailable();
+  }
+
   return false;
+}
+
+void CC1101Util::endReceive() {
+  _sw.disableReceive();
 }
 
 void CC1101Util::_initRx() {

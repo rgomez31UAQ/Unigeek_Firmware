@@ -6,7 +6,8 @@
 #pragma once
 #include <Arduino.h>
 #include <functional>
-#include <SPI.h>
+#include "core/ExtSpiClass.h"
+#include "RCSwitchUtil.h"
 
 class CC1101Util {
 public:
@@ -25,9 +26,9 @@ public:
     int bit = 0;              // number of data bits
   };
 
-  // Initialize CC1101 with CS and GDO0 pins
-  bool begin(SPIClass* spi, int8_t csPin, int8_t gdo0Pin,
-             int8_t spiSck = -1, int8_t spiMiso = -1, int8_t spiMosi = -1);
+  // Initialize CC1101 with CS and GDO0 pins.
+  // SPI bus pins are read directly from the ExtSpiClass instance (pinSCK/MISO/MOSI).
+  bool begin(ExtSpiClass* spi, int8_t csPin, int8_t gdo0Pin);
   void end();
 
   // Set frequency in MHz (280–928, valid sub-bands only)
@@ -37,13 +38,15 @@ public:
   // Check if CC1101 is connected
   bool isConnected();
 
-  // Receive: RSSI-scans for best frequency, then decodes with RCSwitch
-  //   - prefers RcSwitch decode; falls back to RAW pulse data
-  // cancelCb: called each loop iteration; return true to abort
-  bool receive(Signal& out, uint32_t timeoutMs = 20000,
-               std::function<bool()> cancelCb = nullptr);
+  // Non-blocking receive (mirrors IRUtil pattern):
+  //   1. call beginReceive() once when entering receive state
+  //   2. call pollReceive() every frame — returns true if a signal was decoded
+  //   3. call endReceive() (or end()) when leaving receive state
+  bool beginReceive();
+  bool pollReceive(Signal& out);
+  void endReceive();
 
-  // Scan status (readable while receive() is running via cancelCb)
+  // Scan status (still readable — updated during receive)
   bool  isScanning()   const { return _scanning; }
   float getScanFreq()  const { return _scanFreq; }
   int   getScanRssi()  const { return _scanRssi; }
@@ -66,6 +69,8 @@ private:
   int8_t _gdo0Pin = -1;
   float  _freq = DEFAULT_FREQ;
   bool   _initialized = false;
+
+  RCSwitchUtil _sw;  // persistent receiver state for non-blocking polling
 
   // Scan status (updated during receive())
   bool  _scanning = false;
