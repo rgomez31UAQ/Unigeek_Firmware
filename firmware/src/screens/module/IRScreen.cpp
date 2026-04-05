@@ -250,13 +250,18 @@ void IRScreen::onItemSelected(uint8_t index) {
 // ── Receive helpers ─────────────────────────────────────────────────────────
 
 void IRScreen::_showReceiveList() {
+  uint8_t savedSel = _selectedIndex;
   for (uint8_t i = 0; i < _capturedCount; i++) {
     _recvLabels[i] = _captured[i].name;
     _recvSublabels[i] = _signalSublabel(_captured[i]);
     _recvItems[i] = {_recvLabels[i].c_str(), _recvSublabels[i].c_str()};
   }
   _recvItems[_capturedCount] = {">> Save Remote", nullptr};
-  setItems(_recvItems, _capturedCount + 1);
+  setItems(_recvItems, _capturedCount + 1);  // resets sel=0
+  if (savedSel <= _capturedCount) {  // +1 for "Save Remote"
+    _selectedIndex = savedSel;
+    render();
+  }
 }
 
 bool IRScreen::_isDuplicate(const IRUtil::Signal& sig) {
