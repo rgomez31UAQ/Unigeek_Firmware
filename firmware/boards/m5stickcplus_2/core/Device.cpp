@@ -12,13 +12,15 @@
 #include "Power.h"
 #include "Speaker.h"
 #include <Wire.h>
+#include <SPI.h>
 
 static DisplayImpl          display;
 static NavigationImpl       navigation;
 static EncoderNavigation    encoderNavigation;
 static PowerImpl            power;
-static StorageLFS        storageLFS;
-static SpeakerBuzzer     speaker;
+static StorageLFS           storageLFS;
+static SpeakerBuzzer        speaker;
+static SPIClass             extSpi(VSPI);  // Grove port SPI (display uses HSPI)
 
 Device* Device::createInstance() {
   pinMode(BTN_UP, INPUT);
@@ -37,8 +39,11 @@ Device* Device::createInstance() {
 
   storageLFS.begin();
 
+  // Grove port SPI — VSPI on ESP32 (CC1101 Sub-GHz, MFRC522, etc.)
+  extSpi.begin(CC1101_SCK_PIN, CC1101_MISO_PIN, CC1101_MOSI_PIN, -1);
+
   auto* dev = new Device(display, power, &navigation, nullptr,
-                         nullptr, &storageLFS, nullptr, &speaker);
+                         nullptr, &storageLFS, &extSpi, &speaker);
   dev->ExI2C = &Wire;   // free — Wire1 is used for RTC
   dev->InI2C = &Wire1;  // BM8563 RTC
   return dev;
