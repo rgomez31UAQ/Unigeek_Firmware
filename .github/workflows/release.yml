@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -57,3 +59,45 @@ jobs:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           files: unigeek-${{ matrix.env }}.bin
+
+  build-website:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download firmware from release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p website/public/firmware
+          gh release download --repo ${{ github.repository }} --pattern "unigeek-*.bin" --dir website/public/firmware
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build website
+        working-directory: website
+        env:
+          NEXT_PUBLIC_FIRMWARE_VERSION: ${{ github.ref_name }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/build
+
+  deploy-pages:
+    runs-on: ubuntu-latest
+    needs: build-website
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
