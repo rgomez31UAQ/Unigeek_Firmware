@@ -256,6 +256,7 @@ This project was built with inspiration and reference from:
 
 - LoRa
 - nr24lf
+- add configurable vspi and unconfigurable hspi (which is used by default). on module pin configuration will be added "Spi Mode (hspi/vspi)". hspi pin can't be changed while vspi can be fully configured. V_SPI_SCK, V_SPI_MOSI, V_SPI_MISO, V_SPI_CS0, V_SPI_CS1, V_SPI_CS2 will be added to pin setting and used when Spi Mode is set to vspi. hspi will be used by default and is the only option for M5StickC due to pin limitations.
 - change keyboard to HID instead, mode will be USB and BLE, while BLE and USB only have Keyboard, Mouse and Jiggle Mouse, USB has 1 more option is Mass Storage.
 
 <!-- README last synced at commit: ea61587 -->
