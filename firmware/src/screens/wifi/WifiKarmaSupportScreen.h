@@ -1,0 +1,38 @@
+#pragma once
+
+#include "ui/templates/BaseScreen.h"
+
+class WifiKarmaSupportScreen : public BaseScreen
+{
+public:
+  const char* title() override { return "Karma Support"; }
+  bool inhibitPowerOff() override { return true; }
+
+  ~WifiKarmaSupportScreen() override;
+
+  void onInit() override;
+  void onUpdate() override;
+  void onRender() override;
+
+private:
+  enum SupportState { STATE_WAITING_CONNECTION, STATE_WAITING_DEPLOY, STATE_AP_ACTIVE };
+
+  SupportState  _supportState    = STATE_WAITING_CONNECTION;
+  bool          _apActive        = false;
+  bool          _wifiModeUpgraded = false;
+  char          _currentSsid[33] = {};
+  uint8_t       _attackerMac[6]  = {};
+  unsigned long _apDeployTime    = 0;
+  unsigned long _helloTimer      = 0;
+  unsigned long _lastDraw        = 0;
+
+  static WifiKarmaSupportScreen* _instance;
+  static const uint8_t           _broadcast[6];
+
+  static void _onRecvCb(const uint8_t* mac, const uint8_t* data, int len);
+  void        _onRecv(const uint8_t* mac, const uint8_t* data, int len);
+  void        _sendHello();
+  void        _sendAck(const uint8_t* mac, bool ok);
+  void        _deployAP(const char* ssid, const char* pass);
+  void        _stopAP();
+};

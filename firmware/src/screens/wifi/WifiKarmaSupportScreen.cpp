@@ -1,0 +1,215 @@
+#include "WifiKarmaSupportScreen.h"
+#include "core/Device.h"
+#include "core/ScreenManager.h"
+#include "screens/wifi/WifiMenuScreen.h"
+#include "utils/network/KarmaEspNow.h"
+
+#include <WiFi.h>
+#include <esp_now.h>
+#include <esp_wifi.h>
+
+// ── Static definitions ──────────────────────────────────────────────────────
+
+WifiKarmaSupportScreen* WifiKarmaSupportScreen::_instance    = nullptr;
+const uint8_t           WifiKarmaSupportScreen::_broadcast[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+// ── Destructor ──────────────────────────────────────────────────────────────
+
+WifiKarmaSupportScreen::~WifiKarmaSupportScreen()
+{
+  if (_apActive) WiFi.softAPdisconnect(true);
+  esp_now_unregister_recv_cb();
+  esp_now_deinit();
+  WiFi.mode(WIFI_OFF);
+  _instance = nullptr;
+}
+
+// ── Lifecycle ───────────────────────────────────────────────────────────────
+
+void WifiKarmaSupportScreen::onInit()
+{
+  _instance = this;
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+
+  if (esp_now_init() != ESP_OK) return;
+
+  esp_now_peer_info_t peer = {};
+  memcpy(peer.peer_addr, _broadcast, 6);
+  peer.channel = 1;
+  peer.encrypt = false;
+  esp_now_add_peer(&peer);
+  esp_now_register_recv_cb(_onRecvCb);
+
+  _supportState = STATE_WAITING_CONNECTION;
+  _sendHello();
+  _helloTimer = millis();
+}
+
+void WifiKarmaSupportScreen::onUpdate()
+{
+  if (Uni.Nav->wasPressed()) {
+    auto dir = Uni.Nav->readDirection();
+    if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
+      Screen.setScreen(new WifiMenuScreen());
+      return;
+    }
+  }
+
+  unsigned long now = millis();
+
+  if (now - _helloTimer > 2000) {
+    _sendHello();
+    _helloTimer = now;
+  }
+
+  if (now - _lastDraw > 300) {
+    render();
+    _lastDraw = now;
+  }
+}
+
+void WifiKarmaSupportScreen::onRender()
+{
+  TFT_eSprite sp(&Uni.Lcd);
+  sp.createSprite(bodyW(), bodyH());
+  sp.fillSprite(TFT_BLACK);
+  sp.setTextDatum(MC_DATUM);
+
+  const int cx = bodyW() / 2;
+  const int cy = bodyH() / 2;
+
+  switch (_supportState) {
+
+    case STATE_WAITING_CONNECTION:
+      sp.setTextColor(TFT_CYAN, TFT_BLACK);
+      sp.drawString("Waiting for", cx, cy - 8, 1);
+      sp.drawString("connection...", cx, cy + 6, 1);
+      break;
+
+    case STATE_WAITING_DEPLOY:
+      sp.setTextColor(TFT_YELLOW, TFT_BLACK);
+      sp.drawString("Waiting for", cx, cy - 8, 1);
+      sp.drawString("deploy...", cx, cy + 6, 1);
+      break;
+
+    case STATE_AP_ACTIVE: {
+      sp.setTextColor(TFT_GREEN, TFT_BLACK);
+      sp.drawString("AP Active", cx, cy - 20, 1);
+
+      sp.setTextColor(TFT_WHITE, TFT_BLACK);
+      sp.drawString(String(_currentSsid).substring(0, 22), cx, cy - 4, 1);
+
+      unsigned long elapsed = (millis() - _apDeployTime) / 1000;
+      char buf[12];
+      snprintf(buf, sizeof(buf), "+%lus", elapsed);
+      sp.setTextColor(TFT_DARKGREY, TFT_BLACK);
+      sp.drawString(buf, cx, cy + 12, 1);
+      break;
+    }
+  }
+
+  // Footer: own MAC (bottom-right)
+  uint8_t myMac[6];
+  esp_wifi_get_mac(WIFI_IF_STA, myMac);
+  char mac[12];
+  snprintf(mac, sizeof(mac), "%02X:%02X:%02X", myMac[3], myMac[4], myMac[5]);
+  sp.setTextDatum(BR_DATUM);
+  sp.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  sp.drawString(mac, bodyW() - 2, bodyH() - 2, 1);
+
+#ifdef DEVICE_HAS_KEYBOARD
+  sp.setTextDatum(BL_DATUM);
+  sp.drawString("\\b exit", 2, bodyH() - 2, 1);
+#endif
+
+  sp.pushSprite(bodyX(), bodyY());
+  sp.deleteSprite();
+}
+
+// ── ESP-NOW ──────────────────────────────────────────────────────────────────
+
+void WifiKarmaSupportScreen::_onRecvCb(const uint8_t* mac, const uint8_t* data, int len)
+{
+  if (_instance) _instance->_onRecv(mac, data, len);
+}
+
+void WifiKarmaSupportScreen::_onRecv(const uint8_t* mac, const uint8_t* data, int len)
+{
+  if (len < (int)sizeof(KarmaMsg)) return;
+  const KarmaMsg* msg = reinterpret_cast<const KarmaMsg*>(data);
+  if (memcmp(msg->magic, KARMA_ESPNOW_MAGIC, 4) != 0) return;
+
+  switch (msg->cmd) {
+    case KARMA_DEPLOY:
+      memcpy(_attackerMac, mac, 6);
+      strncpy(_currentSsid, msg->ssid, 32);
+      _currentSsid[32] = '\0';
+      _deployAP(msg->ssid, msg->password);
+      _sendAck(mac, true);
+      break;
+    case KARMA_TEARDOWN:
+      _stopAP();
+      _supportState = STATE_WAITING_DEPLOY;
+      break;
+    case KARMA_DONE:
+      _stopAP();
+      _supportState = STATE_WAITING_CONNECTION;
+      _sendHello();
+      _helloTimer = millis();
+      break;
+    default: break;
+  }
+}
+
+void WifiKarmaSupportScreen::_sendHello()
+{
+  KarmaMsg msg = {};
+  memcpy(msg.magic, KARMA_ESPNOW_MAGIC, 4);
+  msg.cmd = KARMA_HELLO;
+  esp_now_send(_broadcast, reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+void WifiKarmaSupportScreen::_sendAck(const uint8_t* mac, bool ok)
+{
+  if (!esp_now_is_peer_exist(mac)) {
+    esp_now_peer_info_t peer = {};
+    memcpy(peer.peer_addr, mac, 6);
+    peer.channel = 1;
+    peer.encrypt = false;
+    esp_now_add_peer(&peer);
+  }
+  KarmaMsg msg = {};
+  memcpy(msg.magic, KARMA_ESPNOW_MAGIC, 4);
+  msg.cmd     = KARMA_ACK;
+  msg.success = ok ? 1 : 0;
+  esp_wifi_get_mac(WIFI_IF_AP, msg.bssid);
+  esp_now_send(mac, reinterpret_cast<uint8_t*>(&msg), sizeof(msg));
+}
+
+// ── AP management ────────────────────────────────────────────────────────────
+
+void WifiKarmaSupportScreen::_deployAP(const char* ssid, const char* pass)
+{
+  if (!_wifiModeUpgraded) {
+    WiFi.mode(WIFI_AP_STA);
+    delay(50);
+    _wifiModeUpgraded = true;
+  }
+  WiFi.softAP(ssid, pass, 1, 0, 4);
+  delay(100);
+  _apActive     = true;
+  _apDeployTime = millis();
+  _supportState = STATE_AP_ACTIVE;
+}
+
+void WifiKarmaSupportScreen::_stopAP()
+{
+  if (!_apActive) return;
+  WiFi.softAPdisconnect(true);
+  _apActive     = false;
+  _apDeployTime = 0;
+}
