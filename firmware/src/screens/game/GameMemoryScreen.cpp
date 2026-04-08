@@ -12,14 +12,8 @@ static constexpr char kCharDB[36] = {
 
 static constexpr const char* kDiffNames[4]      = { "EASY", "MEDIUM", "HARD", "EXTREME" };
 static constexpr const char* kDiffNamesShort[4] = { "EASY", "MED",    "HARD", "EXTR"    };
-static constexpr const char* kDiffInfo[4] = {
-  "Mistakes:3  Len:3-5  Time:2.5-1s",
-  "Mistakes:2  Len:4-6  Time:2.0-1s",
-  "Mistakes:1  Len:5-7  Time:1.5-1s",
-  "Mistakes:1  Len:7    Time:1.0s"
-};
 
-static constexpr const char* kHsFile = "/unigeek/memseq_hs.txt";
+static constexpr const char* kHsFile = "/unigeek/games/memseq_hs.txt";
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -206,23 +200,23 @@ GameMemoryScreen::StageConfig GameMemoryScreen::_getStage() const
 {
   switch (_difficulty) {
     case 0: // EASY
-      if (_round <= 10) return {3, 2500, 1};
-      if (_round <= 20) return {4, 2000, 2};
-      if (_round <= 30) return {5, 1500, 3};
-      return {5, 1000, 3};
+      if (_round <= 10) return {3, 2000, 1};
+      if (_round <= 20) return {4, 1500, 2};
+      if (_round <= 30) return {5, 1000, 3};
+      return {5, 800, 3};
 
     case 1: // MEDIUM
-      if (_round <= 20) return {4, 2000, 2};
-      if (_round <= 30) return {5, 1500, 3};
-      return {6, 1000, 3};
+      if (_round <= 10) return {4, 1500, 2};
+      if (_round <= 20) return {5, 1000, 3};
+      return {6, 800, 3};
 
     case 2: // HARD
-      if (_round <= 30) return {5, 1500, 3};
-      if (_round <= 40) return {6, 1000, 3};
-      return {7, 1000, 4};
+      if (_round <= 10) return {5, 800, 3};
+      if (_round <= 20) return {6, 600, 3};
+      return {7, 450, 4};
 
     default: // EXTREME
-      return {7, 1000, 4};
+      return {7, 450, 4};
   }
 }
 
@@ -240,8 +234,8 @@ uint8_t GameMemoryScreen::_getMaxMistakes() const
 {
   switch (_difficulty) {
     case 0: return 3;
-    case 1: return 2;
-    default: return 1;
+    case 1: return 3;
+    default: return 2;
   }
 }
 
@@ -402,10 +396,18 @@ void GameMemoryScreen::_renderMenu()
   }
 
   // Difficulty info hint at bottom
-  sp.setTextSize(1);
-  sp.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  sp.setTextDatum(BC_DATUM);
-  sp.drawString(kDiffInfo[_difficulty], bodyW() / 2, bodyH() - 1);
+  {
+    StageConfig stage = _getStage();
+    uint8_t maxM = _getMaxMistakes();
+    char diffInfo[32];
+    snprintf(diffInfo, sizeof(diffInfo), "Mistakes:%u  Len:%u  Time:%u.%us",
+             maxM, stage.length,
+             stage.displayTimeMs / 1000, (stage.displayTimeMs % 1000) / 100);
+    sp.setTextSize(1);
+    sp.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    sp.setTextDatum(BC_DATUM);
+    sp.drawString(diffInfo, bodyW() / 2, bodyH() - 1);
+  }
 
   sp.pushSprite(bodyX(), bodyY());
   sp.deleteSprite();

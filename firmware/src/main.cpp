@@ -45,10 +45,9 @@ void _bootSplash() {
   for (int i = 0; i <= steps; i++) {
     lcd.fillRect(barX + 1, barY + 1, i, barH - 2, Config.getThemeColor());
     unsigned long target = start + (totalMs * i / steps);
+    if (i == (steps / 2) && Uni.Speaker) Uni.Speaker->playWin();
     while (millis() < target) delay(1);
   }
-
-  if (Uni.Speaker) Uni.Speaker->playWin();
 }
 
 void setup() {
