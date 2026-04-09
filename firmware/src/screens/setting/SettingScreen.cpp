@@ -7,6 +7,7 @@
 #include "core/Device.h"
 #include "core/ConfigManager.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "ui/actions/InputTextAction.h"
 #include "ui/actions/InputNumberAction.h"
 #include "ui/actions/InputSelectOption.h"
@@ -68,6 +69,8 @@ void SettingScreen::onItemSelected(uint8_t index) {
       if (result.length() > 0 && result.length() <= 15) {
         Config.set(APP_CONFIG_DEVICE_NAME, result);
         Config.save(Uni.Storage);
+        int n = Achievement.inc("settings_name_changed");
+        if (n == 1) Achievement.unlock("settings_name_changed");
       } else if (result.length() > 15) {
         ShowStatusAction::show("Name must be 1-15 characters.", 1500);
       }
@@ -166,6 +169,8 @@ void SettingScreen::onItemSelected(uint8_t index) {
       if (result != nullptr) {
         Config.set(APP_CONFIG_PRIMARY_COLOR, result);
         Config.save(Uni.Storage);
+        int n = Achievement.inc("settings_color_changed");
+        if (n == 1) Achievement.unlock("settings_color_changed");
       }
       _refresh();
       break;

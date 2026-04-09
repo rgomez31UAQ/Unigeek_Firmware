@@ -2,6 +2,7 @@
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "core/PinConfigManager.h"
+#include "core/AchievementManager.h"
 #include "screens/setting/SettingScreen.h"
 #include "ui/actions/InputNumberAction.h"
 
@@ -129,6 +130,9 @@ void PinSettingScreen::onItemSelected(uint8_t index) {
       break;
     }
   }
+  int n = Achievement.inc("settings_pin_configured");
+  if (n == 1) Achievement.unlock("settings_pin_configured");
+
   _refresh();
 }
 

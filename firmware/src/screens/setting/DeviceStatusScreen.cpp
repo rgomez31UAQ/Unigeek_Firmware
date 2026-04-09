@@ -2,6 +2,7 @@
 #include "screens/setting/SettingScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include <esp_system.h>
 
 static String _fmtSize(uint64_t bytes) {
@@ -57,6 +58,9 @@ void DeviceStatusScreen::onInit() {
 
   _rowCount = i;
   _view.setRows(_rows, _rowCount);
+
+  int n = Achievement.inc("device_status_viewed");
+  if (n == 1) Achievement.unlock("device_status_viewed");
 }
 
 void DeviceStatusScreen::onUpdate() {
