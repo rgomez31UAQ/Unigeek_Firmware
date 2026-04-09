@@ -14,6 +14,7 @@
 #include "ui/actions/ShowStatusAction.h"
 #include "screens/setting/PinSettingScreen.h"
 #include "screens/setting/DeviceStatusScreen.h"
+#include "screens/setting/AboutScreen.h"
 
 void SettingScreen::onInit() {
   setItems(_items);
@@ -198,8 +199,7 @@ void SettingScreen::onItemSelected(uint8_t index) {
     }
 
     case SETT_ABOUT: {
-      ShowStatusAction::show("UniGeek Firmware\nPlatformIO + TFT_eSPI\nCreated by L Shaf");
-      _refresh();
+      Screen.setScreen(new AboutScreen());
       break;
     }
 

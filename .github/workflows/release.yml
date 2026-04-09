@@ -48,6 +48,8 @@ jobs:
         run: pip install platformio
 
       - name: Build ${{ matrix.env }}
+        env:
+          PLATFORMIO_BUILD_SRC_FLAGS: -DFIRMWARE_VERSION='"${{ github.ref_name }}"'
         run: pio run -e ${{ matrix.env }}
 
       - name: Rename binary
