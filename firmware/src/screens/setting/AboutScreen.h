@@ -1,20 +1,19 @@
 #pragma once
 
-#include "ui/templates/BaseScreen.h"
-#include "ui/views/ScrollListView.h"
+#include "ui/templates/ListViewScreen.h"
 
-class AboutScreen : public BaseScreen
+class AboutScreen : public ListViewScreen
 {
 public:
   const char* title() override { return "About"; }
 
-  void onInit()   override;
-  void onUpdate() override;
-  void onRender() override;
+  void onInit() override;
+
+protected:
+  void onBack() override;
 
 private:
   static constexpr uint8_t MAX_ROWS = 14;
-  ScrollListView       _view;
-  ScrollListView::Row  _rows[MAX_ROWS];
-  uint8_t              _rowCount = 0;
+  Row     _rows[MAX_ROWS] = {};
+  uint8_t _rowCount = 0;
 };

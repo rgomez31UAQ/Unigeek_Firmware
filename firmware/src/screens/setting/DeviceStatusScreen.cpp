@@ -3,7 +3,6 @@
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "core/AchievementManager.h"
-#include <esp_system.h>
 
 static String _fmtSize(uint64_t bytes) {
   if (bytes >= 1024ULL * 1024)
@@ -18,17 +17,14 @@ static String _fmtUsedTotal(uint64_t used, uint64_t total) {
 void DeviceStatusScreen::onInit() {
   uint8_t i = 0;
 
-  // CPU
   _cpuFreq = String(ESP.getCpuFreqMHz()) + " MHz";
   _rows[i++] = {"CPU", _cpuFreq};
 
-  // RAM
   uint32_t ramTotal = ESP.getHeapSize();
   uint32_t ramFree  = ESP.getFreeHeap();
   _ramFree  = _fmtUsedTotal(ramTotal - ramFree, ramTotal);
   _rows[i++] = {"RAM", _ramFree};
 
-  // PSRAM
   if (ESP.getPsramSize() > 0) {
     uint32_t psTotal = ESP.getPsramSize();
     uint32_t psFree  = ESP.getFreePsram();
@@ -36,7 +32,6 @@ void DeviceStatusScreen::onInit() {
     _rows[i++] = {"PSRAM", _psramFree};
   }
 
-  // LittleFS
   if (Uni.StorageLFS && Uni.StorageLFS->isAvailable()) {
     uint64_t lfsTotal = Uni.StorageLFS->totalBytes();
     uint64_t lfsUsed  = Uni.StorageLFS->usedBytes();
@@ -46,7 +41,6 @@ void DeviceStatusScreen::onInit() {
     _rows[i++] = {"LittleFS", "N/A"};
   }
 
-  // SD Card
   if (Uni.StorageSD && Uni.StorageSD->isAvailable()) {
     uint64_t sdTotal = Uni.StorageSD->totalBytes();
     uint64_t sdUsed  = Uni.StorageSD->usedBytes();
@@ -57,25 +51,12 @@ void DeviceStatusScreen::onInit() {
   }
 
   _rowCount = i;
-  _view.setRows(_rows, _rowCount);
+  setRows(_rows, _rowCount);
 
   int n = Achievement.inc("device_status_viewed");
   if (n == 1) Achievement.unlock("device_status_viewed");
 }
 
-void DeviceStatusScreen::onUpdate() {
-  if (Uni.Nav->wasPressed()) {
-    auto dir = Uni.Nav->readDirection();
-    if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
-      Screen.setScreen(new SettingScreen());
-      return;
-    }
-    if (_view.onNav(dir)) {
-      render();
-    }
-  }
-}
-
-void DeviceStatusScreen::onRender() {
-  _view.render(bodyX(), bodyY(), bodyW(), bodyH());
+void DeviceStatusScreen::onBack() {
+  Screen.setScreen(new SettingScreen());
 }
