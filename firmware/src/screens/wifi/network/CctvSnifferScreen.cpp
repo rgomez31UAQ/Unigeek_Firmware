@@ -6,9 +6,8 @@
 #include "ui/actions/InputSelectOption.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/views/ProgressView.h"
+#include "utils/network/IpScanUtil.h"
 #include <WiFi.h>
-#include <lwip/etharp.h>
-#include <lwip/netif.h>
 #include <TJpg_Decoder.h>
 
 CctvSnifferScreen* CctvSnifferScreen::_instance = nullptr;
@@ -239,67 +238,36 @@ void CctvSnifferScreen::_startScan()
 
 void CctvSnifferScreen::_scanLAN()
 {
-  _log.addLine("[*] ARP scanning LAN...");
-  render();
-
-  IPAddress localIP = WiFi.localIP();
-  if (localIP[0] == 0) {
+  if (WiFi.localIP()[0] == 0) {
     _log.addLine("[!] Not connected");
     return;
   }
 
-  struct netif* nif = nullptr;
-  for (struct netif* ni = netif_list; ni != nullptr; ni = ni->next) {
-    if ((ni->flags & NETIF_FLAG_UP) && (ni->flags & NETIF_FLAG_ETHARP)) {
-      nif = ni;
-      break;
-    }
-  }
-  if (!nif) { _log.addLine("[!] ARP unavailable"); return; }
-
-  char baseIp[16];
-  snprintf(baseIp, sizeof(baseIp), "%d.%d.%d.", localIP[0], localIP[1], localIP[2]);
-
-  // Phase 1: blast ARP requests
-  for (int i = 1; i <= 254; i++) {
-    char ipStr[16];
-    snprintf(ipStr, sizeof(ipStr), "%s%d", baseIp, i);
-    ip4_addr_t target;
-    ipaddr_aton(ipStr, (ip_addr_t*)&target);
-    etharp_request(nif, &target);
-    if (i % 50 == 0) ProgressView::show("ARP scanning...", i * 40 / 254);
-    delay(5);
-  }
-
-  delay(300);
-  _log.addLine("[*] Scanning camera ports...");
+  _log.addLine("[*] Ping scanning LAN...");
   render();
 
-  // Phase 2: collect ARP responses + scan camera ports
-  int hostCount = 0;
-  for (int i = 1; i <= 254; i++) {
-    if (i == localIP[3]) continue;
+  static IpScanUtil::Host hosts[64];
+  uint8_t hostCount = IpScanUtil::scan(1, 254, hosts, 64, false,
+    [](uint8_t pct) { ProgressView::show("Ping scanning...", pct * 40 / 100); });
 
-    char ipStr[16];
-    snprintf(ipStr, sizeof(ipStr), "%s%d", baseIp, i);
-    ip4_addr_t target;
-    ipaddr_aton(ipStr, (ip_addr_t*)&target);
-
-    struct eth_addr* eth_ret = nullptr;
-    const ip4_addr_t* ip_ret = nullptr;
-    if (etharp_find_addr(nullptr, &target, &eth_ret, &ip_ret) >= 0) {
-      hostCount++;
-      char buf[40];
-      snprintf(buf, sizeof(buf), "[*] Host: %s", ipStr);
-      _log.addLine(buf);
-      render();
-      _scanHost(ipStr);
-    }
-
-    if (i % 50 == 0) ProgressView::show("Scanning...", 40 + i * 60 / 254);
+  if (hostCount == 0) {
+    _log.addLine("[!] No hosts found");
+    return;
   }
 
   char buf[40];
+  snprintf(buf, sizeof(buf), "[*] %d host(s), scanning ports...", hostCount);
+  _log.addLine(buf);
+  render();
+
+  for (uint8_t i = 0; i < hostCount; i++) {
+    snprintf(buf, sizeof(buf), "[*] Host: %s", hosts[i].ip);
+    _log.addLine(buf);
+    render();
+    _scanHost(hosts[i].ip);
+    ProgressView::show("Scanning...", 40 + i * 60 / hostCount);
+  }
+
   snprintf(buf, sizeof(buf), "[*] %d host(s) on network", hostCount);
   _log.addLine(buf);
 }

@@ -1,8 +1,5 @@
 #include "IPScannerScreen.h"
 #include <WiFi.h>
-#include <lwip/etharp.h>
-#include <lwip/netif.h>
-#include "utils/network/DnsUtil.h"
 #include "core/ScreenManager.h"
 #include "screens/wifi/network/NetworkMenuScreen.h"
 #include "ui/actions/InputNumberAction.h"
@@ -80,91 +77,18 @@ void IPScannerScreen::_scanIP() {
   memset(_foundItems, 0, sizeof(_foundItems));
   _foundCount = 0;
 
-  IPAddress localIP = WiFi.localIP();
-  if (localIP[0] == 0 && localIP[1] == 0 && localIP[2] == 0 && localIP[3] == 0) {
+  if (WiFi.localIP()[0] == 0) {
     _foundItems[0] = {"No devices found"};
     _state = STATE_RESULT_IP;
     setItems(_foundItems, 1);
     return;
   }
 
-  // Find the WiFi STA netif (first ETHARP-capable, UP interface)
-  struct netif* netif = nullptr;
-  for (struct netif* ni = netif_list; ni != nullptr; ni = ni->next) {
-    if ((ni->flags & NETIF_FLAG_UP) && (ni->flags & NETIF_FLAG_ETHARP)) {
-      netif = ni;
-      break;
-    }
-  }
-  if (!netif) {
-    _foundItems[0] = {"ARP unavailable"};
-    _state = STATE_RESULT_IP;
-    setItems(_foundItems, 1);
-    return;
-  }
-
-  char baseIp[16];
-  snprintf(baseIp, sizeof(baseIp), "%d.%d.%d.", localIP[0], localIP[1], localIP[2]);
-
-  int total    = _endIp - _startIp + 1;
-  uint8_t lastPct = 255;
-
-  // Phase 1: blast ARP requests (0–60%)
-  for (int i = _startIp; i <= _endIp; i++) {
-    uint8_t pct = (uint8_t)((i - _startIp) * 60 / total);
-    if (pct != lastPct) {
-      ProgressView::show("ARP scanning...", pct);
-      lastPct = pct;
-    }
-
-    char ipStr[16];
-    snprintf(ipStr, sizeof(ipStr), "%s%d", baseIp, i);
-    ip4_addr_t target;
-    ipaddr_aton(ipStr, (ip_addr_t*)&target);
-    etharp_request(netif, &target);
-    delay(10);
-  }
-
-  // Brief wait for late ARP replies
-  ProgressView::show("ARP scanning...", 62);
-  delay(300);
-
-  // Phase 2: read ARP table + resolve hostnames (65–100%)
-  lastPct = 255;
-  for (int i = _startIp; i <= _endIp && _foundCount < MAX_FOUND; i++) {
-    uint8_t pct = 65 + (uint8_t)((i - _startIp) * 35 / total);
-    if (pct != lastPct) {
-      ProgressView::show("Resolving...", pct);
-      lastPct = pct;
-    }
-
-    if (i == localIP[3]) continue;
-
-    char ipStr[16];
-    snprintf(ipStr, sizeof(ipStr), "%s%d", baseIp, i);
-    ip4_addr_t target;
-    ipaddr_aton(ipStr, (ip_addr_t*)&target);
-
-    struct eth_addr*     eth_ret  = nullptr;
-    const ip4_addr_t*    ip_ret   = nullptr;
-    if (etharp_find_addr(nullptr, &target, &eth_ret, &ip_ret) >= 0) {
-      strncpy(_foundIPs[_foundCount].ip, ipStr, sizeof(_foundIPs[0].ip) - 1);
-
-      if (!DnsUtil::resolveHostname(ipStr, _foundIPs[_foundCount].hostname,
-                                    sizeof(_foundIPs[0].hostname)) && eth_ret) {
-        // Fallback: show MAC address
-        snprintf(_foundIPs[_foundCount].hostname, sizeof(_foundIPs[0].hostname),
-                 "%02X:%02X:%02X:%02X:%02X:%02X",
-                 eth_ret->addr[0], eth_ret->addr[1], eth_ret->addr[2],
-                 eth_ret->addr[3], eth_ret->addr[4], eth_ret->addr[5]);
-      }
-
-      _foundItems[_foundCount] = {_foundIPs[_foundCount].ip, _foundIPs[_foundCount].hostname};
-      _foundCount++;
-    }
-  }
-
-  ProgressView::show("ARP scanning...", 100);
+  _foundCount = IpScanUtil::scan(
+    (uint8_t)_startIp, (uint8_t)_endIp,
+    _foundIPs, MAX_FOUND, true,
+    [](uint8_t pct) { ProgressView::show("IP scanning...", pct); }
+  );
 
   if (_foundCount == 0) {
     _foundItems[0] = {"No devices found"};
@@ -172,6 +96,9 @@ void IPScannerScreen::_scanIP() {
     setItems(_foundItems, 1);
     return;
   }
+
+  for (uint8_t i = 0; i < _foundCount; i++)
+    _foundItems[i] = {_foundIPs[i].ip, _foundIPs[i].hostname};
 
   _state = STATE_RESULT_IP;
   setItems(_foundItems, _foundCount);
