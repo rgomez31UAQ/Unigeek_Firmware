@@ -10,9 +10,14 @@
 #include "screens/module/ModuleMenuScreen.h"
 #include "screens/utility/UtilityMenuScreen.h"
 #include "screens/setting/SettingScreen.h"
+#include "screens/CharacterScreen.h"
 
 void MainMenuScreen::onInit() {
   setItems(_items);
+}
+
+void MainMenuScreen::onBack() {
+  Screen.setScreen(new CharacterScreen());
 }
 
 void MainMenuScreen::onItemSelected(uint8_t index) {

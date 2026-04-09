@@ -9,7 +9,7 @@
 #include "core/RtcManager.h"
 #include "core/RandomSeed.h"
 
-#include "screens/MainMenuScreen.h"
+#include "screens/CharacterScreen.h"
 
 void _checkStorageFallback() {
   if (Uni.Storage && !Uni.Storage->isAvailable() && Uni.StorageLFS)
@@ -67,7 +67,7 @@ void setup() {
   Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
   if (Uni.Speaker) Uni.Speaker->setVolume((uint8_t)Config.get(APP_CONFIG_VOLUME, APP_CONFIG_VOLUME_DEFAULT).toInt());
   _bootSplash();
-  Screen.setScreen(new MainMenuScreen());
+  Screen.setScreen(new CharacterScreen());
 }
 
 void loop() {

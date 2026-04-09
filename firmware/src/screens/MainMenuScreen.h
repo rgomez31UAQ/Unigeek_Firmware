@@ -11,9 +11,9 @@ class MainMenuScreen : public ListScreen
 {
 public:
   const char* title() override { return "Main Menu"; }
-  bool hasBackItem() override { return false; }
 
   void onInit() override;
+  void onBack() override;
   void onItemSelected(uint8_t index) override;
 
 private:

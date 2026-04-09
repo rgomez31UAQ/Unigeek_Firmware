@@ -153,7 +153,6 @@ public:
 
   virtual void onItemSelected(uint8_t index) = 0;
   virtual void onBack() {}
-  virtual bool hasBackItem() { return true; }
 
 protected:
   uint8_t _selectedIndex = 0;
@@ -184,7 +183,7 @@ private:
     if (Config.get(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT) == "encoder")
       return false;
 #endif
-    return hasBackItem();
+    return true;
 #endif
   }
 
