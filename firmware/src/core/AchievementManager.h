@@ -226,6 +226,24 @@ public:
 
   // ── Runtime API ─────────────────────────────────────────────────────────────
 
+  // Recalculate ach_exp_total and ach_total_unlocked from every ach_done_* key.
+  // ach_total_unlocked doubles as the calibration guard — if it exists in
+  // storage the scan is skipped. Call after AchStore.load() in setup().
+  void recalibrate(IStorage* storage) {
+    const AchDef* cat       = catalog();
+    int           totalExp  = 0;
+    int           totalUnlk = 0;
+    for (uint8_t i = 0; i < kAchCount; i++) {
+      if (AchStore.get(String("ach_done_") + cat[i].id) == "1") {
+        totalExp  += (int)tierExp(cat[i].tier);
+        totalUnlk++;
+      }
+    }
+    AchStore.set("ach_exp_total",      String(totalExp));
+    AchStore.set("ach_total_unlocked", String(totalUnlk));
+    if (storage) AchStore.save(storage);
+  }
+
   // Increment counter, persist, return new value
   int inc(const char* key) {
     int v = getInt(key) + 1;
@@ -269,6 +287,10 @@ public:
     return AchStore.get("ach_exp_total", "0").toInt();
   }
 
+  int getTotalUnlocked() const {
+    return AchStore.get("ach_total_unlocked", "0").toInt();
+  }
+
   // Draw toast overlay — called from BaseScreen::update() every frame
   void drawToastIfNeeded(int bx, int by, int bw, int bh) {
     if (_toast[0] == '\0') return;
@@ -290,8 +312,10 @@ private:
     String doneKey = String("ach_done_") + id;
     if (AchStore.get(doneKey) == "1") return;
     AchStore.set(doneKey, "1");
-    int total = AchStore.get("ach_exp_total", "0").toInt() + exp;
-    AchStore.set("ach_exp_total", String(total));
+    int totalExp  = AchStore.get("ach_exp_total",      "0").toInt() + exp;
+    int totalUnlk = AchStore.get("ach_total_unlocked", "0").toInt() + 1;
+    AchStore.set("ach_exp_total",      String(totalExp));
+    AchStore.set("ach_total_unlocked", String(totalUnlk));
     if (Uni.Storage) AchStore.save(Uni.Storage);
     strncpy(_toast, title, sizeof(_toast) - 1);
     _toast[sizeof(_toast) - 1] = '\0';

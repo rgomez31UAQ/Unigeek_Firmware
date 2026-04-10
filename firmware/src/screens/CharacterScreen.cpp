@@ -282,11 +282,8 @@ void CharacterScreen::onRender()
   String agent      = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
   String agentTitle = Config.get(APP_CONFIG_AGENT_TITLE, APP_CONFIG_AGENT_TITLE_DEFAULT);
 
-  const auto* cat    = AchievementManager::catalog();
-  const int   kTotal = (int)AchievementManager::kAchCount;
-  int numUnlk = 0;
-  for (int i = 0; i < kTotal; i++)
-    if (Achievement.isUnlocked(cat[i].id)) numUnlk++;
+  const int kTotal  = (int)AchievementManager::kAchCount;
+  int       numUnlk = Achievement.getTotalUnlocked();
 
   int cx = PAD;
   int cy = PAD + 2;

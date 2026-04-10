@@ -6,6 +6,7 @@
 #include "core/ConfigManager.h"
 #include "core/PinConfigManager.h"
 #include "core/AchievementStorage.h"
+#include "core/AchievementManager.h"
 #include "core/RtcManager.h"
 #include "core/RandomSeed.h"
 
@@ -17,38 +18,65 @@ void _checkStorageFallback() {
 }
 
 void _bootSplash() {
+  // ── Pre-draw init (config needed for theme colour) ────────────────────────
+  _checkStorageFallback();
+  Config.load(Uni.Storage);
+  PinConfig.load(Uni.Storage);
+
+  // ── Static UI ─────────────────────────────────────────────────────────────
   auto& lcd = Uni.Lcd;
   uint16_t w = lcd.width();
   uint16_t h = lcd.height();
 
   lcd.fillScreen(TFT_BLACK);
-
   lcd.setTextDatum(MC_DATUM);
   lcd.setTextSize(3);
   lcd.setTextColor(Config.getThemeColor());
   lcd.drawString("UniGeek", w / 2, h / 2 - 14);
-
-  // Version
   lcd.setTextSize(1);
   lcd.setTextColor(TFT_DARKGREY);
   lcd.drawString(__DATE__, w / 2, h / 2 + 10);
 
-  // Loading bar
-  uint16_t barW = w / 2;
-  uint16_t barH = 4;
-  uint16_t barX = (w - barW) / 2;
-  uint16_t barY = h / 2 + 28;
+  const uint16_t barW  = w / 2;
+  const uint16_t barH  = 4;
+  const uint16_t barX  = (w - barW) / 2;
+  const uint16_t barY  = h / 2 + 28;
+  const uint16_t lblY  = barY + barH + 6;
+  const uint16_t fillW = barW - 2;
   lcd.drawRoundRect(barX, barY, barW, barH, 1, TFT_DARKGREY);
 
-  uint16_t steps = barW - 2;
-  unsigned long totalMs = 1000;
-  unsigned long start = millis();
-  for (int i = 0; i <= steps; i++) {
-    lcd.fillRect(barX + 1, barY + 1, i, barH - 2, Config.getThemeColor());
-    unsigned long target = start + (totalMs * i / steps);
-    if (i == (steps / 2) && Uni.Speaker) Uni.Speaker->playWin();
-    while (millis() < target) delay(1);
-  }
+  // progress(pct, label) — fills bar to pct% and updates status text
+  auto progress = [&](uint8_t pct, const char* label) {
+    lcd.fillRect(barX + 1, barY + 1, fillW * pct / 100, barH - 2, Config.getThemeColor());
+    lcd.fillRect(0, lblY, w, 12, TFT_BLACK);   // clear full label row before redraw
+    lcd.setTextDatum(TC_DATUM);                // top-centre: y is the TOP of the text
+    lcd.setTextSize(1);
+    lcd.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    lcd.drawString(label, w / 2, lblY + 2);
+  };
+
+  progress(25, "Config loaded");
+  delay(300);
+
+  // ── Init steps ────────────────────────────────────────────────────────────
+  AchStore.load(Uni.Storage);
+  progress(50, "Achievements loaded");
+  delay(300);
+
+  Achievement.recalibrate(Uni.Storage);
+  progress(75, "EXP calibrated");
+  delay(300);
+
+  RandomSeed::init();
+  Uni.applyNavMode();
+  progress(90, "System ready");
+  delay(300);
+
+  Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
+  if (Uni.Speaker) Uni.Speaker->setVolume((uint8_t)Config.get(APP_CONFIG_VOLUME, APP_CONFIG_VOLUME_DEFAULT).toInt());
+  if (Uni.Speaker) Uni.Speaker->playWin();
+  progress(100, "Starting...");
+  delay(300);
 }
 
 void setup() {
@@ -57,15 +85,6 @@ void setup() {
 #ifdef DEVICE_HAS_RTC
   RtcManager::syncSystemFromRtc();
 #endif
-  _checkStorageFallback();
-  Config.load(Uni.Storage);
-  PinConfig.load(Uni.Storage);
-  AchStore.load(Uni.Storage);
-
-  RandomSeed::init();
-  Uni.applyNavMode();
-  Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
-  if (Uni.Speaker) Uni.Speaker->setVolume((uint8_t)Config.get(APP_CONFIG_VOLUME, APP_CONFIG_VOLUME_DEFAULT).toInt());
   _bootSplash();
   Screen.setScreen(new CharacterScreen());
 }
