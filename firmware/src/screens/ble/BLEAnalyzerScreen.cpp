@@ -1,6 +1,7 @@
 #include "BLEAnalyzerScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "screens/ble/BLEMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 
@@ -73,6 +74,10 @@ void BLEAnalyzerScreen::_startScan()
   ShowStatusAction::show("Scanning...", 0);
   _bleScan->clearResults();
   _scanResults = _bleScan->start(5, false);
+
+  int ns = Achievement.inc("ble_analyzer_scan");
+  if (ns == 1) Achievement.unlock("ble_analyzer_scan");
+
   _showList();
 }
 
@@ -82,6 +87,11 @@ void BLEAnalyzerScreen::_showList()
   _devCount = 0;
 
   int count = min((int)_scanResults.getCount(), (int)kMaxDevices);
+
+  if ((int)_scanResults.getCount() >= 20) {
+    int n20 = Achievement.inc("ble_analyzer_20");
+    if (n20 == 1) Achievement.unlock("ble_analyzer_20");
+  }
   for (int i = 0; i < count; i++) {
     NimBLEAdvertisedDevice dev = _scanResults.getDevice(i);
     _devLabel[i] = dev.getAddress().toString().c_str();
@@ -105,6 +115,9 @@ void BLEAnalyzerScreen::_showInfo()
 {
   if (_selectedDeviceIdx < 0) return;
   _state = STATE_INFO;
+
+  int nd = Achievement.inc("ble_analyzer_detail");
+  if (nd == 1) Achievement.unlock("ble_analyzer_detail");
 
   NimBLEAdvertisedDevice dev = _scanResults.getDevice(_selectedDeviceIdx);
 

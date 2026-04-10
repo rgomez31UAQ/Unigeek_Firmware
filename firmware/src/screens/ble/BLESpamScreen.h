@@ -15,9 +15,11 @@ public:
 
 private:
   static constexpr const char* _spinner = "-\\|/";
-  uint8_t  _spinIdx    = 0;
-  uint32_t _lastSpamMs = 0;
-  uint32_t _lastDrawMs = 0;
+  uint8_t  _spinIdx      = 0;
+  uint32_t _lastSpamMs   = 0;
+  uint32_t _lastDrawMs   = 0;
+  uint32_t _spamStartMs  = 0;
+  bool     _spam1minFired = false;
 
   NimBLEAdvertising* _pAdv = nullptr;
 

@@ -1,6 +1,7 @@
 #include "BLEDetectorScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "screens/ble/BLEMenuScreen.h"
 
 BLEDetectorScreen* BLEDetectorScreen::_instance = nullptr;
@@ -116,6 +117,9 @@ void BLEDetectorScreen::onRender()
 
 void BLEDetectorScreen::_startScan()
 {
+  int n = Achievement.inc("ble_detector_first");
+  if (n == 1) Achievement.unlock("ble_detector_first");
+
   NimBLEDevice::init("");
   _bleScan = NimBLEDevice::getScan();
   _bleScan->setAdvertisedDeviceCallbacks(new ScanCallbacks(), true);
@@ -287,6 +291,9 @@ void BLEDetectorScreen::_pushAlert(const char* type)
   _alerts[idx].timestamp = millis();
   _alertHead = (_alertHead + 1) % kMaxAlerts;
   if (_alertCount < kMaxAlerts) _alertCount++;
+
+  int na = Achievement.inc("ble_spam_detected");
+  if (na == 1) Achievement.unlock("ble_spam_detected");
 
   if (Uni.Speaker) Uni.Speaker->playNotification();
 }

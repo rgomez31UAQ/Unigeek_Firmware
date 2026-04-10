@@ -1,6 +1,7 @@
 #include "WhisperPairScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "screens/ble/BLEMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include <mbedtls/aes.h>
@@ -105,6 +106,10 @@ void WhisperPairScreen::_startScan()
   ShowStatusAction::show("Scanning FP...", 0);
   _bleScan->clearResults();
   _scanResults = _bleScan->start(5, false);
+
+  int n = Achievement.inc("whisper_scan_first");
+  if (n == 1) Achievement.unlock("whisper_scan_first");
+
   _showList();
 }
 
@@ -142,6 +147,13 @@ void WhisperPairScreen::_runTest()
 {
   NimBLEAdvertisedDevice dev = _scanResults.getDevice(_selScanIdx);
   _isVulnerable = _doKbpTest(dev);
+
+  int nt = Achievement.inc("whisper_tested_5");
+  if (nt == 5) Achievement.unlock("whisper_tested_5");
+  if (_isVulnerable) {
+    int nv = Achievement.inc("whisper_vulnerable");
+    if (nv == 1) Achievement.unlock("whisper_vulnerable");
+  }
 
   _state = STATE_RESULT;
   _log.addLine(_isVulnerable ? ">> VULNERABLE <<" : ">> Safe <<");

@@ -1,6 +1,7 @@
 #include "BLESpamScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "screens/ble/BLEMenuScreen.h"
 
 // NimBLE internal API to set the static random address
@@ -19,6 +20,11 @@ BLESpamScreen::~BLESpamScreen()
 
 void BLESpamScreen::onInit()
 {
+  int n = Achievement.inc("ble_spam_first");
+  if (n == 1) Achievement.unlock("ble_spam_first");
+  _spamStartMs  = millis();
+  _spam1minFired = false;
+
   NimBLEDevice::init("");
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM);
   _pAdv = NimBLEDevice::getAdvertising();
@@ -37,6 +43,11 @@ void BLESpamScreen::onUpdate()
   }
 
   uint32_t now = millis();
+  if (!_spam1minFired && now - _spamStartMs >= 60000) {
+    _spam1minFired = true;
+    int n = Achievement.inc("ble_spam_1min");
+    if (n == 1) Achievement.unlock("ble_spam_1min");
+  }
   if (now - _lastSpamMs >= 100) {
     _lastSpamMs = now;
     _spam();
