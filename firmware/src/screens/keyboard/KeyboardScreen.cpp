@@ -1,6 +1,7 @@
 #include "KeyboardScreen.h"
 #include "core/Device.h"
 #include "core/ScreenManager.h"
+#include "core/AchievementManager.h"
 #include "screens/keyboard/KeyboardMenuScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/components/StatusBar.h"
@@ -159,6 +160,16 @@ void KeyboardScreen::_goMenu()
 
 void KeyboardScreen::_goConnected()
 {
+  if (_mode == MODE_BLE) {
+    int n = Achievement.inc("kbd_ble_connected");
+    if (n == 1) Achievement.unlock("kbd_ble_connected");
+  } else {
+    int n = Achievement.inc("kbd_usb_connected");
+    if (n == 1) Achievement.unlock("kbd_usb_connected");
+  }
+  int nr = Achievement.inc("kbd_relay_first");
+  if (nr == 1) Achievement.unlock("kbd_relay_first");
+
   _state = STATE_KEYBOARD;
   Uni.Nav->setSuppressKeys(true);
   render();
@@ -199,6 +210,11 @@ void KeyboardScreen::_showFiles(const String& path)
 
 void KeyboardScreen::_runDuckyScript(const String& path)
 {
+  int nd = Achievement.inc("kbd_ducky_first");
+  if (nd == 1)  Achievement.unlock("kbd_ducky_first");
+  if (nd == 5)  Achievement.unlock("kbd_ducky_5");
+  if (nd == 10) Achievement.unlock("kbd_ducky_10");
+
   _state           = STATE_RUNNING_SCRIPT;
   _scriptLineCount = 0;
   render();
