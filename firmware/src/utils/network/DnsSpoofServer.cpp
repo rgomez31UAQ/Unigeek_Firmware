@@ -300,7 +300,7 @@ void DnsSpoofServer::_startWeb()
     if (p) {
       _serveFromPath(p, req);
     } else if (_captiveIntercept) {
-      _serveFromPath(_captivePath[0] != '\0' ? _captivePath : "/unigeek/wifi/portals/default", req);
+      _serveFromPath(_captivePath[0] != '\0' ? _captivePath : "/unigeek/web/portals/default", req);
     } else {
       req->send(204); // pass connectivity check for unconfigured domains
     }

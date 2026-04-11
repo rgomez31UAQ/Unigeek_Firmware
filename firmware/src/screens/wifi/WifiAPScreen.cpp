@@ -169,7 +169,7 @@ void WifiAPScreen::onItemSelected(uint8_t index)
     case 4: { // Captive Portal toggle
       if (!_captiveEnabled) {
         // List portal folders
-        static constexpr const char* PORTALS_DIR = "/unigeek/wifi/portals";
+        static constexpr const char* PORTALS_DIR = "/unigeek/web/portals";
         if (!Uni.Storage || !Uni.Storage->exists(PORTALS_DIR)) {
           ShowStatusAction::show("No portals found", 1500);
           render();

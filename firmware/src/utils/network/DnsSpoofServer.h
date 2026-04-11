@@ -6,7 +6,7 @@
 class DnsSpoofServer {
 public:
   static constexpr int MAX_RECORDS = 20;
-  static constexpr const char* CONFIG_PATH = "/unigeek/wifi/portals/dns_config";
+  static constexpr const char* CONFIG_PATH = "/unigeek/web/portals/dns_config";
 
   struct DnsRecord {
     char domain[64];

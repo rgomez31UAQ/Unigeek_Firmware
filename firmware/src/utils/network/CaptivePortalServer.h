@@ -195,7 +195,7 @@ public:
   }
 
 private:
-  static constexpr const char* PORTALS_DIR = "/unigeek/wifi/portals";
+  static constexpr const char* PORTALS_DIR = "/unigeek/web/portals";
   static constexpr int MAX_PORTALS = 10;
 
   String _portalFolder;
