@@ -28,8 +28,10 @@ void DeviceStatusScreen::onInit() {
   if (ESP.getPsramSize() > 0) {
     uint32_t psTotal = ESP.getPsramSize();
     uint32_t psFree  = ESP.getFreePsram();
-    _psramFree = _fmtUsedTotal(psTotal - psFree, psTotal);
-    _rows[i++] = {"PSRAM", _psramFree};
+    _psramFree  = _fmtUsedTotal(psTotal - psFree, psTotal);
+    _rows[i++]  = {"PSRAM", _psramFree};
+    _totalFree  = _fmtSize(ramFree + psFree);
+    _rows[i++]  = {"Total Free", _totalFree};
   }
 
   if (Uni.StorageLFS && Uni.StorageLFS->isAvailable()) {

@@ -21,6 +21,7 @@ private:
   String _cpuFreq;
   String _ramFree;
   String _psramFree;
+  String _totalFree;
   String _lfsFree;
   String _sdFree;
 };

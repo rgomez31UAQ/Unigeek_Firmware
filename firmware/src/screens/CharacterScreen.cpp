@@ -177,6 +177,11 @@ constexpr int kWordCount = (int)(sizeof(kWords) / sizeof(kWords[0]));
 
 // ─── CharacterScreen ─────────────────────────────────────────────────────────
 
+CharacterScreen::~CharacterScreen()
+{
+  if (_sprite) { _sprite->deleteSprite(); delete _sprite; _sprite = nullptr; }
+}
+
 void CharacterScreen::update()
 {
   onUpdate();
@@ -200,6 +205,14 @@ void CharacterScreen::onInit()
   _wordState     = 0;
   _history[0][0] = '\0';
   _history[1][0] = '\0';
+
+  // Persistent sprite — allocated once here so render cycles do not repeatedly
+  // alloc/free. On BOARD_HAS_PSRAM boards, heap merge routes this large
+  // allocation to PSRAM (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096).
+  if (!_sprite) {
+    _sprite = new TFT_eSprite(&Uni.Lcd);
+    _sprite->createSprite(Uni.Lcd.width(), Uni.Lcd.height());
+  }
 }
 
 void CharacterScreen::onUpdate()
@@ -258,10 +271,10 @@ void CharacterScreen::onUpdate()
 
 void CharacterScreen::onRender()
 {
-  TFT_eSprite sp(&Uni.Lcd);
+  if (!_sprite) return;
+  TFT_eSprite& sp = *_sprite;
   const int W = Uni.Lcd.width();
   const int H = Uni.Lcd.height();
-  sp.createSprite(W, H);
   sp.fillSprite(TFT_BLACK);
 
   const int      PAD   = 4;
@@ -280,8 +293,9 @@ void CharacterScreen::onRender()
   int      hp    = _clampPct(Uni.Power.getBatteryPercentage());
   bool     chg   = Uni.Power.isCharging();
   if (hp == 0 && !chg) hp = 100;
-  int      brain = ESP.getHeapSize() > 0
-                 ? _clampPct((ESP.getFreeHeap() * 100) / ESP.getHeapSize()) : 0;
+  uint32_t _totalMem = ESP.getHeapSize() + ESP.getPsramSize();
+  uint32_t _freeMem  = ESP.getFreeHeap() + ESP.getFreePsram();
+  int      brain = _totalMem > 0 ? _clampPct(((_totalMem - _freeMem) * 100) / _totalMem) : 0;
   String agent      = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
   String agentTitle = Config.get(APP_CONFIG_AGENT_TITLE, APP_CONFIG_AGENT_TITLE_DEFAULT);
 
@@ -435,7 +449,6 @@ void CharacterScreen::onRender()
   }
 
   sp.pushSprite(0, 0);
-  sp.deleteSprite();
 }
 
 void CharacterScreen::_enterMainMenu()
