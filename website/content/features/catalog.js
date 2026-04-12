@@ -53,7 +53,7 @@ export const CATALOG = [
   { slug: "barcode",              title: "Barcode",             category: "utility",  summary: "Generate and display a Code 128 barcode from typed or file-loaded text",                             hasDetail: false },
   { slug: "file-manager",         title: "File Manager",        category: "utility",  summary: "Browse, rename, copy, cut, paste, and delete files on device storage",                               hasDetail: false },
   { slug: "i2c-detector",         title: "I2C Detector",        category: "utility",  summary: "Scan the I2C bus and list all responding device addresses",                                           hasDetail: false },
-  { slug: "achievements",         title: "Achievements",        category: "utility",  summary: "View all achievements grouped by domain; long-press an unlocked achievement to set it as your Agent Title", hasDetail: false },
+  { slug: "achievements",         title: "Achievements",        category: "utility",  summary: "View all achievements grouped by domain; long-press an unlocked achievement to set it as your Agent Title", hasDetail: true },
 
   // Games
   { slug: "game-flappy",          title: "Flappy Bird",         category: "game",     summary: "Classic side-scrolling game with randomized pipes and scoring",                                       hasDetail: false },
