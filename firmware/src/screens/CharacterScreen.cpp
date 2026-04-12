@@ -11,23 +11,24 @@ namespace {
 
 int _clampPct(int v) { return v < 0 ? 0 : v > 100 ? 100 : v; }
 
-void _drawInlineBar(TFT_eSprite& sp, int x, int y, int w, int h,
+template<typename T>
+void _drawInlineBar(T& dc, int x, int y, int w, int h,
                     const char* label, const char* value,
                     int pct, uint16_t fillColor, int scale = 1)
 {
   const uint16_t kEmptyBg = 0x2104;
   pct = _clampPct(pct);
-  sp.fillRect(x, y, w, h, kEmptyBg);
-  sp.drawRect(x, y, w, h, TFT_DARKGREY);
+  dc.fillRect(x, y, w, h, kEmptyBg);
+  dc.drawRect(x, y, w, h, TFT_DARKGREY);
   int fill = (w - 2) * pct / 100;
-  if (fill > 0) sp.fillRect(x + 1, y + 1, fill, h - 2, fillColor);
+  if (fill > 0) dc.fillRect(x + 1, y + 1, fill, h - 2, fillColor);
   int ty = y + (h - scale * 8) / 2 + 1;
-  sp.setTextDatum(TL_DATUM);
-  sp.setTextColor(TFT_WHITE);
-  sp.drawString(label, x + 5, ty, 1);
-  sp.setTextDatum(TR_DATUM);
-  sp.setTextColor(TFT_WHITE);
-  sp.drawString(value, x + w - 5, ty, 1);
+  dc.setTextDatum(TL_DATUM);
+  dc.setTextColor(TFT_WHITE);
+  dc.drawString(label, x + 5, ty, 1);
+  dc.setTextDatum(TR_DATUM);
+  dc.setTextColor(TFT_WHITE);
+  dc.drawString(value, x + w - 5, ty, 1);
 }
 
 struct RankInfo { const char* label; uint16_t color; int rank; };
@@ -44,7 +45,7 @@ RankInfo _getRankInfo(int exp)
 // ── Pixel-art hacker head ─────────────────────────────────────────────────────
 // Grid: 12 wide × 14 tall (art-pixels).  ps = screen pixels per art-pixel.
 // rank 0=NOVICE  1=HACKER  2=EXPERT  3=ELITE  4=LEGEND
-void _drawHackerHead(TFT_eSprite& sp, int ox, int oy, int ps, bool blink, int rank)
+void _drawHackerHead(TFT_eSPI& dc, int ox, int oy, int ps, bool blink, int rank)
 {
   // Per-rank style table
   struct HeadStyle { uint16_t hood; uint16_t eye; bool sunglasses; bool bigEyes; };
@@ -66,7 +67,7 @@ void _drawHackerHead(TFT_eSprite& sp, int ox, int oy, int ps, bool blink, int ra
   const uint16_t N = 0xEB60;   // nose
 
   auto R = [&](int ax, int ay, int aw, int ah, uint16_t c) {
-    sp.fillRect(ox + ax * ps, oy + ay * ps, aw * ps, ah * ps, c);
+    dc.fillRect(ox + ax * ps, oy + ay * ps, aw * ps, ah * ps, c);
   };
 
   // ── Hood background ──
@@ -93,8 +94,8 @@ void _drawHackerHead(TFT_eSprite& sp, int ox, int oy, int ps, bool blink, int ra
     R(1, 4, 10, 1, M);                   // frame top bar
     R(5, 5,  2, 2, 0x2945);              // nose bridge between lenses
     // Tiny eye glow visible through tinted glass
-    sp.drawPixel(ox + 3 * ps, oy + 5 * ps, E);
-    sp.drawPixel(ox + 9 * ps, oy + 5 * ps, E);
+    dc.drawPixel(ox + 3 * ps, oy + 5 * ps, E);
+    dc.drawPixel(ox + 9 * ps, oy + 5 * ps, E);
   } else {
     int eyeW = s.bigEyes ? 3 : 2;
     int eyeRx = 10 - eyeW;               // right-eye start col (mirror of 2)
@@ -103,12 +104,12 @@ void _drawHackerHead(TFT_eSprite& sp, int ox, int oy, int ps, bool blink, int ra
       R(eyeRx, 5, eyeW, 2, E);           // right eye
       if (!s.bigEyes) {
         // specular dot top-left corner of each eye
-        sp.drawPixel(ox + 2    * ps, oy + 5 * ps, TFT_WHITE);
-        sp.drawPixel(ox + eyeRx * ps, oy + 5 * ps, TFT_WHITE);
+        dc.drawPixel(ox + 2    * ps, oy + 5 * ps, TFT_WHITE);
+        dc.drawPixel(ox + eyeRx * ps, oy + 5 * ps, TFT_WHITE);
       } else if (rank == 4) {
         // LEGEND: faint violet glow halo flanking eyes
-        sp.drawPixel(ox + 1       * ps, oy + 5 * ps, s.eye);
-        sp.drawPixel(ox + (eyeRx + eyeW) * ps, oy + 5 * ps, s.eye);
+        dc.drawPixel(ox + 1       * ps, oy + 5 * ps, s.eye);
+        dc.drawPixel(ox + (eyeRx + eyeW) * ps, oy + 5 * ps, s.eye);
       }
     } else {
       R(2,     6, eyeW, 1, M);           // left closed
@@ -133,6 +134,58 @@ void _drawHackerHead(TFT_eSprite& sp, int ox, int oy, int ps, bool blink, int ra
     R(3, 10, 6, 1, M);
     R(3, 11, 1, 1, M);
     R(8, 11, 1, 1, M);
+  }
+}
+
+// ── Partial blink update — only redraws the 3 eye rows, no full head repaint ─
+void _drawHackerEyes(TFT_eSPI& dc, int ox, int oy, int ps, bool blink, int rank)
+{
+  if (rank == 2) return;  // EXPERT has sunglasses — blink has no visible effect
+
+  struct EyeStyle { uint16_t eye; bool bigEyes; };
+  static constexpr EyeStyle kE[5] = {
+    { 0x7BEF, false },  // NOVICE
+    { 0x07FF, false },  // HACKER
+    { 0x07FF, false },  // EXPERT (unused — guarded above)
+    { 0xFFE0, true  },  // ELITE
+    { 0x780F, true  },  // LEGEND
+  };
+
+  int ri = rank < 0 ? 0 : rank > 4 ? 4 : rank;
+  const EyeStyle& s = kE[ri];
+  const uint16_t F = 0xFDA0;
+  const uint16_t E = s.eye;
+  const uint16_t M = 0x2104;
+
+  auto R = [&](int ax, int ay, int aw, int ah, uint16_t c) {
+    dc.fillRect(ox + ax * ps, oy + ay * ps, aw * ps, ah * ps, c);
+  };
+
+  // Clear rows 4-6 (eyebrows + eyes) back to face color
+  R(1, 4, 10, 3, F);
+
+  // NOVICE eyebrows (row 4)
+  if (rank == 0) {
+    R(2, 4, 2, 1, M);
+    R(8, 4, 2, 1, M);
+  }
+
+  int eyeW  = s.bigEyes ? 3 : 2;
+  int eyeRx = 10 - eyeW;
+
+  if (!blink) {
+    R(2, 5, eyeW, 2, E);
+    R(eyeRx, 5, eyeW, 2, E);
+    if (!s.bigEyes) {
+      dc.drawPixel(ox + 2      * ps, oy + 5 * ps, TFT_WHITE);
+      dc.drawPixel(ox + eyeRx  * ps, oy + 5 * ps, TFT_WHITE);
+    } else if (rank == 4) {
+      dc.drawPixel(ox + 1                * ps, oy + 5 * ps, E);
+      dc.drawPixel(ox + (eyeRx + eyeW)   * ps, oy + 5 * ps, E);
+    }
+  } else {
+    R(2,     6, eyeW, 1, M);
+    R(eyeRx, 6, eyeW, 1, M);
   }
 }
 
@@ -202,7 +255,8 @@ void CharacterScreen::onInit()
   _wordState     = 0;
   _history[0][0] = '\0';
   _history[1][0] = '\0';
-
+  _firstRender   = true;
+  _dirtyMask     = 0xFF;
 }
 
 void CharacterScreen::onUpdate()
@@ -215,14 +269,13 @@ void CharacterScreen::onUpdate()
     }
   }
 
-  unsigned long now        = millis();
-  bool          needsRender = false;
+  unsigned long now = millis();
 
   // ── blink animation ──────────────────────────────────────────────────
   if (_animFrame == 0) {
-    if (now - _lastAnimMs > 3500) { _animFrame = 1; _lastAnimMs = now; needsRender = true; }
+    if (now - _lastAnimMs > 3500) { _animFrame = 1; _lastAnimMs = now; _dirtyMask |= DIRTY_HEAD; }
   } else {
-    if (now - _lastAnimMs > 150)  { _animFrame = 0; _lastAnimMs = now; needsRender = true; }
+    if (now - _lastAnimMs > 150)  { _animFrame = 0; _lastAnimMs = now; _dirtyMask |= DIRTY_HEAD; }
   }
 
   // ── dialog bubble state machine ──────────────────────────────────────
@@ -233,7 +286,7 @@ void CharacterScreen::onUpdate()
 
   if (_wordState == 0) {
     if (_wordPos < (uint8_t)wlen) {
-      if (now - _lastCharMs > 65) { _wordPos++; _lastCharMs = now; needsRender = true; }
+      if (now - _lastCharMs > 65) { _wordPos++; _lastCharMs = now; _dirtyMask |= DIRTY_BUBBLE; }
     } else {
       _wordState = 1; _lastCharMs = now;  // word done → enter pause
     }
@@ -249,79 +302,111 @@ void CharacterScreen::onUpdate()
       _wordPos    = 0;
       _wordState  = 0;
       _lastCharMs = now;
-      needsRender = true;
+      _dirtyMask |= DIRTY_BUBBLE;
     }
   }
 
   // ── periodic data refresh (battery, heap) ────────────────────────────
-  if (now - _lastRefreshMs > 5000) { _lastRefreshMs = now; needsRender = true; }
+  // Also sets DIRTY_HEAD so rank changes (level-up) repaint the full head.
+  if (now - _lastRefreshMs > 5000) { _lastRefreshMs = now; _dirtyMask |= DIRTY_BARS; }
 
-  if (needsRender) render();
+  if (_dirtyMask) render();
 }
 
 void CharacterScreen::onRender()
 {
-  TFT_eSprite sp(&Uni.Lcd);
-  sp.createSprite(Uni.Lcd.width(), Uni.Lcd.height());
   const int W = Uni.Lcd.width();
   const int H = Uni.Lcd.height();
-  sp.fillSprite(TFT_BLACK);
 
+  // ── layout ───────────────────────────────────────────────────────────
   const int      PAD   = 4;
   const uint16_t theme = Config.getThemeColor();
+  const int      scale = W < 360 ? 1 : W < 600 ? 2 : 3;
+  const int      lineH = scale * 8;
+  const int      barH  = scale * 16;
+  const int      gap   = scale * 2;
+  const int      ps    = (W < 360) ? 3 : (W < 600) ? 6 : 9;
 
-  const int scale = W < 360 ? 1 : W < 600 ? 2 : 3;
-  const int lineH = scale * 8;
-  const int barH  = scale * 16;
-  const int gap   = scale * 2;
+  const int topY1 = PAD + 2;
+  const int topY2 = topY1 + lineH + gap;
+  const int midY  = topY2 + lineH + gap;
 
-  sp.setTextSize(scale);
+  const int sec2H = barH * 2 + gap;
+  const int sec2Y = H - 1 - sec2H;
+  const int halfW = (W - PAD * 2 - gap) / 2;
 
-  // ── collect data ──────────────────────────────────────────────────────
-  int      exp   = Achievement.getExp();
-  RankInfo ri    = _getRankInfo(exp);
-  int      hp    = _clampPct(Uni.Power.getBatteryPercentage());
-  bool     chg   = Uni.Power.isCharging();
+  const int headW = 12 * ps;
+  const int headH = 14 * ps;
+  const int headX = PAD + scale * 4;
+  const int midH  = sec2Y - midY;
+  const int headY = midH > headH ? (midY + (midH - headH) / 2) : midY;
+
+  const int bubX = headX + headW + gap * 3;
+  const int bubW = W - bubX - PAD;
+  const int ip   = gap * 2;
+  const int rowH = lineH + gap;
+  const int bubH = lineH * 3 + gap * 2 + ip * 2;
+  const int bubY = headY + headH / 2 - bubH / 2;
+  const int y1   = bubY + ip + lineH / 2;
+  const int y2   = bubY + ip + rowH + lineH / 2;
+  const int y3   = bubY + ip + rowH * 2 + lineH / 2;
+  const int btx  = bubX + gap * 2;
+
+  const uint16_t bubBg = 0x0841;
+  const uint16_t col3  = TFT_GREEN;
+  const uint16_t col2  = 0x0460;
+  const uint16_t col1  = 0x01C0;
+
+  // ── data ─────────────────────────────────────────────────────────────
+  int      exp      = Achievement.getExp();
+  RankInfo ri       = _getRankInfo(exp);
+  int      hp       = _clampPct(Uni.Power.getBatteryPercentage());
+  bool     chg      = Uni.Power.isCharging();
   if (hp == 0 && !chg) hp = 100;
-  uint32_t _totalMem = ESP.getHeapSize() + ESP.getPsramSize();
-  uint32_t _freeMem  = ESP.getFreeHeap() + ESP.getFreePsram();
-  int      brain = _totalMem > 0 ? _clampPct(((_totalMem - _freeMem) * 100) / _totalMem) : 0;
-  String agent      = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
-  String agentTitle = Config.get(APP_CONFIG_AGENT_TITLE, APP_CONFIG_AGENT_TITLE_DEFAULT);
+  uint32_t totalMem = ESP.getHeapSize() + ESP.getPsramSize();
+  uint32_t freeMem  = ESP.getFreeHeap() + ESP.getFreePsram();
+  int      brain    = totalMem > 0 ? _clampPct(((totalMem - freeMem) * 100) / totalMem) : 0;
+  String   agent    = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
+  String   agTitle  = Config.get(APP_CONFIG_AGENT_TITLE, APP_CONFIG_AGENT_TITLE_DEFAULT);
+  int      kTotal   = (int)Achievement.catalog().count;
+  int      numUnlk  = Achievement.getTotalUnlocked();
 
-  const int kTotal  = (int)Achievement.catalog().count;
-  int       numUnlk = Achievement.getTotalUnlocked();
+  const bool isFirst = _firstRender;
 
-  int cx = PAD;
-  int cy = PAD + 2;
-
-  const int indent = sp.textWidth("AGENT ", 1);
-
-  // ── SECTION 1: identity ───────────────────────────────────────────────
-  {
-    const char* t = agentTitle.length() > 0 ? agentTitle.c_str() : "No Title";
-    char rankTitleBuf[48];
-    snprintf(rankTitleBuf, sizeof(rankTitleBuf), "[%s] %s", ri.label, t);
-
-    sp.setTextDatum(TL_DATUM);
-    sp.setTextColor(TFT_DARKGREY);
-    sp.drawString("AGENT", cx, cy, 1);
-    sp.setTextColor(TFT_WHITE);
-    sp.drawString(agent.substring(0, 15).c_str(), cx + indent, cy, 1);
-    sp.setTextDatum(TR_DATUM);
-    sp.setTextColor(ri.color);
-    sp.drawString(rankTitleBuf, W - PAD, cy, 1);
+  if (isFirst) {
+    Uni.Lcd.fillScreen(TFT_BLACK);
+    _firstRender = false;
+    _dirtyMask   = 0xFF;
   }
-  cy += lineH + gap;
 
-  {
+  Uni.Lcd.setTextSize(scale);
+
+  // ── TOP SECTION ───────────────────────────────────────────────────────
+  if (_dirtyMask & DIRTY_TOP) {
+    Uni.Lcd.fillRect(0, 0, W, midY, TFT_BLACK);
+
+    const int indent = Uni.Lcd.textWidth("AGENT ", 1);
+
+    const char* t = agTitle.length() > 0 ? agTitle.c_str() : "No Title";
+    char rankBuf[48];
+    snprintf(rankBuf, sizeof(rankBuf), "[%s] %s", ri.label, t);
+
+    Uni.Lcd.setTextDatum(TL_DATUM);
+    Uni.Lcd.setTextColor(TFT_DARKGREY);
+    Uni.Lcd.drawString("AGENT", PAD, topY1, 1);
+    Uni.Lcd.setTextColor(TFT_WHITE);
+    Uni.Lcd.drawString(agent.substring(0, 15).c_str(), PAD + indent, topY1, 1);
+    Uni.Lcd.setTextDatum(TR_DATUM);
+    Uni.Lcd.setTextColor(ri.color);
+    Uni.Lcd.drawString(rankBuf, W - PAD, topY1, 1);
+
     char expBuf[12];
     snprintf(expBuf, sizeof(expBuf), "%d", exp);
-    sp.setTextDatum(TL_DATUM);
-    sp.setTextColor(TFT_DARKGREY);
-    sp.drawString("EXP", cx, cy, 1);
-    sp.setTextColor(TFT_ORANGE);
-    sp.drawString(expBuf, cx + indent, cy, 1);
+    Uni.Lcd.setTextDatum(TL_DATUM);
+    Uni.Lcd.setTextColor(TFT_DARKGREY);
+    Uni.Lcd.drawString("EXP", PAD, topY2, 1);
+    Uni.Lcd.setTextColor(TFT_ORANGE);
+    Uni.Lcd.drawString(expBuf, PAD + indent, topY2, 1);
 
     int nextExp = (exp < 4500)  ? 4500  : (exp < 15000) ? 15000
                 : (exp < 30000) ? 30000 : 43000;
@@ -329,117 +414,107 @@ void CharacterScreen::onRender()
                 : (exp < 30000) ? 15000 : 30000;
     int rPct    = (exp >= 43000) ? 100
                 : _clampPct((exp - prevExp) * 100 / (nextExp - prevExp));
-
     int bx    = W * 5 / 8;
     int bw    = W - bx - PAD;
     int rBarH = scale * 6;
-    sp.drawRect(bx, cy + scale, bw, rBarH, TFT_DARKGREY);
+    Uni.Lcd.fillRect(bx, topY2 + scale, bw, rBarH, TFT_BLACK);
+    Uni.Lcd.drawRect(bx, topY2 + scale, bw, rBarH, TFT_DARKGREY);
     int fill = (bw - 2) * rPct / 100;
-    if (fill > 0) sp.fillRect(bx + 1, cy + scale + 1, fill, rBarH - 2, theme);
+    if (fill > 0) Uni.Lcd.fillRect(bx + 1, topY2 + scale + 1, fill, rBarH - 2, theme);
+
+    _dirtyMask &= ~DIRTY_TOP;
   }
-  cy += lineH + gap;
 
-  // ── SECTION 2: vitals — pinned to bottom, 1 px gap from edge ─────────
-  const int sec2H = barH * 2 + gap;
-  const int sec2Y = H - 1 - sec2H;
-  const int halfW = (W - PAD * 2 - gap) / 2;
-
-  char hpBuf[8];
-  snprintf(hpBuf, sizeof(hpBuf), "%d%%", hp);
-  _drawInlineBar(sp, cx, sec2Y, halfW, barH,
-                 chg ? "HP++" : "HP", hpBuf, hp, TFT_RED, scale);
-
-  char brainBuf[8];
-  snprintf(brainBuf, sizeof(brainBuf), "%d%%", brain);
-  _drawInlineBar(sp, cx + halfW + gap, sec2Y, halfW, barH,
-                 "BRAIN", brainBuf, brain, TFT_DARKGREEN, scale);
-
-  char achBuf[16];
-  int achPct = kTotal > 0 ? (numUnlk * 100 / kTotal) : 0;
-  snprintf(achBuf, sizeof(achBuf), "%d/%d", numUnlk, kTotal);
-  _drawInlineBar(sp, cx, sec2Y + barH + gap, W - PAD * 2, barH,
-                 "ACHIEVEMENT", achBuf, achPct, TFT_ORANGE, scale);
-
-  // ── MIDDLE: idle hacker head + dialog bubble ──────────────────────────
-  const int midY = cy;
-  const int midH = sec2Y - cy;
-
-  const int ps    = (W < 360) ? 3 : (W < 600) ? 6 : 9;
-  const int headW = 12 * ps;
-  const int headH = 14 * ps;
-  const int headX = PAD + scale * 4;
-  const int headY = midH > headH ? (midY + (midH - headH) / 2) : midY;
-
-  _drawHackerHead(sp, headX, headY, ps, _animFrame == 1, ri.rank);
-
-  // Dialog bubble (tail points left toward head) — 3-line terminal scroll
-  const int bubX = headX + headW + gap * 3;
-  const int bubW = W - bubX - PAD;
-  const int ip   = gap * 2;                           // inner vertical padding
-  const int rowH = lineH + gap;
-  const int bubH = lineH * 3 + gap * 2 + ip * 2;     // 3 rows + 2 inter-row gaps + top/bottom padding
-  const int bubY = headY + headH / 2 - bubH / 2;
-
-  if (bubW > lineH * 2) {
-    const uint16_t bubBg = 0x0841;
-    const uint16_t col3  = TFT_GREEN;                 // bottom: current (bright)
-    const uint16_t col2  = 0x0460;                    // middle: prev word (medium green)
-    const uint16_t col1  = 0x01C0;                    // top: oldest word (dim green)
-
-    sp.fillRect(bubX, bubY, bubW, bubH, bubBg);
-    sp.drawRect(bubX, bubY, bubW, bubH, col3);
-
-    // Tail: drawn after the rect so it paints over the left border.
-    // Shifted 1 px right: rightmost column lands on bubX, erasing the
-    // border line there and making the tail merge seamlessly with the bubble.
-    const int tailW  = gap * 3;
-    const int tailMy = bubY + bubH / 2;
-    for (int i = 0; i < tailW; i++) {
-      int spread = i + 1;
-      int tx2    = bubX - tailW + i + 1;   // +1: shift right by 1 px
-      sp.drawFastVLine(tx2, tailMy - spread, spread * 2, bubBg);
-      sp.drawPixel(tx2, tailMy - spread,        col3);
-      sp.drawPixel(tx2, tailMy + spread - 1,    col3);
+  // ── HEAD ──────────────────────────────────────────────────────────────
+  if (_dirtyMask & DIRTY_HEAD) {
+    if (isFirst) {
+      Uni.Lcd.fillRect(headX, headY, headW, headH, TFT_BLACK);
+      _drawHackerHead(Uni.Lcd, headX, headY, ps, _animFrame == 1, ri.rank);
+    } else {
+      _drawHackerEyes(Uni.Lcd, headX, headY, ps, _animFrame == 1, ri.rank);
     }
+    _dirtyMask &= ~DIRTY_HEAD;
+  }
 
-    // Y centres for the three rows (ML_DATUM)
-    const int y1 = bubY + ip + lineH / 2;
-    const int y2 = bubY + ip + rowH + lineH / 2;
-    const int y3 = bubY + ip + rowH * 2 + lineH / 2;
-    const int tx = bubX + gap * 2;
+  // ── BUBBLE ────────────────────────────────────────────────────────────
+  if (_dirtyMask & DIRTY_BUBBLE) {
+    if (bubW > lineH * 2) {
+      if (isFirst) {
+        // Frame and tail drawn once — persist on LCD until next full render
+        Uni.Lcd.fillRect(bubX, bubY, bubW, bubH, bubBg);
+        Uni.Lcd.drawRect(bubX, bubY, bubW, bubH, col3);
+        const int tailW  = gap * 3;
+        const int tailMy = bubY + bubH / 2;
+        for (int i = 0; i < tailW; i++) {
+          int spread = i + 1;
+          int tx2    = bubX - tailW + i + 1;
+          Uni.Lcd.drawFastVLine(tx2, tailMy - spread, spread * 2, bubBg);
+          Uni.Lcd.drawPixel(tx2, tailMy - spread,     col3);
+          Uni.Lcd.drawPixel(tx2, tailMy + spread - 1, col3);
+        }
+      }
 
-    // ── row 1: oldest history (static, dim) ──
-    if (_history[0][0] != '\0') {
+      // Text rows via sprite — compose into a bubBg-filled buffer, push once.
+      // Sprite covers the inner text area only; frame/tail stay on LCD.
+      const int spW = bubW - gap * 4;
+      const int spH = lineH * 3 + gap * 2;
+      TFT_eSprite sp(&Uni.Lcd);
+      sp.createSprite(spW, spH);
+      sp.fillSprite(bubBg);
+      sp.setTextSize(scale);
       sp.setTextDatum(ML_DATUM);
+
+      // y positions are relative to sprite top (origin = btx, bubY + ip)
+      const int sy1 = lineH / 2;
+      const int sy2 = rowH + lineH / 2;
+      const int sy3 = rowH * 2 + lineH / 2;
+
       sp.setTextColor(col1);
-      sp.drawString(_history[0], tx, y1, 1);
-    }
-
-    // ── row 2: most-recent completed word (static, medium) ──
-    if (_history[1][0] != '\0') {
-      sp.setTextDatum(ML_DATUM);
+      if (_history[0][0]) sp.drawString(_history[0], 0, sy1, 1);
       sp.setTextColor(col2);
-      sp.drawString(_history[1], tx, y2, 1);
-    }
+      if (_history[1][0]) sp.drawString(_history[1], 0, sy2, 1);
 
-    // ── row 3: current animated word + cursor (bottom) ──
-    {
-      const char* word  = kWords[_wordIdx % kWordCount];
-      int         wlen2 = (int)strlen(word);
-      int         shown = (_wordPos <= (uint8_t)wlen2) ? (int)_wordPos : wlen2;
-      char        buf[36] = {};
-      if (shown > 0) strncpy(buf, word, shown);
-      buf[shown]     = '_';
-      buf[shown + 1] = '\0';
+      {
+        const char* word  = kWords[_wordIdx % kWordCount];
+        int         wlen2 = (int)strlen(word);
+        int         shown = (_wordPos <= (uint8_t)wlen2) ? (int)_wordPos : wlen2;
+        char        buf[20] = {};
+        if (shown > 0) memcpy(buf, word, shown);
+        buf[shown] = '_';
+        sp.setTextColor(col3);
+        sp.drawString(buf, 0, sy3, 1);
+      }
 
-      sp.setTextDatum(ML_DATUM);
-      sp.setTextColor(col3);
-      sp.drawString(buf, tx, y3, 1);
+      sp.pushSprite(btx, bubY + ip);
+      sp.deleteSprite();
     }
+    _dirtyMask &= ~DIRTY_BUBBLE;
   }
 
-  sp.pushSprite(0, 0);
-  sp.deleteSprite();
+  // ── BARS ──────────────────────────────────────────────────────────────
+  if (_dirtyMask & DIRTY_BARS) {
+    char hpBuf[8], brainBuf[8];
+    snprintf(hpBuf,    sizeof(hpBuf),    "%d%%", hp);
+    snprintf(brainBuf, sizeof(brainBuf), "%d%%", brain);
+    {
+      TFT_eSprite sp(&Uni.Lcd);
+      sp.createSprite(W - PAD * 2, barH);
+      sp.setTextSize(scale);
+      _drawInlineBar(sp, 0,           0, halfW, barH, chg ? "HP++" : "HP", hpBuf,    hp,    TFT_RED,       scale);
+      _drawInlineBar(sp, halfW + gap, 0, halfW, barH, "BRAIN",              brainBuf, brain, TFT_DARKGREEN, scale);
+      sp.pushSprite(PAD, sec2Y);
+      sp.deleteSprite();
+    }
+
+    if (isFirst) {
+      char achBuf[16];
+      int achPct = kTotal > 0 ? (numUnlk * 100 / kTotal) : 0;
+      snprintf(achBuf, sizeof(achBuf), "%d/%d", numUnlk, kTotal);
+      _drawInlineBar(Uni.Lcd, PAD, sec2Y + barH + gap, W - PAD * 2, barH, "ACHIEVEMENT", achBuf, achPct, TFT_ORANGE, scale);
+    }
+
+    _dirtyMask &= ~DIRTY_BARS;
+  }
 }
 
 void CharacterScreen::_enterMainMenu()
