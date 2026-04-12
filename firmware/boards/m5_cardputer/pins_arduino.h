@@ -87,3 +87,8 @@ static const uint8_t SCL = 15;
 #define DEVICE_HAS_SOUND          // speaker attached — enables audio paths and sound settings
 #define DEVICE_HAS_VOLUME_CONTROL // I2S amp supports setVolume() — shows Volume slider in Settings
 #define DEVICE_HAS_USB_HID        // ESP32-S3 native USB OTG — enables USB HID keyboard
+// Device has dedicated up/down/left/right navigation in addition to select.
+// Enables row-based grid navigation in MainMenuScreen (UP/DOWN move between
+// rows, LEFT/RIGHT move between columns). Without this flag, UP maps to LEFT
+// and DOWN maps to RIGHT so 2-button devices can still traverse the grid.
+#define DEVICE_HAS_4WAY_NAV

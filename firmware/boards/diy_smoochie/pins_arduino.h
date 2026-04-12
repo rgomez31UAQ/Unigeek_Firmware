@@ -72,3 +72,10 @@ static const uint8_t SCL = 48;
 #define SMOOTH_FONT 1
 #define SPI_FREQUENCY       27000000
 #define SPI_READ_FREQUENCY  16000000
+
+// ─── App feature flags ────────────────────────────────────
+// Device has dedicated up/down/left/right buttons in addition to select.
+// Enables row-based grid navigation in MainMenuScreen (UP/DOWN move between
+// rows, LEFT/RIGHT move between columns). Without this flag, UP maps to LEFT
+// and DOWN maps to RIGHT so 2-button devices can still traverse the grid.
+#define DEVICE_HAS_4WAY_NAV

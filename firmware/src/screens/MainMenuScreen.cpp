@@ -13,13 +13,6 @@
 #include "screens/CharacterScreen.h"
 #include "ui/components/Icon.h"
 
-static void drawBackIcon(TFT_eSPI& lcd, int16_t x, int16_t y, bool active) {
-  uint16_t color = active ? TFT_CYAN : TFT_WHITE;
-  lcd.drawLine(x + 14, y + 4, x + 8, y + 10, color);
-  lcd.drawLine(x + 8, y + 10, x + 14, y + 16, color);
-  lcd.drawLine(x + 15, y + 4, x + 9, y + 10, color);
-  lcd.drawLine(x + 9, y + 10, x + 15, y + 16, color);
-}
 
 void MainMenuScreen::onInit() {
   _items[0] = {"Wifi", Icons::drawWifi};
@@ -93,11 +86,11 @@ void MainMenuScreen::onUpdate() {
     uint8_t eff = _effectiveCount();
     if (eff == 0) return;
 
+#ifdef DEVICE_HAS_4WAY_NAV
     if (dir == INavigation::DIR_UP) {
       if (_selectedIndex >= _cols) {
         _selectedIndex -= _cols;
       } else {
-        // Wrap to the bottom column if possible
         uint8_t bottomRow = (_rows - 1);
         uint8_t newIndex = bottomRow * _cols + _selectedIndex;
         if (newIndex >= eff) newIndex -= _cols;
@@ -111,21 +104,24 @@ void MainMenuScreen::onUpdate() {
       uint8_t nextIndex = _selectedIndex + _cols;
       if (nextIndex < eff) {
         _selectedIndex = nextIndex;
-      } else {
-        // Wrap to the top column
+      } else if (_selectedIndex == eff - 1) {
         _selectedIndex = _selectedIndex % _cols;
+      } else {
+        _selectedIndex = eff - 1;
       }
       _scrollIfNeeded();
       onRender();
       if (Uni.Speaker) Uni.Speaker->beep();
     }
-    else if (dir == INavigation::DIR_LEFT) {
+    else
+#endif
+    if (dir == INavigation::DIR_LEFT || dir == INavigation::DIR_UP) {
       _selectedIndex = (_selectedIndex == 0) ? eff - 1 : _selectedIndex - 1;
       _scrollIfNeeded();
       onRender();
       if (Uni.Speaker) Uni.Speaker->beep();
     }
-    else if (dir == INavigation::DIR_RIGHT) {
+    else if (dir == INavigation::DIR_RIGHT || dir == INavigation::DIR_DOWN) {
       _selectedIndex = (_selectedIndex >= eff - 1) ? 0 : _selectedIndex + 1;
       _scrollIfNeeded();
       onRender();
@@ -157,7 +153,7 @@ void MainMenuScreen::onRender() {
   uint16_t itemW = bodyW() / _cols;
   uint16_t itemH = 46;
 
-  static const GridItem _backGridItem = {"Back", drawBackIcon};
+  static const GridItem _backGridItem = {"Back", Icons::drawBack};
 
   for (uint8_t r = 0; r < _visibleRows; r++) {
     uint8_t rowIdx = r + _scrollOffset;
@@ -187,7 +183,7 @@ void MainMenuScreen::onRender() {
       int16_t iconX = itemX + (itemW - 24) / 2;
       int16_t iconY = itemY + 6;
 
-      item->drawIcon(sprite, iconX, iconY, selected);
+      item->drawIcon(sprite, iconX, iconY, fg);
 
       sprite.setTextColor(fg, bg);
       sprite.setTextDatum(TC_DATUM);

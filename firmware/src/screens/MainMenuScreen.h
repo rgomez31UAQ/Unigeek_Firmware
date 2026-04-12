@@ -21,7 +21,7 @@ public:
   void onItemSelected(uint8_t index);
 
 private:
-  typedef void (*DrawIconFunc)(TFT_eSPI& lcd, int16_t x, int16_t y, bool active);
+  typedef void (*DrawIconFunc)(TFT_eSPI& lcd, int16_t x, int16_t y, uint16_t color);
 
   struct GridItem
   {
