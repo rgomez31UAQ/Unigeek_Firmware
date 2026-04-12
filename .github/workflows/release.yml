@@ -25,8 +25,8 @@ jobs:
           - t_lora_pager
           - m5_cardputer
           - m5_cardputer_adv
-          - t_display_16mb
-          - t_display_s3_16mb
+          - t_display
+          - t_display_s3
           - diy_smoochie
           - t_embed_cc1101
 

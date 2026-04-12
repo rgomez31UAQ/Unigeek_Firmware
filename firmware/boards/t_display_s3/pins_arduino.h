@@ -4,10 +4,13 @@
 #define BTN_UP 0
 #define BTN_B  14
 
-#define LCD_BAT_VOLT 4
+#define LCD_BAT_VOLT  4
+#define LCD_POWER_ON  15
 
-#define LCD_BL 38
+#define LCD_BL    38
 #define LCD_BL_CH 7
+
+#define DEVICE_HAS_USB_HID
 
 // Define standard SPI pins to avoid SD.h compilation errors, even if unused
 #define SS 10

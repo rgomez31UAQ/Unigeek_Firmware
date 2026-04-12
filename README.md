@@ -164,7 +164,7 @@ pio run -e m5stickcplus_2
 pio run -e t_lora_pager
 pio run -e m5_cardputer
 pio run -e m5_cardputer_adv
-pio run -e t_display_16mb
+pio run -e t_display
 pio run -e diy_smoochie
 
 # Flash
@@ -173,7 +173,7 @@ pio run -e m5stickcplus_2 -t upload
 pio run -e t_lora_pager -t upload
 pio run -e m5_cardputer -t upload
 pio run -e m5_cardputer_adv -t upload
-pio run -e t_display_16mb -t upload
+pio run -e t_display -t upload
 pio run -e diy_smoochie -t upload
 
 # Serial monitor

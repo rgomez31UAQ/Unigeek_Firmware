@@ -21,11 +21,18 @@ export const BOARDS = [
     bin: "/firmware/unigeek-t_lora_pager.bin",
   },
   {
-    id: "t_display_16mb",
-    name: "T-Display 16MB",
+    id: "t_display",
+    name: "T-Display",
     chip: "ESP32",
     tags: ["WiFi", "BLE", "NFC", "IR"],
-    bin: "/firmware/unigeek-t_display_16mb.bin",
+    bin: "/firmware/unigeek-t_display.bin",
+  },
+  {
+    id: "t_display_s3",
+    name: "T-Display S3",
+    chip: "ESP32-S3",
+    tags: ["WiFi", "BLE", "NFC", "IR", "USB HID"],
+    bin: "/firmware/unigeek-t_display_s3.bin",
   },
   {
     id: "m5_cardputer",

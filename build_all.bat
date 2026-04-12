@@ -3,7 +3,7 @@ REM Build all board environments in parallel and report results
 
 setlocal EnableDelayedExpansion
 
-set ENVS=m5stickcplus_11 m5stickcplus_2 m5_cardputer m5_cardputer_adv t_lora_pager t_display_16mb diy_smoochie
+set ENVS=m5stickcplus_11 m5stickcplus_2 m5_cardputer m5_cardputer_adv t_lora_pager t_display diy_smoochie
 set LOGDIR=%TEMP%\pio_build_%RANDOM%
 mkdir "%LOGDIR%" 2>nul
 

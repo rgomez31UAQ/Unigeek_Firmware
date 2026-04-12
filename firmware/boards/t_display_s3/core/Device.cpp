@@ -20,10 +20,6 @@ Device* Device::createInstance() {
     ledcAttachPin(LCD_BL, LCD_BL_CH);
     ledcWrite(LCD_BL_CH, 255);
 
-    // Required display power sequence
-    pinMode(15, OUTPUT);
-    digitalWrite(15, HIGH);
-
     return new Device(
         displayImpl,
         powerImpl,

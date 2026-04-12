@@ -4,9 +4,8 @@
 class PowerImpl : public IPower {
 public:
     void begin() override {
-        // Setup ADC pins
-        pinMode(15, OUTPUT); // LCD_POWER_ON
-        digitalWrite(15, HIGH);
+        pinMode(LCD_POWER_ON, OUTPUT);
+        digitalWrite(LCD_POWER_ON, HIGH);
         pinMode(LCD_BAT_VOLT, INPUT);
     }
 
