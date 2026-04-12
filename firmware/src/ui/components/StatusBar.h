@@ -68,8 +68,8 @@ public:
     // ─── Heap % (always) ─────────────────────────────
     uint16_t yHeap = _slotY(slot++);
     _drawBox(sprite, yHeap);
-    uint32_t freeHeap = ESP.getFreeHeap();
-    uint32_t totalHeap = ESP.getHeapSize();
+    uint32_t freeHeap  = ESP.getFreeHeap()  + ESP.getFreePsram();
+    uint32_t totalHeap = ESP.getHeapSize() + ESP.getPsramSize();
     uint8_t heapPct = totalHeap > 0 ? (uint8_t)((totalHeap - freeHeap) * 100 / totalHeap) : 0;
     _renderText(sprite, yHeap, std::to_string(heapPct).c_str(),
                 heapPct >= 85 ? TFT_RED : TFT_WHITE);

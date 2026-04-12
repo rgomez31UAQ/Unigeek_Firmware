@@ -31,10 +31,11 @@ public:
   };
 
   static constexpr uint8_t kDomainCount = 11;
-  static constexpr uint8_t kAchCount    = 146;
 
-  // Returns the full catalog array (143 entries)
-  static const AchDef* catalog() {
+  struct Catalog { const AchDef* defs; uint16_t count; };
+
+  // Returns catalog pointer + count derived from sizeof — no manual counting needed
+  static Catalog catalog() {
     static constexpr AchDef kAchs[] = {
       // ── WiFi Network (domain 0) ────────────────────────────────────────────
       { "wifi_first_scan",           "First Contact",          0, 0, "Scan for nearby WiFi networks" },
@@ -54,6 +55,7 @@ public:
       { "wifi_download_first",       "Downloader",             0, 0, "Download a file over WiFi" },
       { "wifi_download_10",          "Data Hoarder",           0, 1, "Download 10 files over WiFi" },
       { "wifi_download_ir",          "Remote Arsenal",         0, 1, "Download IR codes from the internet" },
+      { "wifi_download_badusb",      "Payload Collector",      0, 1, "Download BadUSB scripts from the internet" },
       { "wifi_world_clock",          "Time Lord",              0, 0, "View world clock via WiFi time sync" },
       { "wifi_wigle_visit",          "WiGLE Curious",          0, 0, "Discover the WiGLE upload section from the WiFi menu" },
       // ── WiFi Attacks (domain 1) ────────────────────────────────────────────
@@ -104,8 +106,14 @@ public:
       { "ble_analyzer_scan",         "Bluetooth Scout",        2, 0, "Scan for nearby BLE devices" },
       { "ble_analyzer_detail",       "BLE Inspector",          2, 0, "View details of a BLE device" },
       { "ble_analyzer_20",           "BLE Census",             2, 1, "Detect 20+ BLE devices in one scan" },
-      { "ble_spam_first",            "Blue Noise",             2, 0, "Start BLE spam advertising" },
-      { "ble_spam_1min",             "Blue Storm",             2, 1, "Run BLE spam continuously for 1 min" },
+      { "ble_spam_first",            "Blue Noise",             2, 0, "Start BLE beacon spam" },
+      { "ble_spam_1min",             "Blue Storm",             2, 1, "Run BLE beacon spam for 1 min" },
+      { "ble_android_spam_first",    "Fake Friend",            2, 0, "Start Android BLE device spam" },
+      { "ble_android_spam_1min",     "Fast Pair Flood",        2, 1, "Run Android spam for 1 min" },
+      { "ble_samsung_spam_first",    "Galaxy Brain",           2, 0, "Start Samsung BLE device spam" },
+      { "ble_samsung_spam_1min",     "Watch Chaos",            2, 1, "Run Samsung spam for 1 min" },
+      { "ble_ios_spam_first",        "Apple Picker",           2, 0, "Start iOS BLE device spam" },
+      { "ble_ios_spam_1min",         "Continuity Crash",       2, 1, "Run iOS spam for 1 min" },
       { "ble_detector_first",        "Spam Radar",             2, 0, "Open the BLE spam detector" },
       { "ble_spam_detected",         "Caught Red-Handed",      2, 1, "Detect active BLE spam nearby" },
       { "whisper_scan_first",        "Whisper Scout",          2, 0, "Scan for WhisperPair devices" },
@@ -188,13 +196,23 @@ public:
       { "memory_new_highscore",      "New Record",             9, 1, "Set a new personal best in Memory" },
       { "memory_extreme_win",        "Eidetic",                9, 3, "Win Memory on extreme difficulty" },
       { "memory_extreme_win_5",     "Memory God",             9, 3, "Win extreme mode 5 times and set a new high score" },
+      { "numguess_first_play",      "First Guess",            9, 0, "Play the Number Guess game for the first time" },
+      { "numguess_win_easy",        "Easy Guesser",           9, 0, "Win Number Guess on Easy difficulty" },
+      { "numguess_win_medium",      "Mid Guesser",            9, 1, "Win Number Guess on Medium difficulty" },
+      { "numguess_win_hard",        "Hard Guesser",           9, 2, "Win Number Guess on Hard difficulty" },
+      { "numguess_win_extreme",     "Extreme Guesser",        9, 3, "Win Number Guess on Extreme difficulty" },
+      { "numguess_lucky_easy",      "Lucky Shot",             9, 1, "Win Easy in 5 guesses or fewer" },
+      { "numguess_lucky_hard",      "Calculated",             9, 2, "Win Hard in 10 guesses or fewer" },
+      { "numguess_survive_extreme", "Survivor",               9, 3, "Win Extreme within the 10-guess limit" },
+      { "numguess_seer",           "Seer",                   9, 3, "Win Number Guess on the first guess in any difficulty" },
+      { "numguess_luck_god",       "Luck God",               9, 3, "Win Number Guess on the first guess in Extreme" },
       // ── Settings (domain 10) ──────────────────────────────────────────────
       { "settings_name_changed",     "Identity",              10, 0, "Change your device name in Settings" },
       { "settings_color_changed",    "My Colors",             10, 0, "Change the UI theme color in Settings" },
       { "settings_pin_configured",   "Lock Down",             10, 0, "Set up a PIN lock for the device" },
       { "device_status_viewed",      "Self Check",            10, 0, "View device status and hardware info" },
     };
-    return kAchs;
+    return { kAchs, (uint16_t)(sizeof(kAchs) / sizeof(kAchs[0])) };
   }
 
   // Returns EXP for a tier: bronze=100, silver=300, gold=600, platinum=1000
@@ -230,12 +248,12 @@ public:
   // ach_total_unlocked doubles as the calibration guard — if it exists in
   // storage the scan is skipped. Call after AchStore.load() in setup().
   void recalibrate(IStorage* storage) {
-    const AchDef* cat       = catalog();
+    Catalog       cat       = catalog();
     int           totalExp  = 0;
     int           totalUnlk = 0;
-    for (uint8_t i = 0; i < kAchCount; i++) {
-      if (AchStore.get(String("ach_done_") + cat[i].id) == "1") {
-        totalExp  += (int)tierExp(cat[i].tier);
+    for (uint16_t i = 0; i < cat.count; i++) {
+      if (AchStore.get(String("ach_done_") + cat.defs[i].id) == "1") {
+        totalExp  += (int)tierExp(cat.defs[i].tier);
         totalUnlk++;
       }
     }
@@ -266,10 +284,10 @@ public:
   // Unlock achievement by id — looks up title and EXP from catalog automatically.
   // No-op if already unlocked or id not found.
   void unlock(const char* id) {
-    const AchDef* cat = catalog();
-    for (uint8_t i = 0; i < kAchCount; i++) {
-      if (strcmp(cat[i].id, id) == 0) {
-        _unlock(id, cat[i].title, tierExp(cat[i].tier));
+    Catalog cat = catalog();
+    for (uint16_t i = 0; i < cat.count; i++) {
+      if (strcmp(cat.defs[i].id, id) == 0) {
+        _unlock(id, cat.defs[i].title, tierExp(cat.defs[i].tier));
         return;
       }
     }

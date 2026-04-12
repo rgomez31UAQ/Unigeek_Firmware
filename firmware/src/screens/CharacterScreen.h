@@ -15,7 +15,15 @@ public:
   void onUpdate() override;
   void onRender() override;
 
-private:
+  ~CharacterScreen() override;
+
+  enum : uint8_t {
+    DIRTY_TOP    = 1 << 0,
+    DIRTY_HEAD   = 1 << 1,
+    DIRTY_BUBBLE = 1 << 2,
+    DIRTY_BARS   = 1 << 3,
+  };
+
   unsigned long _lastRefreshMs = 0;
 
   // idle animation
@@ -28,6 +36,9 @@ private:
   uint8_t       _wordState   = 0;       // 0=typing  1=pausing
   unsigned long _lastCharMs  = 0;
   char          _history[2][20]  = {};  // [0]=oldest  [1]=most-recent completed word
+
+  bool          _firstRender = true;
+  uint8_t       _dirtyMask   = 0xFF;
 
   void _enterMainMenu();
 };

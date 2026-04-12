@@ -14,15 +14,21 @@ public:
   void onRender() override;
 
 private:
-  enum State { STATE_MENU, STATE_PLAY, STATE_RESULT } _state = STATE_MENU;
+  enum State { STATE_MENU, STATE_PLAY, STATE_RESULT, STATE_HIGH_SCORES } _state = STATE_MENU;
 
   static constexpr uint8_t kInputLen   = 4;
   static constexpr uint8_t kMaxHistory = 14;  // max attempts across all difficulties (Easy=14)
   static constexpr uint8_t kCharDBLen  = 16;
+  static constexpr uint8_t kMaxScores  = 5;
+  static constexpr uint8_t kMenuItems  = 4;
+  static constexpr uint8_t kDiffCount  = 4;
+
+  struct Score { int turns; uint32_t ms; };
 
   // Main menu
   int8_t  _menuIdx    = 0;
   uint8_t _difficulty = 0;
+  uint8_t _hsViewDiff = 0;
 
   // Game state
   char     _target[kInputLen]                = {};
@@ -39,6 +45,11 @@ private:
   uint32_t _lastRenderMs = 0;
   bool     _win          = false;
 
+  // Scores
+  Score   _scores[kMaxScores] = {};
+  uint8_t _scoreCount = 0;
+  int8_t  _newRank    = -1;
+
   // Helpers
   const char* _diffStr()              const;
   int         _timerSecs()            const;
@@ -52,7 +63,12 @@ private:
   void _confirmChar();        // non-keyboard: lock cycleIdx char into _current
   void _handleKeyInput(char c);
 
+  void _loadScores(uint8_t diff);
+  void _saveScores(uint8_t diff);
+  void _insertScore(int turns, uint32_t ms);
+
   void _renderMenu();
   void _renderPlay();
   void _renderResult();
+  void _renderHighScores();
 };

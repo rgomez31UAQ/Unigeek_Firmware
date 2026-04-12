@@ -30,7 +30,8 @@ jobs:
           - m5_cardputer_adv
           - t_display_16mb
           - t_display_s3_16mb
-          # diy_smoochie excluded — not fully working
+          - diy_smoochie
+          - t_embed_cc1101
 
     steps:
       - name: Checkout

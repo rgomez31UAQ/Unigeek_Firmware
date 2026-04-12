@@ -20,7 +20,7 @@ export const CATALOG = [
   { slug: "network-mitm",         title: "Network MITM",        category: "wifi",     summary: "Man-in-the-middle with DHCP starvation, deauth burst, rogue DHCP, DNS spoofing, and web file manager", hasDetail: true },
   { slug: "cctv-toolkit",         title: "CCTV Sniffer",        category: "wifi",     summary: "Discover network cameras, identify brands, test credentials, and stream live video",                   hasDetail: true },
   { slug: "web-file-manager",     title: "Web File Manager",    category: "wifi",     summary: "Manage device files from a browser over WiFi",                                                         hasDetail: true },
-  { slug: "download",             title: "Download",            category: "wifi",     summary: "Download over-the-air to device storage: Web File Manager interface, Firmware Sample Files, and Infrared Files from Flipper-IRDB by category", hasDetail: false },
+  { slug: "download",             title: "Download",            category: "wifi",     summary: "Download over-the-air to device storage: Web File Manager interface, Firmware Sample Files, Infrared Files from Flipper-IRDB, and BadUSB Scripts by OS and category", hasDetail: false },
   { slug: "ip-scanner",           title: "IP Scanner",          category: "wifi",     summary: "Scan the local network for active devices via ARP",                                                    hasDetail: false },
   { slug: "port-scanner",         title: "Port Scanner",        category: "wifi",     summary: "Scan open TCP ports on a target IP address",                                                           hasDetail: false },
   { slug: "wigle",                title: "Wigle",               category: "wifi",     summary: "Upload wardrive logs, view user stats, and manage Wigle API token",                                    hasDetail: false },
@@ -31,7 +31,8 @@ export const CATALOG = [
   // BLE
   { slug: "ble-detector",         title: "BLE Detector",        category: "ble",      summary: "Passive BLE scanner that detects Flipper Zero, AirTags, skimmers, BitChat users, and BLE spam",      hasDetail: true },
   { slug: "whisperpair",          title: "WhisperPair",         category: "ble",      summary: "Tests Google Fast Pair devices for CVE-2025-36911 — forged KBP handshake via ECDH key exchange",     hasDetail: true },
-  { slug: "ble-spam",             title: "BLE Spam",            category: "ble",      summary: "Spam BLE advertisement packets to nearby devices",                                                     hasDetail: false },
+  { slug: "ble-beacon-spam",      title: "BLE Beacon Spam",     category: "ble",      summary: "Broadcast iBeacon packets with randomized UUID, major/minor, and spoofed MAC on every cycle",        hasDetail: false },
+  { slug: "ble-device-spam",      title: "BLE Device Spam",     category: "ble",      summary: "Targeted BLE spam that triggers pairing popups on Android (Fast Pair), iOS (Apple Continuity), and Samsung (Galaxy Watch)", hasDetail: false },
   { slug: "ble-analyzer",         title: "BLE Analyzer",        category: "ble",      summary: "Scan nearby BLE devices, display name, address, and signal strength",                                 hasDetail: false },
 
   // Keyboard (HID)
@@ -52,13 +53,14 @@ export const CATALOG = [
   { slug: "barcode",              title: "Barcode",             category: "utility",  summary: "Generate and display a Code 128 barcode from typed or file-loaded text",                             hasDetail: false },
   { slug: "file-manager",         title: "File Manager",        category: "utility",  summary: "Browse, rename, copy, cut, paste, and delete files on device storage",                               hasDetail: false },
   { slug: "i2c-detector",         title: "I2C Detector",        category: "utility",  summary: "Scan the I2C bus and list all responding device addresses",                                           hasDetail: false },
-  { slug: "achievements",         title: "Achievements",        category: "utility",  summary: "View all achievements grouped by domain; long-press an unlocked achievement to set it as your Agent Title", hasDetail: false },
+  { slug: "achievements",         title: "Achievements",        category: "utility",  summary: "View all achievements grouped by domain; long-press an unlocked achievement to set it as your Agent Title", hasDetail: true },
 
   // Games
   { slug: "game-flappy",          title: "Flappy Bird",         category: "game",     summary: "Classic side-scrolling game with randomized pipes and scoring",                                       hasDetail: false },
-  { slug: "game-wordle",          title: "Wordle",              category: "game",     summary: "Guess a 5-letter word in up to 10 attempts — available in English and Indonesian",                   hasDetail: false },
-  { slug: "game-hex-decoder",     title: "HEX Decoder",         category: "game",     summary: "Wordle-style game using hex characters — guess a 4-character hex code with color-coded feedback",   hasDetail: false },
+  { slug: "game-wordle",          title: "Wordle",              category: "game",     summary: "Guess a 5-letter word in up to 10 attempts — available in English and Indonesian; top 5 high scores per difficulty", hasDetail: false },
+  { slug: "game-hex-decoder",     title: "HEX Decoder",         category: "game",     summary: "Wordle-style game using hex characters — guess a 4-character hex code with color-coded feedback; top 5 high scores per difficulty", hasDetail: false },
   { slug: "game-memory",          title: "Memory Sequence",     category: "game",     summary: "Simon Says-style memory game — repeat a growing sequence across 4 difficulty levels with high score tracking", hasDetail: false },
+  { slug: "game-number-guess",    title: "Number Guess",        category: "game",     summary: "Higher/lower number guessing game — 4 difficulties (1-99 to 1-9999); top 5 high scores per difficulty",   hasDetail: false },
 
   // Profile
   { slug: "character-screen",     title: "Character Screen",    category: "profile",  summary: "Full-screen profile showing rank, EXP, HP, BRAIN, achievement progress, domain bars, and your Agent Title", hasDetail: false },

@@ -32,6 +32,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
     - **Web File Manager** — HTML/CSS/JS interface for browser-based file management (auto-checks for updates)
     - **Firmware Sample Files** — Portal templates (Google, Facebook, WiFi login), DuckyScript payloads (hello world, reverse shell, WiFi password grab, rickroll, disable defender), QR code samples, DNS spoofing config, and rockyou_mini password wordlist
     - **Infrared Files** — Browse and download IR remote files by category (TVs, ACs, Fans, Projectors, etc.) from [Flipper-IRDB](https://github.com/lshaf/Flipper-IRDB), saved to `/unigeek/ir/downloads/`
+    - **BadUSB Scripts** — Browse and download DuckyScript payloads from the badusb-collection by OS and category, saved to `/unigeek/keyboard/duckyscript/`
   - **MITM Attack** — Man-in-the-middle with DHCP starvation, deauth burst, rogue DHCP, DNS spoofing, and web file manager ([details](knowledge/network-mitm.md))
   - **CCTV Sniffer** — Discover network cameras, identify brands, test credentials, and stream live video ([details](knowledge/cctv-toolkit.md))
   - **Wigle** — Upload wardrive logs, view user stats, and manage Wigle API token ([details](knowledge/gps-wardriving.md))
@@ -52,7 +53,11 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 
 ### Bluetooth
 - **BLE Analyzer** — Scan nearby BLE devices, display name, address, and signal strength
-- **BLE Spam** — Spam BLE advertisement packets
+- **BLE Beacon Spam** — Broadcast iBeacon advertisement packets with randomized proximity UUID, major/minor values, and spoofed MAC address on every cycle
+- **BLE Device Spam** — Targeted BLE advertisement spam that triggers pairing/notification popups on nearby devices
+  - **Android** — Google Fast Pair spam using random model IDs from the public Fast Pair device registry; triggers "New device found" popups on Android
+  - **iOS** — Apple Continuity spam cycling through SourApple (proximity action `0x0F`) and AppleJuice (AirPods proximity `0x07` / setup `0x04`) payloads; triggers popup notifications on iPhones and iPads
+  - **Samsung** — Samsung Galaxy Watch pairing popup spam using Samsung manufacturer data with random watch model IDs
 - **BLE Detector** — Passive BLE scanner that detects Flipper Zero devices, credit card skimmers, Apple AirTags/FindMy trackers, BitChat app users, and BLE spam attacks ([details](knowledge/ble-detector.md))
 - **WhisperPair** — Tests Google Fast Pair devices for CVE-2025-36911; performs an ECDH key exchange and forged KBP handshake to detect unauthorized pairing vulnerability ([details](knowledge/whisperpair.md))
 
@@ -74,6 +79,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - Guess a 4-character hex code in the fewest attempts
   - Color-coded feedback: green = correct position, orange = wrong position, red = not in code
   - 4 difficulty levels: Easy (14 attempts, 3 min), Medium (7 attempts, 90 sec), Hard (unlimited, 3 min), Extreme (unlimited, 90 sec)
+  - Tracks top 5 high scores per difficulty (ranked by turns then time)
   - Keyboard devices type directly; non-keyboard devices cycle characters with UP/DOWN and use the `<` erase option
 - **Flappy Bird** — Classic side-scrolling game with randomized pipes and scoring
 - **Wordle** — Classic word-guessing game in English and Indonesian
@@ -82,10 +88,15 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - 3 difficulty levels: Easy (10 attempts, colors + alphabet hint), Medium (7 attempts, colors), Hard (7 attempts, no colors)
   - Choose between Common (curated) or Full word database
   - Available in English (EN) and Indonesian (ID)
+  - Tracks top 5 high scores per difficulty (ranked by turns then time)
 - **Memory Sequence** — Simon Says-style memory game; repeat an ever-growing sequence of directions
   - 4 difficulty levels: Easy, Medium, Hard, Extreme
   - Tracks high scores per difficulty; earn bonus achievements for extreme wins and new high scores
   - Set a new high score after 5 extreme wins to unlock the Extreme Master achievement
+- **Number Guess** — Classic higher/lower number guessing game
+  - 4 difficulty levels: Easy (1–99, unlimited), Medium (1–999, unlimited), Hard (1–9999, unlimited), Extreme (1–9999, 10 attempts)
+  - Tracks top 5 high scores per difficulty (ranked by fewest guesses then time)
+  - Bonus achievements for lucky guesses, surviving Extreme, and guessing in one try
 
 ### Modules
 - **NFC (MFRC522)** — MIFARE Classic card reader and key recovery tool ([details](knowledge/nfc-mifare.md))
@@ -258,6 +269,7 @@ This project was built with inspiration and reference from:
   - All boards configuration and pin definitions
   - IR Remote (receive, send, TV-B-Gone with WORLD_IR_CODES database)
   - Sub-GHz CC1101 frequency list, RSSI threshold, and CC1101 wiring for M5StickC (shared SPI/UART bus on GPIO 32/33)
+  - BLE Device Spam payloads: Android Fast Pair model IDs, Samsung Galaxy Watch pairing data, iOS Apple Continuity (SourApple/AppleJuice) packets
 - [Flipper-IRDB](https://github.com/Flipper-XFW/Flipper-IRDB) by Flipper-XFW
   - Infrared remote database (46 categories, 2000+ IR remote files)
 - [FrostedFastPair](https://github.com/pivotchip/FrostedFastPair) by PivotChip
@@ -271,7 +283,7 @@ This project was built with inspiration and reference from:
 
 - LoRa
 - nr24lf
-- add configurable vspi and unconfigurable hspi (which is used by default). on module pin configuration will be added "Spi Mode (hspi/vspi)". hspi pin can't be changed while vspi can be fully configured. V_SPI_SCK, V_SPI_MOSI, V_SPI_MISO, V_SPI_CS0, V_SPI_CS1, V_SPI_CS2 will be added to pin setting and used when Spi Mode is set to vspi. hspi will be used by default and is the only option for M5StickC due to pin limitations.
+- implement thermal camera
 - change keyboard to HID instead, mode will be USB and BLE, while BLE and USB only have Keyboard, Mouse and Jiggle Mouse, USB has 1 more option is Mass Storage.
 
-<!-- README last synced at commit: ea61587 -->
+<!-- README last synced at commit: aacd34a (device spam, number guess game, high scores, badusb download) -->

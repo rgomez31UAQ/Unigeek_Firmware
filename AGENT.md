@@ -3,8 +3,9 @@
 
 ## What This Project Is
 
-Multi-device ESP32 firmware. Seven target boards share one codebase:
-M5StickC Plus 1.1, M5StickC Plus 2, T-Lora Pager, T-Display 16MB, DIY Smoochie, M5 Cardputer, M5 Cardputer ADV.
+Multi-device ESP32 firmware. Nine target boards share one codebase:
+M5StickC Plus 1.1, M5StickC Plus 2, T-Lora Pager, T-Display 16MB, DIY Smoochie,
+M5 Cardputer, M5 Cardputer ADV, T-Embed CC1101, WiFi Marauder v7.
 All hardware differences are isolated. Do not break this isolation.
 
 ---
@@ -13,6 +14,7 @@ All hardware differences are isolated. Do not break this isolation.
 
     ../M5Unified    M5Stack hardware reference (not in build)
     ../LilyGoLib    LilyGO T-Lora Pager hardware reference (not in build)
+    ../bruce        Bruce firmware — Smoochiee, T-Embed CC1101, Marauder v7 board reference (not in build)
 
 When implementing board-specific hardware features, check these FIRST.
 
@@ -49,70 +51,9 @@ section with the repo link, author, and specific features taken as sub-bullets.
 8. **Think about achievements**: for every meaningful user action in the screen,
    add appropriate achievements to the catalog in `AchievementManager.h::catalog()`
    and hook `Achievement.inc()` / `Achievement.setMax()` / `Achievement.unlock()` calls
-   at the appropriate points in the screen implementation (see Achievement System below)
+   at the appropriate points in the screen implementation
 
----
-
-## Achievement System
-
-`AchievementManager` (singleton, header-only) manages the achievement catalog and state.
-
-    #define Achievement AchievementManager::getInstance()
-
-    // Increment a counter — auto-unlocks when threshold achievements are met
-    Achievement.inc("wifi_first_scan");        // increments ach_cnt_wifi_first_scan by 1
-    Achievement.setMax("flappy_score_25", 25); // sets ach_max_flappy_score_25 to max(current, 25)
-
-    // Check unlock state
-    bool done = Achievement.isUnlocked("wifi_first_scan");
-
-    // Read a counter value
-    int  val  = Achievement.getInt("wifi_first_scan");
-
-    // Total accumulated EXP
-    int  exp  = Achievement.getExp();
-
-### Catalog location
-
-The full achievement catalog lives in `AchievementManager.h` inside the static method:
-
-    static const AchDef* catalog() {
-      static constexpr AchDef kAchs[] = { /* 122 entries ordered by domain */ };
-      return kAchs;
-    }
-
-When adding new achievements, append entries to `kAchs[]` and increment `kAchCount`.
-
-### Unlock mechanism
-
-`Achievement.inc(id)` and `Achievement.setMax(id, value)` look up the id in the catalog.
-If `getInt(id) >= 1` (for inc) or the value satisfies a threshold, they call `unlock()` automatically.
-`unlock()` saves to Config, adds EXP, and queues a toast.
-
-### Toast
-
-`drawToastIfNeeded()` is called from `BaseScreen::update()` every frame — no screen needs to call it.
-Toast shows for 3 seconds at the bottom: "Achievement!" header (yellow) + title + "+N EXP" (green).
-
-### Domains and tiers
-
-    domain 0  WiFi Network    domain 1  WiFi Attacks   domain 2  Bluetooth
-    domain 3  Keyboard        domain 4  NFC            domain 5  IR
-    domain 6  Sub-GHz         domain 7  GPS            domain 8  Utility
-    domain 9  Games           domain 10 Settings
-
-    tier 0 bronze  +100 EXP    tier 1 silver +300 EXP
-    tier 2 gold    +600 EXP    tier 3 platinum +1000 EXP
-
-### Rule: every new screen with meaningful actions must have achievements
-
-When creating a screen that involves:
-- A first-use action (scan, connect, send, generate) → bronze achievement
-- A repeated-use milestone (5x, 10x, 20x) → silver/gold achievement
-- A high-skill or rare outcome (cracked, full dump, exploit) → gold/platinum
-
-Add the entries to `catalog()` in the correct domain, then call `Achievement.inc()` or
-`Achievement.setMax()` from the screen at the relevant moment.
+See `docs/SCREEN_PATTERNS.md` for full rendering rules, overlays, LogView, config, storage, and achievement details.
 
 ---
 
@@ -135,6 +76,11 @@ Add the entries to `catalog()` in the correct domain, then call `Achievement.inc
 9. If board has SD: create SPIClass with correct bus, pass to SD.begin(csPin, spi)
 10. Always init StorageLFS — all boards have a LittleFS partition
 11. Define Device::boardHook() in Device.cpp — empty stub if no per-frame board logic
+
+See `docs/HARDWARE.md` for ISpeaker, IKeyboard, I2S pin defines, and board-specific hardware constraints.
+
+**Build gate:** Do NOT add a new board to build_all.sh / platformio.ini default_envs /
+release workflow / website unless the user explicitly asks. See `docs/WEBSITE.md`.
 
 ---
 
@@ -159,46 +105,6 @@ Add the entries to `catalog()` in the correct domain, then call `Achievement.inc
 Use Uni.StorageSD or Uni.StorageLFS only when the feature explicitly requires one.
 Always null-check — Uni.StorageSD is nullptr on M5StickC.
 sdcard/ directory contains sample SD card data (portals, duckyscript, passwords, qrcodes) — copy to SD root.
-
----
-
-## BLE Scan Pattern (NimBLE 1.4.x)
-
-    // Non-blocking scan — NEVER use start(duration, false) which blocks the main loop
-    static void scanDoneCB(NimBLEScanResults) {}
-    _bleScan = NimBLEDevice::getScan();
-    _bleScan->setAdvertisedDeviceCallbacks(new ScanCallbacks(), true);
-    _bleScan->start(1, scanDoneCB);   // 1s non-blocking scan with callback
-
-    // Re-trigger in onUpdate():
-    if (_scanning && _bleScan && !_bleScan->isScanning()) {
-      _bleScan->clearResults();
-      _bleScan->start(1, scanDoneCB);
-    }
-
-    // Use NimBLEAdvertisedDeviceCallbacks (NOT NimBLEScanCallbacks — doesn't exist in 1.4.x)
-    // Use setAdvertisedDeviceCallbacks() (NOT setScanCallbacks())
-
----
-
-## LogView Component
-
-    LogView log;
-    log.addLine("message");                                          // scrolls when full (30 lines)
-    log.draw(bodyX(), bodyY(), bodyW(), bodyH());                    // simple log
-    log.draw(bodyX(), bodyY(), bodyW(), bodyH(), statusCb, data);    // with status bar callback
-    log.clear();
-
-Use LogView for scanning/progress screens. Do not roll raw _logLines[] arrays.
-
----
-
-## IScreen Power Inhibit
-
-    bool inhibitPowerSave() override { return _active; }   // keep display on
-    bool inhibitPowerOff()  override { return _active; }   // block auto power-off
-
-Override in screen .h. Use for scans, streams, attacks that should not be interrupted.
 
 ---
 
@@ -229,114 +135,6 @@ Override in screen .h. Use for scans, streams, attacks that should not be interr
 - Do NOT skip sprite push in ListScreen onRender() when empty — always push to clear overlays
 - Do NOT roll custom log line arrays — use LogView from ui/views/LogView.h
 - Do NOT forget inhibitPowerSave()/inhibitPowerOff() on screens with active long-running operations
-
----
-
-## Action Overlay Pattern
-
-    String      result = InputTextAction::popup("Title");
-    String      result = InputTextAction::popup("Title", "default", true);  // numberMode
-    int         result = InputNumberAction::popup("Title", min, max, default);
-    const char* result = InputSelectAction::popup("Title", opts, count, default);
-    void               ShowStatusAction::show("Message", durationMs);
-    void               ShowQRCodeAction::show("Label", "content");
-    void               ProgressView::show("Message", percent);  // non-blocking, from ui/views/ProgressView.h
-
-    // Always call render() after a popup returns to restore the screen
-
-    static constexpr InputSelectAction::Option opts[] = {
-      {"Label", "value"},
-    };
-
----
-
-## Navigation Direction Values
-
-    DIR_UP / DIR_DOWN / DIR_PRESS / DIR_BACK / DIR_LEFT / DIR_RIGHT / DIR_NONE
-
-    isPressed()      true while physically held (non-consuming)
-    heldDuration()   ms since current press started (0 if not held)
-    pressDuration()  ms of last completed press (set on release)
-
-    ListScreen handles all six automatically:
-      UP/DOWN     move by 1, wraps around
-      LEFT/RIGHT  page jump by visible count, clamps at ends
-      PRESS       select item
-      BACK        call onBack()
-
-## Non-Keyboard Back Navigation in Custom States
-
-    // CORRECT — works on all boards
-    if (Uni.Nav->wasPressed()) {
-      auto dir = Uni.Nav->readDirection();
-      if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) { /* exit */ }
-    }
-
-    // Render exit affordance:
-    #ifdef DEVICE_HAS_KEYBOARD
-      sp.drawString("BACK: Exit", bodyW() / 2, bodyH() - 2, 1);
-    #else
-      sp.fillRect(0, bodyH() - 16, bodyW(), 16, Config.getThemeColor());
-      sp.setTextColor(TFT_WHITE, Config.getThemeColor());
-      sp.drawString("< Back", bodyW() / 2, bodyH() - 8, 1);
-    #endif
-
----
-
-## Device Constructor Signature
-
-    Device(IDisplay& lcd, IPower& power, INavigation* nav,
-           IKeyboard* keyboard  = nullptr,
-           IStorage*  storageSD = nullptr,
-           IStorage*  storageLFS = nullptr,
-           SPIClass*  spi = nullptr,
-           ISpeaker*  sound = nullptr)
-
-Storage primary is decided inside constructor: SD if available, else LittleFS.
-
----
-
-## Sublabel Pattern
-
-    // Pointers must point into class member Strings — NOT temporaries
-    _nameSub = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
-    _items[0].sublabel = _nameSub.c_str();
-
----
-
-## Config System
-
-    Config.load(Uni.Storage)    — call in setup() after _checkStorageFallback()
-    Config.save(Uni.Storage)    — call after every Config.set() to persist
-    Config.get(KEY, DEFAULT)    — use #define constants from ConfigManager.h
-    Config.set(KEY, value)      — in-memory only until save()
-
----
-
-## Build src_filter for Board .cpp Files
-
-If adding .cpp files in a board folder, ensure boards.ini includes:
-
-    build_src_filter = +<../boards/t-lora-pager/>
-
----
-
-## Website Content Sync
-
-The website reads content directly from the repo — no copy step needed:
-- `knowledge/*.md`       → feature detail pages (slug must match catalog entry)
-- `release-notes/*.md`   → release notes page (auto-detected at build)
-- `README.md`            → source of truth for feature catalog
-
-Rules:
-- Adding a knowledge file   → add entry to `website/content/features/catalog.js` with `hasDetail: true`
-- Removing a knowledge file → set `hasDetail: false` in catalog (do NOT delete the catalog entry)
-- Renaming a knowledge file → update `slug` in catalog to match new filename
-- Adding a feature to README → add entry to catalog even if no knowledge file yet (`hasDetail: false`)
-- Removing a feature from README → remove entry from catalog entirely
-- Adding a release-notes file → no action needed
-
-Always check catalog.js after any README.md or knowledge/ change.
 
 ---
 

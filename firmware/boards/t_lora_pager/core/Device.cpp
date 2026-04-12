@@ -11,6 +11,7 @@
 #include "Keyboard.h"
 #include "Speaker.h"
 #include <Wire.h>
+#include <esp_heap_caps.h>
 
 static DisplayImpl    display;
 static KeyboardImpl   keyboard;
@@ -25,6 +26,9 @@ void Device::applyNavMode() {}
 void Device::boardHook() {}
 
 Device* Device::createInstance() {
+  // Route all malloc to PSRAM first (falls back to internal if unavailable).
+  // DMA/WiFi allocations still land in internal RAM via explicit MALLOC_CAP_INTERNAL.
+  if (psramFound()) heap_caps_malloc_extmem_enable(0);
   pinMode(LCD_BL, OUTPUT);
   digitalWrite(LCD_BL, HIGH);
   const uint8_t share_spi_bus_devices_cs_pins[] = { NFC_CS, LORA_CS, SD_CS, LORA_RST };

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build all board environments in parallel and report results
 
-ENVS="m5stickcplus_11 m5stickcplus_2 m5_cardputer m5_cardputer_adv t_lora_pager t_display_16mb diy_smoochie"
+ENVS="m5stickcplus_11 m5stickcplus_2 m5_cardputer m5_cardputer_adv t_lora_pager t_display_16mb diy_smoochie t_embed_cc1101"
 JOBS=${1:-4}  # parallel jobs, override with: ./build_all.sh 7
 LOGDIR=$(mktemp -d)
 

@@ -41,4 +41,18 @@ export const BOARDS = [
     tags: ["WiFi", "BLE", "NFC", "IR", "Sub-GHz", "Keyboard", "USB HID"],
     bin: "/firmware/unigeek-m5_cardputer_adv.bin",
   },
+  {
+    id: "diy_smoochie",
+    name: "DIY Smoochie",
+    chip: "ESP32-S3",
+    tags: ["WiFi", "BLE", "IR", "Sub-GHz", "USB HID"],
+    bin: "/firmware/unigeek-diy_smoochie.bin",
+  },
+  {
+    id: "t_embed_cc1101",
+    name: "T-Embed CC1101",
+    chip: "ESP32-S3",
+    tags: ["WiFi", "BLE", "Sub-GHz", "Speaker", "USB HID"],
+    bin: "/firmware/unigeek-t_embed_cc1101.bin",
+  },
 ];

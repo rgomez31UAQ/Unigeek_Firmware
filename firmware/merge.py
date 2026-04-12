@@ -7,7 +7,7 @@ import traceback
 pioenv    = env.subst("${PIOENV}")
 BUILD_DIR = env.subst("$BUILD_DIR")
 PROJECT_DIR = env.get("PROJECT_DIR")
-OUTPUT_PATH = os.path.join(PROJECT_DIR, "unigeek-latest.bin")
+OUTPUT_PATH = os.path.join(PROJECT_DIR, f"unigeek-{pioenv}.bin")
 
 # Determine boot offset based on the MCU.
 # ESP32 uses 0x1000, while others (like ESP32-S2/S3) use 0.

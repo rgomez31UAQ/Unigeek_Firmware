@@ -5,7 +5,7 @@
 
 class BLESpamScreen : public BaseScreen {
 public:
-  const char* title()    override { return "BLE Spam"; }
+  const char* title()    override { return "BLE Beacon Spam"; }
   bool inhibitPowerOff() override { return true; }
 
   ~BLESpamScreen() override;

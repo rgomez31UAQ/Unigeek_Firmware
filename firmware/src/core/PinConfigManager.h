@@ -9,9 +9,19 @@
 
 // ─── Pin config keys & defaults ──────────────────────────────────────────────
 #define PIN_CONFIG_EXT_SDA          "ext_sda"
-#define PIN_CONFIG_EXT_SDA_DEFAULT  "2"
 #define PIN_CONFIG_EXT_SCL          "ext_scl"
-#define PIN_CONFIG_EXT_SCL_DEFAULT  "1"
+
+#ifdef GROVE_SDA
+  #define PIN_CONFIG_EXT_SDA_DEFAULT  String(GROVE_SDA)
+#else
+  #define PIN_CONFIG_EXT_SDA_DEFAULT  "-1"
+#endif
+
+#ifdef GROVE_SCL
+  #define PIN_CONFIG_EXT_SCL_DEFAULT  String(GROVE_SCL)
+#else
+  #define PIN_CONFIG_EXT_SCL_DEFAULT  "-1"
+#endif
 
 #ifdef GPS_TX
   #define PIN_CONFIG_GPS_TX_DEFAULT   String(GPS_TX)

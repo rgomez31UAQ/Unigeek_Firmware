@@ -29,7 +29,9 @@ public:
   {
     Lcd.begin();
     Lcd.setRotation(TFT_DEFAULT_ORIENTATION);
+#ifndef DISPLAY_NO_INVERT
     Lcd.invertDisplay(true);
+#endif
 
     Power.begin();
     Nav->begin();
