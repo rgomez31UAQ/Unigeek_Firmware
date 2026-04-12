@@ -3,22 +3,22 @@
 #include "ui/templates/BaseScreen.h"
 #include <NimBLEDevice.h>
 
-class BLESpamScreen : public BaseScreen {
+class BLESamsungSpamScreen : public BaseScreen {
 public:
-  const char* title()    override { return "BLE Beacon Spam"; }
+  const char* title()    override { return "Samsung Spam"; }
   bool inhibitPowerOff() override { return true; }
 
-  ~BLESpamScreen() override;
+  ~BLESamsungSpamScreen() override;
   void onInit()   override;
   void onUpdate() override;
   void onRender() override;
 
 private:
   static constexpr const char* _spinner = "-\\|/";
-  uint8_t  _spinIdx      = 0;
-  uint32_t _lastSpamMs   = 0;
-  uint32_t _lastDrawMs   = 0;
-  uint32_t _spamStartMs  = 0;
+  uint8_t  _spinIdx     = 0;
+  uint32_t _lastSpamMs  = 0;
+  uint32_t _lastDrawMs  = 0;
+  uint32_t _spamStartMs = 0;
   bool     _spam1minFired = false;
 
   NimBLEAdvertising* _pAdv = nullptr;
