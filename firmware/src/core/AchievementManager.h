@@ -31,10 +31,11 @@ public:
   };
 
   static constexpr uint8_t kDomainCount = 11;
-  static constexpr uint8_t kAchCount    = 146;
 
-  // Returns the full catalog array (143 entries)
-  static const AchDef* catalog() {
+  struct Catalog { const AchDef* defs; uint16_t count; };
+
+  // Returns catalog pointer + count derived from sizeof — no manual counting needed
+  static Catalog catalog() {
     static constexpr AchDef kAchs[] = {
       // ── WiFi Network (domain 0) ────────────────────────────────────────────
       { "wifi_first_scan",           "First Contact",          0, 0, "Scan for nearby WiFi networks" },
@@ -54,6 +55,7 @@ public:
       { "wifi_download_first",       "Downloader",             0, 0, "Download a file over WiFi" },
       { "wifi_download_10",          "Data Hoarder",           0, 1, "Download 10 files over WiFi" },
       { "wifi_download_ir",          "Remote Arsenal",         0, 1, "Download IR codes from the internet" },
+      { "wifi_download_badusb",      "Payload Collector",      0, 1, "Download BadUSB scripts from the internet" },
       { "wifi_world_clock",          "Time Lord",              0, 0, "View world clock via WiFi time sync" },
       { "wifi_wigle_visit",          "WiGLE Curious",          0, 0, "Discover the WiGLE upload section from the WiFi menu" },
       // ── WiFi Attacks (domain 1) ────────────────────────────────────────────
@@ -194,7 +196,7 @@ public:
       { "settings_pin_configured",   "Lock Down",             10, 0, "Set up a PIN lock for the device" },
       { "device_status_viewed",      "Self Check",            10, 0, "View device status and hardware info" },
     };
-    return kAchs;
+    return { kAchs, (uint16_t)(sizeof(kAchs) / sizeof(kAchs[0])) };
   }
 
   // Returns EXP for a tier: bronze=100, silver=300, gold=600, platinum=1000
@@ -230,12 +232,12 @@ public:
   // ach_total_unlocked doubles as the calibration guard — if it exists in
   // storage the scan is skipped. Call after AchStore.load() in setup().
   void recalibrate(IStorage* storage) {
-    const AchDef* cat       = catalog();
+    Catalog       cat       = catalog();
     int           totalExp  = 0;
     int           totalUnlk = 0;
-    for (uint8_t i = 0; i < kAchCount; i++) {
-      if (AchStore.get(String("ach_done_") + cat[i].id) == "1") {
-        totalExp  += (int)tierExp(cat[i].tier);
+    for (uint16_t i = 0; i < cat.count; i++) {
+      if (AchStore.get(String("ach_done_") + cat.defs[i].id) == "1") {
+        totalExp  += (int)tierExp(cat.defs[i].tier);
         totalUnlk++;
       }
     }
@@ -266,10 +268,10 @@ public:
   // Unlock achievement by id — looks up title and EXP from catalog automatically.
   // No-op if already unlocked or id not found.
   void unlock(const char* id) {
-    const AchDef* cat = catalog();
-    for (uint8_t i = 0; i < kAchCount; i++) {
-      if (strcmp(cat[i].id, id) == 0) {
-        _unlock(id, cat[i].title, tierExp(cat[i].tier));
+    Catalog cat = catalog();
+    for (uint16_t i = 0; i < cat.count; i++) {
+      if (strcmp(cat.defs[i].id, id) == 0) {
+        _unlock(id, cat.defs[i].title, tierExp(cat.defs[i].tier));
         return;
       }
     }

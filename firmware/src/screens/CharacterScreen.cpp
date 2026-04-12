@@ -177,10 +177,7 @@ constexpr int kWordCount = (int)(sizeof(kWords) / sizeof(kWords[0]));
 
 // ─── CharacterScreen ─────────────────────────────────────────────────────────
 
-CharacterScreen::~CharacterScreen()
-{
-  if (_sprite) { _sprite->deleteSprite(); delete _sprite; _sprite = nullptr; }
-}
+CharacterScreen::~CharacterScreen() {}
 
 void CharacterScreen::update()
 {
@@ -206,13 +203,6 @@ void CharacterScreen::onInit()
   _history[0][0] = '\0';
   _history[1][0] = '\0';
 
-  // Persistent sprite — allocated once here so render cycles do not repeatedly
-  // alloc/free. On BOARD_HAS_PSRAM boards, heap merge routes this large
-  // allocation to PSRAM (CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096).
-  if (!_sprite) {
-    _sprite = new TFT_eSprite(&Uni.Lcd);
-    _sprite->createSprite(Uni.Lcd.width(), Uni.Lcd.height());
-  }
 }
 
 void CharacterScreen::onUpdate()
@@ -271,8 +261,8 @@ void CharacterScreen::onUpdate()
 
 void CharacterScreen::onRender()
 {
-  if (!_sprite) return;
-  TFT_eSprite& sp = *_sprite;
+  TFT_eSprite sp(&Uni.Lcd);
+  sp.createSprite(Uni.Lcd.width(), Uni.Lcd.height());
   const int W = Uni.Lcd.width();
   const int H = Uni.Lcd.height();
   sp.fillSprite(TFT_BLACK);
@@ -299,7 +289,7 @@ void CharacterScreen::onRender()
   String agent      = Config.get(APP_CONFIG_DEVICE_NAME, APP_CONFIG_DEVICE_NAME_DEFAULT);
   String agentTitle = Config.get(APP_CONFIG_AGENT_TITLE, APP_CONFIG_AGENT_TITLE_DEFAULT);
 
-  const int kTotal  = (int)AchievementManager::kAchCount;
+  const int kTotal  = (int)Achievement.catalog().count;
   int       numUnlk = Achievement.getTotalUnlocked();
 
   int cx = PAD;
@@ -449,6 +439,7 @@ void CharacterScreen::onRender()
   }
 
   sp.pushSprite(0, 0);
+  sp.deleteSprite();
 }
 
 void CharacterScreen::_enterMainMenu()

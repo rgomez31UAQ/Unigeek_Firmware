@@ -2,8 +2,6 @@
 
 #include "ui/templates/BaseScreen.h"
 
-class TFT_eSprite;
-
 class CharacterScreen : public BaseScreen
 {
 public:
@@ -20,7 +18,6 @@ public:
   ~CharacterScreen() override;
 
 private:
-  TFT_eSprite*  _sprite        = nullptr;  // persistent full-screen sprite (PSRAM on BOARD_HAS_PSRAM)
   unsigned long _lastRefreshMs = 0;
 
   // idle animation

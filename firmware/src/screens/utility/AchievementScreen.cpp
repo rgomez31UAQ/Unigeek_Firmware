@@ -30,15 +30,15 @@ void AchievementScreen::onItemSelected(uint8_t index)
     _activeDomain = index;
     _showDomain(index);
   } else if (_state == STATE_DOMAIN && index < _achCount) {
-    const AchievementManager::AchDef* cat = Achievement.catalog();
+    AchievementManager::Catalog cat = Achievement.catalog();
     uint8_t ci   = _achCatIdx[index];
-    bool    done = Achievement.isUnlocked(cat[ci].id);
-    bool    hidden = (cat[ci].tier == 3 && !done);
+    bool    done = Achievement.isUnlocked(cat.defs[ci].id);
+    bool    hidden = (cat.defs[ci].tier == 3 && !done);
     char buf[96];
     if (hidden) {
       snprintf(buf, sizeof(buf), "??? Unlock to reveal the secret");
     } else {
-      snprintf(buf, sizeof(buf), "%s%s", done ? "[UNLOCKED] " : "", cat[ci].desc);
+      snprintf(buf, sizeof(buf), "%s%s", done ? "[UNLOCKED] " : "", cat.defs[ci].desc);
     }
     ShowStatusAction::show(buf);
     render();
@@ -56,13 +56,13 @@ void AchievementScreen::onUpdate()
   // Long-press: set achievement title (STATE_DOMAIN only)
   if (_state == STATE_DOMAIN && !_holdFired && Uni.Nav->heldDuration() > 600) {
     _holdFired = true;
-    const AchievementManager::AchDef* cat = Achievement.catalog();
+    AchievementManager::Catalog cat = Achievement.catalog();
     uint8_t ci   = _achCatIdx[_selectedIndex];
-    bool    done = Achievement.isUnlocked(cat[ci].id);
+    bool    done = Achievement.isUnlocked(cat.defs[ci].id);
     if (!done) {
       ShowStatusAction::show("Unlock first", 1500);
     } else {
-      Config.set(APP_CONFIG_AGENT_TITLE, cat[ci].title);
+      Config.set(APP_CONFIG_AGENT_TITLE, cat.defs[ci].title);
       Config.save(Uni.Storage);
       ShowStatusAction::show("Title saved", 1500);
     }
@@ -84,18 +84,18 @@ void AchievementScreen::_showDomains()
 {
   _state = STATE_DOMAINS;
 
-  const AchievementManager::AchDef* cat = Achievement.catalog();
+  AchievementManager::Catalog cat = Achievement.catalog();
 
   for (uint8_t d = 0; d < AchievementManager::kDomainCount; d++) {
     uint8_t  total    = 0;
     uint8_t  unlocked = 0;
     uint16_t exp      = 0;
-    for (uint8_t i = 0; i < AchievementManager::kAchCount; i++) {
-      if (cat[i].domain != d) continue;
+    for (uint16_t i = 0; i < cat.count; i++) {
+      if (cat.defs[i].domain != d) continue;
       total++;
-      if (Achievement.isUnlocked(cat[i].id)) {
+      if (Achievement.isUnlocked(cat.defs[i].id)) {
         unlocked++;
-        exp += AchievementManager::tierExp(cat[i].tier);
+        exp += AchievementManager::tierExp(cat.defs[i].tier);
       }
     }
     snprintf(_domainSubs[d], sizeof(_domainSubs[d]), "%u/%u", unlocked, total);
@@ -111,12 +111,12 @@ void AchievementScreen::_showDomain(uint8_t domain)
   _state    = STATE_DOMAIN;
   _achCount = 0;
 
-  const AchievementManager::AchDef* cat = Achievement.catalog();
+  AchievementManager::Catalog cat = Achievement.catalog();
 
-  for (uint8_t i = 0; i < AchievementManager::kAchCount && _achCount < kMaxPerDomain; i++) {
-    if (cat[i].domain != domain) continue;
+  for (uint16_t i = 0; i < cat.count && _achCount < kMaxPerDomain; i++) {
+    if (cat.defs[i].domain != domain) continue;
     uint8_t n    = _achCount;
-    _achItems[n] = { cat[i].title, nullptr };
+    _achItems[n] = { cat.defs[i].title, nullptr };
     _achCatIdx[n] = i;
     _achCount++;
   }
@@ -207,7 +207,7 @@ void AchievementScreen::_renderDomainView(TFT_eSprite& sp)
   const uint8_t  rowH    = kRowHAch;
   const uint8_t  visible = bodyH() / rowH;
 
-  const AchievementManager::AchDef* cat = Achievement.catalog();
+  AchievementManager::Catalog cat = Achievement.catalog();
 
   // Bidirectional scroll clamp — persists between renders
   if (_selectedIndex < _achScrollOff)
@@ -222,20 +222,20 @@ void AchievementScreen::_renderDomainView(TFT_eSprite& sp)
     if (idx >= _achCount) break;
 
     uint8_t  ci     = _achCatIdx[idx];
-    bool     done   = Achievement.isUnlocked(cat[ci].id);
-    bool     hidden = (cat[ci].tier == 3 && !done);
+    bool     done   = Achievement.isUnlocked(cat.defs[ci].id);
+    bool     hidden = (cat.defs[ci].tier == 3 && !done);
     bool     sel    = (idx == _selectedIndex);
     int16_t  y      = (int16_t)(i * rowH);
 
     uint16_t titleFg = sel ? TFT_WHITE : (done ? TFT_WHITE : 0x4208);
     uint16_t descFg  = sel ? TFT_WHITE : TFT_DARKGREY;
-    uint16_t tierFg  = sel ? TFT_WHITE : (done ? kTierColors[cat[ci].tier] : 0x4208);
+    uint16_t tierFg  = sel ? TFT_WHITE : (done ? kTierColors[cat.defs[ci].tier] : 0x4208);
 
-    const char* tierName = hidden ? "???" : kTierNames[cat[ci].tier];
-    const char* descSrc  = hidden ? "Unlock to reveal" : cat[ci].desc;
+    const char* tierName = hidden ? "???" : kTierNames[cat.defs[ci].tier];
+    const char* descSrc  = hidden ? "Unlock to reveal" : cat.defs[ci].desc;
 
     _renderListItem(sp, y, sel,
-      cat[ci].title, titleFg,
+      cat.defs[ci].title, titleFg,
       tierName,      tierFg,
       descSrc,       descFg);
   }
