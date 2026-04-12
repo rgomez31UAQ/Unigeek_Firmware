@@ -18,17 +18,23 @@ public:
   void onRender() override;
 
 private:
-  enum State { STATE_MENU, STATE_PLAY, STATE_RESULT } _state = STATE_MENU;
+  enum State { STATE_MENU, STATE_PLAY, STATE_RESULT, STATE_HIGH_SCORES } _state = STATE_MENU;
 
   static constexpr uint8_t kWordLen    = 5;
   static constexpr uint8_t kMaxHistory = 10;
   static constexpr uint8_t kAlphaLen   = 26;
+  static constexpr uint8_t kMaxScores  = 5;
+  static constexpr uint8_t kMenuItems  = 5;
+  static constexpr uint8_t kDiffCount  = 3;
+
+  struct Score { int turns; uint32_t ms; };
 
   Language _language;
 
   // Menu
   int8_t  _menuIdx    = 0;
   uint8_t _difficulty = 0;   // 0=Easy 1=Medium 2=Hard
+  uint8_t _hsViewDiff = 0;
   bool    _useCommon  = true;
 
   // Game state
@@ -44,6 +50,11 @@ private:
   bool     _win         = false;
   uint32_t _startMs     = 0;
 
+  // Scores
+  Score   _scores[kMaxScores] = {};
+  uint8_t _scoreCount = 0;
+  int8_t  _newRank    = -1;
+
   // Helpers
   const char* _diffStr()    const;
   int         _maxAttempts() const;
@@ -56,7 +67,12 @@ private:
   void _confirmChar();
   void _handleKeyInput(char c);
 
+  void _loadScores(uint8_t diff);
+  void _saveScores(uint8_t diff);
+  void _insertScore(int turns, uint32_t ms);
+
   void _renderMenu();
   void _renderPlay();
   void _renderResult();
+  void _renderHighScores();
 };
