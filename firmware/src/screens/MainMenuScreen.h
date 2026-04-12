@@ -40,9 +40,11 @@ private:
   uint8_t _selectedIndex = 0;
   uint8_t _scrollOffset = 0; // The row offset
 
-  uint8_t _cols = 1;
-  uint8_t _rows = 1;
-  uint8_t _visibleRows = 1;
+  uint8_t  _cols = 1;
+  uint8_t  _rows = 1;
+  uint8_t  _visibleRows = 1;
+  uint16_t _itemH = 40;
+  uint16_t _itemW = 54;
 
   void _calculateLayout();
   void _scrollIfNeeded();

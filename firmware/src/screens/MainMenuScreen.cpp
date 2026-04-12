@@ -52,13 +52,23 @@ uint8_t MainMenuScreen::_effectiveCount()
 
 void MainMenuScreen::_calculateLayout()
 {
-  uint16_t itemW = 54; // Width needed for a 24x24 icon + label
-  uint16_t itemH = 46; // Height needed for a 24x24 icon + label + padding
+  // Measure widest label — item must be at least as wide as text + 2px each side.
+  uint16_t maxTextW = 0;
+  for (uint8_t i = 0; i < ITEM_COUNT; i++) {
+    uint16_t tw = Uni.Lcd.textWidth(_items[i].label, 1);
+    if (tw > maxTextW) maxTextW = tw;
+  }
+  uint16_t minItemW = maxTextW + 4;
+  if (minItemW < 30) minItemW = 30; // floor so the 24px icon has room
 
-  _cols = bodyW() / itemW;
+  // Item: 5px top + 24px icon + 3px gap + 8px text + 4px bottom = 44px
+  _itemH = 44;
+
+  _cols = bodyW() / minItemW;
   if (_cols == 0) _cols = 1;
+  _itemW = bodyW() / _cols;
 
-  _visibleRows = bodyH() / itemH;
+  _visibleRows = bodyH() / _itemH;
   if (_visibleRows == 0) _visibleRows = 1;
 
   _rows = (_effectiveCount() + _cols - 1) / _cols;
@@ -150,9 +160,6 @@ void MainMenuScreen::onRender() {
     return;
   }
 
-  uint16_t itemW = bodyW() / _cols;
-  uint16_t itemH = 46;
-
   static const GridItem _backGridItem = {"Back", Icons::drawBack};
 
   for (uint8_t r = 0; r < _visibleRows; r++) {
@@ -170,24 +177,24 @@ void MainMenuScreen::onRender() {
         item = &_items[idx];
 
       bool selected = (idx == _selectedIndex);
-      int16_t itemX = c * itemW;
-      int16_t itemY = r * itemH;
+      int16_t itemX = c * _itemW;
+      int16_t itemY = r * _itemH;
 
       uint16_t bg = selected ? Config.getThemeColor() : TFT_BLACK;
       uint16_t fg = selected ? TFT_WHITE : TFT_LIGHTGREY;
 
       if (selected) {
-        sprite.fillRoundRect(itemX + 2, itemY + 2, itemW - 4, itemH - 4, 4, bg);
+        sprite.fillRoundRect(itemX + 1, itemY + 1, _itemW - 2, _itemH - 2, 3, bg);
       }
 
-      int16_t iconX = itemX + (itemW - 24) / 2;
-      int16_t iconY = itemY + 6;
+      int16_t iconX = itemX + (_itemW - 24) / 2;
+      int16_t iconY = itemY + 5;
 
       item->drawIcon(sprite, iconX, iconY, fg);
 
       sprite.setTextColor(fg, bg);
       sprite.setTextDatum(TC_DATUM);
-      sprite.drawString(item->label, itemX + itemW / 2, itemY + 32, 1);
+      sprite.drawString(item->label, itemX + _itemW / 2, itemY + 32, 1);
     }
   }
 
