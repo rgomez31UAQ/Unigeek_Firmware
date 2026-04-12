@@ -5,7 +5,7 @@
         },
         "core": "esp32",
         "extra_flags": [
-            "-DDEVICE_MARAUDER_V7"
+            "-DDEVICE_DIY_MARAUDER"
         ],
         "f_cpu": "240000000L",
         "f_flash": "40000000L",

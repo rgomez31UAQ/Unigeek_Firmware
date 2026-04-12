@@ -14,9 +14,9 @@ public:
   void begin() override {}
 
   // No battery monitoring hardware — return midpoint
-  uint8_t getBatteryPercentage() override { return 50; }
+  uint8_t getBatteryPercentage() override { return 100; }
 
-  bool isCharging() override { return false; }
+  bool isCharging() override { return true; }
 
   void powerOff() override {
     // GPIO34 is RTC_GPIO4 on ESP32 — valid for ext0 wakeup
