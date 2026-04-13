@@ -9,7 +9,6 @@
         "extra_flags": [
             "-DDEVICE_M5STICK_S3",
             "-DBOARD_HAS_PSRAM",
-            "-mfix-esp32-psram-cache-issue",
             "-DARDUINO_USB_CDC_ON_BOOT",
             "-DARDUINO_USB_MODE=1",
             "-DARDUINO_RUNNING_CORE=1",

@@ -33,7 +33,7 @@ static const uint8_t SCL = GROVE_SCL;
 
 // ─── LCD ──────────────────────────────────────────────────
 #define LCD_BL     38
-#define LCD_BL_CH   0
+#define LCD_BL_CH   7
 
 // ─── Buttons ──────────────────────────────────────────────
 // BTN_A (GPIO 11): SELECT
@@ -55,7 +55,8 @@ static const uint8_t SCL = GROVE_SCL;
 #define DISABLE_ALL_LIBRARY_WARNINGS 1
 #define USER_SETUP_LOADED 1
 
-#define ST7789_DRIVER
+#define ST7789_2_DRIVER
+#define TFT_RGB_ORDER  1
 #define TFT_WIDTH   135
 #define TFT_HEIGHT  240
 #define TFT_MOSI    39
@@ -64,7 +65,7 @@ static const uint8_t SCL = GROVE_SCL;
 #define TFT_DC      45
 #define TFT_RST     21
 #define TFT_MISO    -1
-#define TFT_BL      -1        // managed by Display.h via LEDC — do NOT let TFT_eSPI touch this pin
+#define TFT_BL      38
 #define TFT_BACKLIGHT_ON HIGH
 #define TFT_INVERSION_ON
 #define USE_HSPI_PORT
