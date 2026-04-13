@@ -26,7 +26,7 @@ Evil Twin creates a fake WiFi access point with the same name as a real network,
 Create your own portal by adding a folder under `/unigeek/web/portals/`:
 
 ```
-/unigeek/wev/portals/my-portal/
+/unigeek/web/portals/my-portal/
   index.htm       main login page (required)
   success.htm     shown after credentials are submitted (optional)
   style.css       stylesheet (optional)
