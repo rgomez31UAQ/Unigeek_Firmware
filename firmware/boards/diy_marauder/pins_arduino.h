@@ -45,9 +45,6 @@ static const uint8_t SCL = GROVE_SCL;
 #define BTN_RIGHT  39   // Right
 #define BTN_LEFT   26   // Left / Back
 
-// ─── App feature flags ────────────────────────────────────
-#define APP_MENU_POWER_OFF   // deep sleep via BTN_SEL wakeup
-
 // ─── TFT_eSPI config ──────────────────────────────────────
 #define DISABLE_ALL_LIBRARY_WARNINGS 1
 #define USER_SETUP_LOADED 1
