@@ -23,23 +23,22 @@ private:
 
   const char* _message;
   uint8_t     _percent;
-  Sprite _spr;
 
   ProgressView(const char* message, uint8_t percent)
-    : _message(message), _percent(percent), _spr(&Uni.Lcd)
+    : _message(message), _percent(percent)
   {}
 
   void _run() {
+    auto& lcd = Uni.Lcd;
     uint16_t bx = StatusBar::WIDTH;
     uint16_t by = Header::HEIGHT;
-    uint16_t bw = Uni.Lcd.width() - StatusBar::WIDTH - 4;
-    uint16_t bh = Uni.Lcd.height() - by - 4;
+    uint16_t bw = lcd.width() - StatusBar::WIDTH - 4;
+    uint16_t bh = lcd.height() - by - 4;
 
-    _spr.createSprite(bw, bh);
-    _spr.fillSprite(TFT_BLACK);
-    _spr.setTextSize(1);
-    _spr.setTextColor(TFT_WHITE, TFT_BLACK);
-    _spr.setTextDatum(MC_DATUM);
+    lcd.fillRect(bx, by, bw, bh, TFT_BLACK);
+    lcd.setTextSize(1);
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    lcd.setTextDatum(MC_DATUM);
 
     // Word-wrap message into max 2 lines
     String lines[MAX_LINES];
@@ -49,21 +48,18 @@ private:
     String msg = _message;
     msg.replace("\n", " ");
 
-    if (Uni.Lcd.textWidth(msg) <= maxTextW) {
-      // Fits on one line
+    if (lcd.textWidth(msg) <= maxTextW) {
       lines[0] = msg;
       lineCount = 1;
     } else {
-      // Try word-break for first line
       int lastSpace = -1;
       for (int i = 0; i < (int)msg.length(); i++) {
         if (msg[i] == ' ') lastSpace = i;
-        if (Uni.Lcd.textWidth(msg.substring(0, i + 1)) > maxTextW) {
+        if (lcd.textWidth(msg.substring(0, i + 1)) > maxTextW) {
           if (lastSpace > 0) {
             lines[0] = msg.substring(0, lastSpace);
             msg = msg.substring(lastSpace + 1);
           } else {
-            // No space found — break at character
             lines[0] = msg.substring(0, i);
             msg = msg.substring(i);
           }
@@ -77,15 +73,13 @@ private:
         msg = "";
       }
 
-      // Second line — truncate with "..." if needed
       if (msg.length() > 0) {
-        if (Uni.Lcd.textWidth(msg) <= maxTextW) {
+        if (lcd.textWidth(msg) <= maxTextW) {
           lines[1] = msg;
         } else {
-          // Truncate with ellipsis
           for (int i = msg.length() - 1; i >= 0; i--) {
             String truncated = msg.substring(0, i) + "...";
-            if (Uni.Lcd.textWidth(truncated) <= maxTextW) {
+            if (lcd.textWidth(truncated) <= maxTextW) {
               lines[1] = truncated;
               break;
             }
@@ -95,26 +89,23 @@ private:
       }
     }
 
-    // Center text vertically above bar
-    int barY = bh - BAR_PAD - BAR_H;
-    int textBlockH = lineCount * LINE_H;
-    int textStartY = (barY - textBlockH) / 2;
+    // Center text block vertically above bar
+    int barY     = bh - BAR_PAD - BAR_H;
+    int textStartY = (barY - lineCount * LINE_H) / 2;
 
     for (int i = 0; i < lineCount; i++) {
-      int ly = textStartY + i * LINE_H + LINE_H / 2;
-      _spr.drawString(lines[i], bw / 2, ly);
+      int ly = by + textStartY + i * LINE_H + LINE_H / 2;
+      lcd.drawString(lines[i], bx + bw / 2, ly);
     }
 
-    // Progress bar
-    int barX = BAR_PAD;
-    int barW = bw - BAR_PAD * 2;
+    // Progress bar — draw directly on LCD
+    int      barX    = bx + BAR_PAD;
+    int      barW    = bw - BAR_PAD * 2;
     uint16_t barColor = Config.getThemeColor();
-    _spr.drawRect(barX, barY, barW, BAR_H, barColor);
+    int      absBarY  = by + barY;
+    lcd.drawRect(barX, absBarY, barW, BAR_H, barColor);
     int fillW = (int)(barW * _percent / 100.0f);
     if (fillW > 0)
-      _spr.fillRect(barX + 1, barY + 1, fillW, BAR_H - 2, barColor);
-
-    _spr.pushSprite(bx, by);
-    _spr.deleteSprite();
+      lcd.fillRect(barX + 1, absBarY + 1, fillW, BAR_H - 2, barColor);
   }
 };

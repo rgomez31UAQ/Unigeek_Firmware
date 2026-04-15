@@ -30,30 +30,42 @@ public:
   void draw(IDisplay& lcd, int x, int y, int w, int h,
             StatusBarCallback statusCb = nullptr, void* userData = nullptr)
   {
-    Sprite sp(&lcd);
-    sp.createSprite(w, h);
-    sp.fillSprite(TFT_BLACK);
-
-    int lineH   = 10;
-    int statusH = statusCb ? 11 : 0;
-    int logAreaH   = h - statusH;
+    static constexpr int lineH   = 10;
+    static constexpr int statusH = 11;
+    int cbH      = statusCb ? statusH : 0;
+    int logAreaH = h - cbH;
     int maxVisible = logAreaH / lineH;
     int startIdx   = _count > maxVisible ? _count - maxVisible : 0;
 
-    sp.setTextDatum(TL_DATUM);
+    // Draw each visible log line: clear the row first, then draw text.
+    int rendered = 0;
+    lcd.setTextSize(1);
+    lcd.setTextDatum(TL_DATUM);
     for (int i = startIdx; i < _count; i++) {
-      sp.setTextColor(_colors[i], TFT_BLACK);
-      sp.drawString(_lines[i], 2, (i - startIdx) * lineH);
+      int rowY = y + (i - startIdx) * lineH;
+      lcd.fillRect(x, rowY, w, lineH, TFT_BLACK);
+      lcd.setTextColor(_colors[i], TFT_BLACK);
+      lcd.drawString(_lines[i], x + 2, rowY);
+      rendered++;
     }
 
+    // Clear any unused rows below the last log line.
+    int usedH = rendered * lineH;
+    if (usedH < logAreaH)
+      lcd.fillRect(x, y + usedH, w, logAreaH - usedH, TFT_BLACK);
+
+    // Status bar — small sprite so the callback interface stays unchanged.
     if (statusCb) {
-      int sepY = h - statusH;
-      sp.drawFastHLine(0, sepY, w, TFT_DARKGREY);
-      statusCb(sp, sepY + 3, w, userData);
-    }
+      int sepY = y + logAreaH;
+      lcd.drawFastHLine(x, sepY, w, TFT_DARKGREY);
 
-    sp.pushSprite(x, y);
-    sp.deleteSprite();
+      Sprite sp(&lcd);
+      sp.createSprite(w, statusH);
+      sp.fillSprite(TFT_BLACK);
+      statusCb(sp, 3, w, userData);
+      sp.pushSprite(x, sepY + 1);
+      sp.deleteSprite();
+    }
   }
 
   int count() const { return _count; }
