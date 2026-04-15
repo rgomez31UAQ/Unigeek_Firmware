@@ -92,25 +92,19 @@ public:
 
   void onRender() override
   {
-    uint8_t eff = _effectiveCount();
+    uint8_t eff     = _effectiveCount();
+    uint8_t visible = bodyH() / ITEM_H;
 
     auto& lcd = Uni.Lcd;
-    Sprite sprite(&lcd);
-    sprite.createSprite(bodyW(), bodyH());
-    sprite.fillSprite(TFT_BLACK);
 
     if (eff == 0) {
-      sprite.pushSprite(bodyX(), bodyY());
-      sprite.deleteSprite();
+      lcd.fillRect(bodyX(), bodyY(), bodyW(), bodyH(), TFT_BLACK);
       return;
     }
 
-    sprite.setTextDatum(TL_DATUM);
-
-    uint8_t visible = bodyH() / ITEM_H;
-
     static const ListItem _backListItem = {"< Back", nullptr};
 
+    uint8_t rendered = 0;
     for (uint8_t i = 0; i < visible; i++)
     {
       uint8_t idx = i + _scrollOffset;
@@ -123,32 +117,42 @@ public:
         item = &_items[idx];
 
       bool     selected = (idx == _selectedIndex);
-      int16_t  itemTop  = i * ITEM_H;
       uint16_t bg       = selected ? Config.getThemeColor() : TFT_BLACK;
       uint16_t fg       = selected ? TFT_WHITE : TFT_LIGHTGREY;
 
+      Sprite sprite(&lcd);
+      sprite.createSprite(bodyW(), ITEM_H);
+      sprite.fillSprite(TFT_BLACK);
+      sprite.setTextDatum(TL_DATUM);
+
       if (selected)
       {
-        sprite.fillRoundRect(0, itemTop + 2, bodyW(), ITEM_H - 4, 3, bg);
+        sprite.fillRoundRect(0, 2, bodyW(), ITEM_H - 4, 3, bg);
       }
 
       sprite.setTextColor(fg, bg);
 
       if (item->sublabel)
       {
-        sprite.drawString(item->label, 6, itemTop + (ITEM_H / 2) - 4);
+        sprite.drawString(item->label, 6, (ITEM_H / 2) - 4);
         sprite.setTextColor(selected ? TFT_CYAN : TFT_DARKGREY, bg);
         int16_t subX = bodyW() - 6 - sprite.textWidth(item->sublabel);
-        sprite.drawString(item->sublabel, subX, itemTop + (ITEM_H / 2) - 4);
+        sprite.drawString(item->sublabel, subX, (ITEM_H / 2) - 4);
       }
       else
       {
-        sprite.drawString(item->label, 6, itemTop + (ITEM_H / 2) - 4);
+        sprite.drawString(item->label, 6, (ITEM_H / 2) - 4);
       }
+
+      sprite.pushSprite(bodyX(), bodyY() + i * ITEM_H);
+      sprite.deleteSprite();
+      rendered++;
     }
 
-    sprite.pushSprite(bodyX(), bodyY());
-    sprite.deleteSprite();
+    // Clear only the unused rows below the last item.
+    int16_t usedH = rendered * ITEM_H;
+    if (usedH < bodyH())
+      lcd.fillRect(bodyX(), bodyY() + usedH, bodyW(), bodyH() - usedH, TFT_BLACK);
   }
 
   virtual void onItemSelected(uint8_t index) = 0;

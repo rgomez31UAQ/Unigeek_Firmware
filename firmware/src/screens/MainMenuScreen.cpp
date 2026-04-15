@@ -154,22 +154,20 @@ void MainMenuScreen::onRender() {
   uint8_t eff = _effectiveCount();
 
   auto& lcd = Uni.Lcd;
-  Sprite sprite(&lcd);
-  sprite.createSprite(bodyW(), bodyH());
-  sprite.fillSprite(TFT_BLACK);
 
   if (eff == 0) {
-    sprite.pushSprite(bodyX(), bodyY());
-    sprite.deleteSprite();
+    lcd.fillRect(bodyX(), bodyY(), bodyW(), bodyH(), TFT_BLACK);
     return;
   }
 
   static const GridItem _backGridItem = {"Back", Icons::drawBack};
 
+  uint8_t renderedRows = 0;
   for (uint8_t r = 0; r < _visibleRows; r++) {
     uint8_t rowIdx = r + _scrollOffset;
     if (rowIdx >= _rows) break;
 
+    uint8_t renderedCols = 0;
     for (uint8_t c = 0; c < _cols; c++) {
       uint8_t idx = rowIdx * _cols + c;
       if (idx >= eff) break;
@@ -181,29 +179,41 @@ void MainMenuScreen::onRender() {
         item = &_items[idx];
 
       bool selected = (idx == _selectedIndex);
-      int16_t itemX = c * _itemW;
-      int16_t itemY = r * _itemH;
 
       uint16_t bg = selected ? Config.getThemeColor() : TFT_BLACK;
       uint16_t fg = selected ? TFT_WHITE : TFT_LIGHTGREY;
 
+      Sprite sprite(&lcd);
+      sprite.createSprite(_itemW, _itemH);
+      sprite.fillSprite(TFT_BLACK);
+      sprite.setTextDatum(TC_DATUM);
+
       if (selected) {
-        sprite.fillRoundRect(itemX + 1, itemY + 1, _itemW - 2, _itemH - 2, 3, bg);
+        sprite.fillRoundRect(1, 1, _itemW - 2, _itemH - 2, 3, bg);
       }
 
-      int16_t iconX = itemX + (_itemW - 24) / 2;
-      int16_t iconY = itemY + 5;
-
-      item->drawIcon(sprite, iconX, iconY, fg);
+      item->drawIcon(sprite, (_itemW - 24) / 2, 5, fg);
 
       sprite.setTextColor(fg, bg);
-      sprite.setTextDatum(TC_DATUM);
-      sprite.drawString(item->label, itemX + _itemW / 2, itemY + 32);
+      sprite.drawString(item->label, _itemW / 2, 32);
+
+      sprite.pushSprite(bodyX() + c * _itemW, bodyY() + r * _itemH);
+      sprite.deleteSprite();
+      renderedCols++;
     }
+
+    // Clear any unused cells at the end of this row (partial last row).
+    if (renderedCols < _cols) {
+      int16_t clearX = bodyX() + renderedCols * _itemW;
+      lcd.fillRect(clearX, bodyY() + r * _itemH, bodyW() - renderedCols * _itemW, _itemH, TFT_BLACK);
+    }
+    renderedRows++;
   }
 
-  sprite.pushSprite(bodyX(), bodyY());
-  sprite.deleteSprite();
+  // Clear unused rows below the last rendered row.
+  int16_t usedH = renderedRows * _itemH;
+  if (usedH < bodyH())
+    lcd.fillRect(bodyX(), bodyY() + usedH, bodyW(), bodyH() - usedH, TFT_BLACK);
 }
 
 void MainMenuScreen::onBack() {
