@@ -4,15 +4,22 @@
 
 #pragma once
 
-#include <TFT_eSPI.h>
-
-class IDisplay : public TFT_eSPI
-{
-public:
-  // brightness percentage between 0 to 100
-  virtual void setBrightness(uint8_t brightness) = 0;
-  virtual void powerOff()
+#ifdef DISPLAY_BACKEND_M5GFX
+  #include <M5GFX.h>
+  class IDisplay : public lgfx::LGFX_Device
   {
-    setBrightness(0);
-  }
-};
+  public:
+    virtual void setBrightness(uint8_t brightness) = 0;
+    virtual void powerOff() { setBrightness(0); }
+  };
+  using Sprite = LGFX_Sprite;
+#else
+  #include <TFT_eSPI.h>
+  class IDisplay : public TFT_eSPI
+  {
+  public:
+    virtual void setBrightness(uint8_t brightness) = 0;
+    virtual void powerOff() { setBrightness(0); }
+  };
+  using Sprite = TFT_eSprite;
+#endif

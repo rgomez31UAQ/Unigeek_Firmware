@@ -1,5 +1,4 @@
 #pragma once
-#include <TFT_eSPI.h>
 #include "AchievementStorage.h"
 #include "Device.h"
 
@@ -348,23 +347,23 @@ private:
     int tx = bx + 4;
     int ty = by + bh - th - 4;
 
-    TFT_eSprite sp(&lcd);
+    Sprite sp(&lcd);
     sp.createSprite(tw, th);
     sp.fillRoundRect(0, 0, tw, th, 4, TFT_BLACK);
     sp.drawRoundRect(0, 0, tw, th, 4, TFT_YELLOW);
     sp.setTextDatum(TL_DATUM);
     sp.setTextColor(TFT_YELLOW, TFT_BLACK);
-    sp.drawString("Achievement!", 5, 3, 1);
+    sp.drawString("Achievement!", 5, 3);
     sp.setTextColor(TFT_WHITE, TFT_BLACK);
     String t(_toast);
-    while (t.length() > 1 && sp.textWidth(t.c_str(), 1) > tw - 52)
+    while (t.length() > 1 && sp.textWidth(t.c_str()) > tw - 52)
       t.remove(t.length() - 1);
-    sp.drawString(t.c_str(), 5, 14, 1);
+    sp.drawString(t.c_str(), 5, 14);
     char ebuf[12];
     snprintf(ebuf, sizeof(ebuf), "+%d EXP", _toastExp);
     sp.setTextColor(TFT_GREEN, TFT_BLACK);
     sp.setTextDatum(TR_DATUM);
-    sp.drawString(ebuf, tw - 4, 14, 1);
+    sp.drawString(ebuf, tw - 4, 14);
     sp.pushSprite(tx, ty);
     sp.deleteSprite();
   }
