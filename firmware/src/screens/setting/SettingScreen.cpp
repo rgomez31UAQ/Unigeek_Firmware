@@ -28,8 +28,10 @@ void SettingScreen::_refresh() {
   _nameSub       = Config.get(APP_CONFIG_DEVICE_NAME,          APP_CONFIG_DEVICE_NAME_DEFAULT);
   _dispOffEnSub  = Config.get(APP_CONFIG_ENABLE_POWER_SAVING,  APP_CONFIG_ENABLE_POWER_SAVING_DEFAULT).toInt() ? "On" : "Off";
   _dispOffSub    = Config.get(APP_CONFIG_INTERVAL_DISPLAY_OFF, APP_CONFIG_INTERVAL_DISPLAY_OFF_DEFAULT) + "s";
+#ifdef APP_MENU_POWER_OFF
   _powerOffEnSub = Config.get(APP_CONFIG_ENABLE_POWER_OFF,     APP_CONFIG_ENABLE_POWER_OFF_DEFAULT).toInt() ? "On" : "Off";
   _powerOffSub   = Config.get(APP_CONFIG_INTERVAL_POWER_OFF,   APP_CONFIG_INTERVAL_POWER_OFF_DEFAULT)   + "s";
+#endif
   _brightSub   = Config.get(APP_CONFIG_BRIGHTNESS,           APP_CONFIG_BRIGHTNESS_DEFAULT)            + "%";
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
   _volSub      = Config.get(APP_CONFIG_VOLUME,               APP_CONFIG_VOLUME_DEFAULT)                + "%";
@@ -49,8 +51,10 @@ void SettingScreen::_refresh() {
   _items[SETT_NAME].sublabel         = _nameSub.c_str();
   _items[SETT_DISP_OFF_EN].sublabel  = _dispOffEnSub.c_str();
   _items[SETT_DISP_OFF].sublabel     = _dispOffSub.c_str();
+#ifdef APP_MENU_POWER_OFF
   _items[SETT_POWER_OFF_EN].sublabel = _powerOffEnSub.c_str();
   _items[SETT_POWER_OFF].sublabel    = _powerOffSub.c_str();
+#endif
   _items[SETT_BRIGHTNESS].sublabel = _brightSub.c_str();
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
   _items[SETT_VOLUME].sublabel    = _volSub.c_str();
@@ -107,6 +111,7 @@ void SettingScreen::onItemSelected(uint8_t index) {
       break;
     }
 
+#ifdef APP_MENU_POWER_OFF
     case SETT_POWER_OFF_EN: {
       bool cur = Config.get(APP_CONFIG_ENABLE_POWER_OFF, APP_CONFIG_ENABLE_POWER_OFF_DEFAULT).toInt();
       Config.set(APP_CONFIG_ENABLE_POWER_OFF, cur ? "0" : "1");
@@ -125,6 +130,7 @@ void SettingScreen::onItemSelected(uint8_t index) {
       _refresh();
       break;
     }
+#endif
 
     case SETT_BRIGHTNESS: {
       int cur    = Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt();

@@ -22,8 +22,10 @@ private:
     SETT_NAME = 0,
     SETT_DISP_OFF_EN,
     SETT_DISP_OFF,
+#ifdef APP_MENU_POWER_OFF
     SETT_POWER_OFF_EN,
     SETT_POWER_OFF,
+#endif
     SETT_BRIGHTNESS,
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
     SETT_VOLUME,
@@ -49,8 +51,10 @@ private:
   String _nameSub;
   String _dispOffEnSub;
   String _dispOffSub;
+#ifdef APP_MENU_POWER_OFF
   String _powerOffEnSub;
   String _powerOffSub;
+#endif
   String _brightSub;
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
   String _volSub;
@@ -71,8 +75,10 @@ private:
     {"Name",             ""},
     {"Auto Display Off", ""},
     {"Display Off",      ""},
+#ifdef APP_MENU_POWER_OFF
     {"Auto Power Off",   ""},
     {"Power Off",        ""},
+#endif
     {"Brightness",       ""},
 #if defined(DEVICE_HAS_SOUND) && defined(DEVICE_HAS_VOLUME_CONTROL)
     {"Volume",           ""},

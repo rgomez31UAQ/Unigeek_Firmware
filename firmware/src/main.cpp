@@ -98,7 +98,9 @@ void loop() {
   // ── Power saving ──────────────────────────────────────────────────────────
   IScreen* _cur       = Screen.current();
   bool _psInhibit     = _cur && _cur->inhibitPowerSave();
+#ifdef APP_MENU_POWER_OFF
   bool _poInhibit     = _psInhibit || (_cur && _cur->inhibitPowerOff());
+#endif
 
   if (!_psInhibit && Config.get(APP_CONFIG_ENABLE_POWER_SAVING, APP_CONFIG_ENABLE_POWER_SAVING_DEFAULT).toInt()) {
     unsigned long idle   = millis() - Uni.lastActiveMs;
@@ -120,12 +122,14 @@ void loop() {
       return;
     }
 
+#ifdef APP_MENU_POWER_OFF
     if (!_poInhibit && Uni.lcdOff && Config.get(APP_CONFIG_ENABLE_POWER_OFF, APP_CONFIG_ENABLE_POWER_OFF_DEFAULT).toInt()) {
       unsigned long powerMs = dispMs + (unsigned long)Config.get(APP_CONFIG_INTERVAL_POWER_OFF, APP_CONFIG_INTERVAL_POWER_OFF_DEFAULT).toInt() * 1000UL;
       if (idle > powerMs) {
         Uni.Power.powerOff();
       }
     }
+#endif
   } else if (Uni.lcdOff) {
     // auto display off disabled or inhibited while display was sleeping — restore brightness
     Uni.Lcd.setBrightness((uint8_t)Config.get(APP_CONFIG_BRIGHTNESS, APP_CONFIG_BRIGHTNESS_DEFAULT).toInt());
