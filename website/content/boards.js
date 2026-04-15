@@ -62,4 +62,18 @@ export const BOARDS = [
     tags: ["WiFi", "BLE", "Sub-GHz", "Speaker", "USB HID"],
     bin: "/firmware/unigeek-t_embed_cc1101.bin",
   },
+  {
+    id: "m5_cores3",
+    name: "M5 CoreS3",
+    chip: "ESP32-S3",
+    tags: ["WiFi", "BLE", "Speaker", "Touch", "USB HID"],
+    bin: "/firmware/unigeek-m5_cores3.bin",
+  },
+  {
+    id: "m5sticks3",
+    name: "M5StickC S3",
+    chip: "ESP32-S3",
+    tags: ["WiFi", "BLE", "IR", "Speaker", "USB HID"],
+    bin: "/firmware/unigeek-m5sticks3.bin",
+  },
 ];
