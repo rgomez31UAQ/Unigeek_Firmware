@@ -239,6 +239,8 @@ Rule: every new screen with meaningful actions must have achievements. See `docs
 - TFT_eSPI cannot render unicode characters — only ASCII printable chars work
 - IRAM_ATTR inline functions cause Xtensa literal pool errors — always put in .cpp
 - TFT_eSprite leaks heap if deleteSprite() is never called
+- Full-body sprites can OOM on boards with large displays but small RAM (e.g. 320×240 @ 16-bit = ~150 KB)
+  ALWAYS use per-block sprites (per-row, per-line, per-cell) sized to the smallest region needed
 - powerOff() only works when USB is disconnected (hardware limitation)
 - LittleFS uses SPIFFS subtype in partitions.csv, use LittleFS.begin() not SPIFFS.begin()
 - Uni.Storage may be reassigned at runtime by _checkStorageFallback() in main.cpp when SD fails

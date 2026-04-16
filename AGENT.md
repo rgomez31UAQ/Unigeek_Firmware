@@ -143,6 +143,8 @@ sdcard/ directory contains sample SD card data (portals, duckyscript, passwords,
   draw static chrome once (guarded by a `_chromeDrawn` flag), use per-region sprites, and track per-region
   state so only regions that changed get redrawn. Games/visualizers that legitimately repaint every frame
   are exempt. See `docs/SCREEN_PATTERNS.md` → Partial-Redraw Pattern
+- Do NOT allocate full-body sprites even for one-shot renders — boards with large displays and small RAM
+  will OOM (e.g. 320×240 @ 16-bit = ~150 KB). ALWAYS use per-block sprites (per-row, per-line, per-cell)
 
 ---
 

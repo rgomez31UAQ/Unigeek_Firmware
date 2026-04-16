@@ -265,6 +265,12 @@ Reference implementations (post-commit d12dc27):
   - TouchGuideScreen  — per-zone sprites + chrome-once + packed state + one-shot dialog
   - AchievementScreen — per-row sprites + tail fillRect for shrinking lists
 
+RAM constraint: some boards have large displays but limited RAM (e.g. 320×240
+with only ~50 KB free heap). A full-body sprite at 16-bit color on a 320×240
+body costs ~150 KB — guaranteed OOM. ALWAYS use per-block sprites (per-row,
+per-line, per-cell) sized to the smallest meaningful region. This keeps each
+sprite allocation small and safe across all boards.
+
 Exemption: full-body sprites remain acceptable ONLY when the whole body
 genuinely repaints every frame (games, MJPEG, packet monitor, audio scopes,
 flappy/wordle-style visuals). Residual flicker there is unavoidable — do not
