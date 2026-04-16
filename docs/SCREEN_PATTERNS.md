@@ -237,6 +237,48 @@ Catalog lives in `static const AchDef* catalog()` as a static constexpr local (a
 
 ---
 
+## Partial-Redraw Pattern (Flicker Mitigation)
+
+NEVER create a full-screen or full-body sprite that re-renders every frame —
+that is the #1 source of flicker on menu / tutorial / list / dashboard screens.
+New menus MUST follow this pattern. Instead of one big sprite:
+
+  1. Draw static chrome (dividers, borders, fixed labels) directly to Uni.Lcd
+     ONCE. Guard with a `bool _chromeDrawn = false;` member, reset in onInit().
+     Set true after the first draw; subsequent renders skip it.
+  2. For each dynamic region (row, zone, button, tile) create a sprite sized to
+     that region only: createSprite(regionW, regionH), pushSprite(regionX, regionY).
+     Push at absolute screen coordinates — do NOT offset inside the sprite.
+  3. Track per-region packed state (e.g. `uint32_t _lastZone[N]` initialized to
+     `0xFFFFFFFFu`, or a small hash of the row's displayed values) and skip the
+     redraw when state hasn't changed. Reset to 0xFFFFFFFF in onInit() to force
+     first paint.
+  4. One-shot overlays (done dialog, success badge, completion toast) render
+     once via a `bool _doneDrawn = false;` flag — check before drawing, set true
+     after pushing.
+  5. When a scrolling list can shrink (visible rows < previous frame) clear the
+     tail with a single `lcd.fillRect(bodyX(), bodyY() + usedH, bodyW(),
+     bodyH() - usedH, TFT_BLACK)` — do NOT wipe the whole body with
+     `fillSprite(TFT_BLACK)` on a full-body sprite.
+
+Reference implementations (post-commit d12dc27):
+  - TouchGuideScreen  — per-zone sprites + chrome-once + packed state + one-shot dialog
+  - AchievementScreen — per-row sprites + tail fillRect for shrinking lists
+
+Exemption: full-body sprites remain acceptable ONLY when the whole body
+genuinely repaints every frame (games, MJPEG, packet monitor, audio scopes,
+flappy/wordle-style visuals). Residual flicker there is unavoidable — do not
+force artificial partial redraws that add complexity for no visible gain.
+
+Flicker-reduction checklist when authoring a new menu:
+  ✓ Static chrome drawn once under a `_chromeDrawn` guard
+  ✓ Dynamic content broken into the smallest meaningful regions
+  ✓ Per-region state cached; redraw skipped when unchanged
+  ✓ fillSprite(TFT_BLACK) does not appear on a body-sized sprite
+  ✓ Shrinking lists clear their tail with lcd.fillRect, not a full repaint
+
+---
+
 ## Sublabel Pattern
 
     // Pointers must point into class member Strings — NOT temporaries

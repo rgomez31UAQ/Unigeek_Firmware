@@ -184,6 +184,9 @@ Key rules (brief):
 - After any action overlay popup, call render() to restore the screen
 - Config.load() must be called after _checkStorageFallback() in setup()
 - Achievement.inc("id") / Achievement.setMax("id", val) — add achievements to every meaningful screen
+- NEW menus/screens must NOT use a full-screen or full-body sprite that re-renders every frame —
+  draw static chrome once, use per-region sprites, track per-region state, and minimize flicker
+  where feasible (games/visualizers are exempt). See `docs/SCREEN_PATTERNS.md` → Partial-Redraw Pattern
 
 ### Achievement System (brief)
 

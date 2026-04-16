@@ -139,6 +139,10 @@ sdcard/ directory contains sample SD card data (portals, duckyscript, passwords,
 - Do NOT skip sprite push in ListScreen onRender() when empty — always push to clear overlays
 - Do NOT roll custom log line arrays — use LogView from ui/views/LogView.h
 - Do NOT forget inhibitPowerSave()/inhibitPowerOff() on screens with active long-running operations
+- Do NOT allocate a full-screen or full-body sprite that re-renders every frame in new menus/screens —
+  draw static chrome once (guarded by a `_chromeDrawn` flag), use per-region sprites, and track per-region
+  state so only regions that changed get redrawn. Games/visualizers that legitimately repaint every frame
+  are exempt. See `docs/SCREEN_PATTERNS.md` → Partial-Redraw Pattern
 
 ---
 
