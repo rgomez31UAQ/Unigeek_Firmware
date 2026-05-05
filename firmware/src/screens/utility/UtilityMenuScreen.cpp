@@ -10,7 +10,6 @@
 #include "screens/utility/UartTerminalScreen.h"
 #include "screens/utility/PomodoroScreen.h"
 #include "screens/utility/RandomLinePickerScreen.h"
-#include "screens/utility/LuaRunnerScreen.h"
 
 void UtilityMenuScreen::onInit() {
   setItems(_items);
@@ -31,6 +30,5 @@ void UtilityMenuScreen::onItemSelected(uint8_t index) {
     case 6: Screen.push(new UartTerminalScreen());  break;
     case 7: Screen.push(new PomodoroScreen());           break;
     case 8: Screen.push(new RandomLinePickerScreen());  break;
-    case 9: Screen.push(new LuaRunnerScreen());         break;
   }
 }

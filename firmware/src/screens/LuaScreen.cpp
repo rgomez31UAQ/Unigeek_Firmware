@@ -1,12 +1,11 @@
-#include "screens/utility/LuaRunnerScreen.h"
+#include "screens/LuaScreen.h"
 #include "core/Device.h"
 #include "core/INavigation.h"
 #include "core/ScreenManager.h"
-#include "screens/utility/UtilityMenuScreen.h"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::_loadDir(const String& path) {
+void LuaScreen::_loadDir(const String& path) {
   _currentDir = path;
   _browser.load(this, path, ".lua");
   setItems(_browser.items(), _browser.count());
@@ -14,7 +13,7 @@ void LuaRunnerScreen::_loadDir(const String& path) {
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::onInit() {
+void LuaScreen::onInit() {
   if (!Uni.Storage || !Uni.Storage->isAvailable()) {
     Screen.goBack();
     return;
@@ -24,7 +23,7 @@ void LuaRunnerScreen::onInit() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::onUpdate() {
+void LuaScreen::onUpdate() {
   if (_state == STATE_BROWSE) {
     ListScreen::onUpdate();
     return;
@@ -49,26 +48,25 @@ void LuaRunnerScreen::onUpdate() {
 
 // ── Render ────────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::onRender() {
+void LuaScreen::onRender() {
   if (_state == STATE_BROWSE) { ListScreen::onRender(); return; }
   if (_state == STATE_RUNNING) { _drawRunning(); return; }
   _drawDone();
 }
 
-void LuaRunnerScreen::onBack() {
+void LuaScreen::onBack() {
   if (_state != STATE_BROWSE) return;
   if (_currentDir == ROOT_DIR) {
     Screen.goBack();
     return;
   }
-  // Navigate up one level
   int slash = _currentDir.lastIndexOf('/');
   String parent = (slash > 0) ? _currentDir.substring(0, slash) : ROOT_DIR;
   if (parent.length() == 0) parent = ROOT_DIR;
   _loadDir(parent);
 }
 
-void LuaRunnerScreen::onItemSelected(uint8_t index) {
+void LuaScreen::onItemSelected(uint8_t index) {
   if (_state != STATE_BROWSE) return;
   const auto& entry = _browser.entry(index);
   if (entry.isDir) {
@@ -80,7 +78,7 @@ void LuaRunnerScreen::onItemSelected(uint8_t index) {
 
 // ── Script start ──────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::_startScript(const String& path) {
+void LuaScreen::_startScript(const String& path) {
   _log.clear();
   _errBuf = "";
 
@@ -120,7 +118,7 @@ void LuaRunnerScreen::_startScript(const String& path) {
 
 // ── Done state ────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::_handleDone(bool isError) {
+void LuaScreen::_handleDone(bool isError) {
   _engine.deinit();
   if (!isError) {
     _state = STATE_BROWSE;
@@ -138,12 +136,12 @@ void LuaRunnerScreen::_handleDone(bool isError) {
 
 // ── Drawing ───────────────────────────────────────────────────────────────────
 
-void LuaRunnerScreen::_drawRunning() {
+void LuaScreen::_drawRunning() {
   int w = Uni.Lcd.width(), h = Uni.Lcd.height();
   _log.draw(Uni.Lcd, 0, 0, w, h);
 }
 
-void LuaRunnerScreen::_drawDone() {
+void LuaScreen::_drawDone() {
   int w = Uni.Lcd.width(), h = Uni.Lcd.height();
   _log.draw(Uni.Lcd, 0, 0, w, h - 12);
   Uni.Lcd.setTextSize(1);

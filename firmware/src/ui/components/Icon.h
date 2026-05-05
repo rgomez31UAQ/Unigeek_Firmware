@@ -73,6 +73,12 @@ public:
   }
 
   template<typename T>
+  static void drawLua(T& lcd, int16_t x, int16_t y, uint16_t color) {
+    static constexpr uint8_t bmp[] = {0x04, 0x0E, 0x74, 0xF8, 0xF8, 0xF8, 0x70, 0x00};
+    _draw(lcd, x, y, bmp, color);
+  }
+
+  template<typename T>
   static void drawBack(T& lcd, int16_t x, int16_t y, uint16_t color) {
     static constexpr uint8_t bmp[] = {0x00, 0x0C, 0x30, 0xC0, 0x30, 0x0C, 0x00, 0x00};
     _draw(lcd, x, y, bmp, color);

@@ -28,9 +28,9 @@ private:
   };
 
 #ifdef APP_MENU_POWER_OFF
-  static const uint8_t ITEM_COUNT = 8;
+  static const uint8_t ITEM_COUNT = 9;
 #else
-  static const uint8_t ITEM_COUNT = 7;
+  static const uint8_t ITEM_COUNT = 8;
 #endif
 
   GridItem _items[ITEM_COUNT];

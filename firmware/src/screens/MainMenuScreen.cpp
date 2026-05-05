@@ -10,6 +10,7 @@
 #include "screens/game/GameMenuScreen.h"
 #include "screens/module/ModuleMenuScreen.h"
 #include "screens/utility/UtilityMenuScreen.h"
+#include "screens/LuaScreen.h"
 #include "screens/setting/SettingScreen.h"
 #include "screens/CharacterScreen.h"
 #include "ui/components/Icon.h"
@@ -21,10 +22,11 @@ void MainMenuScreen::onInit() {
   _items[2] = {"HID", Icons::drawKeyboard};
   _items[3] = {"Modules", Icons::drawModule};
   _items[4] = {"Utility", Icons::drawUtility};
-  _items[5] = {"Games", Icons::drawGame};
-  _items[6] = {"Settings", Icons::drawSetting};
+  _items[5] = {"LUA", Icons::drawLua};
+  _items[6] = {"Games", Icons::drawGame};
+  _items[7] = {"Settings", Icons::drawSetting};
 #ifdef APP_MENU_POWER_OFF
-  _items[7] = {"Power Off", Icons::drawPower};
+  _items[8] = {"Power Off", Icons::drawPower};
 #endif
 
   _selectedIndex    = 0;
@@ -214,10 +216,11 @@ void MainMenuScreen::onItemSelected(uint8_t index) {
   case 2: Screen.push(new KeyboardMenuScreen()); break;
   case 3: Screen.push(new ModuleMenuScreen());   break;
   case 4: Screen.push(new UtilityMenuScreen());  break;
-  case 5: Screen.push(new GameMenuScreen());     break;
-  case 6: Screen.push(new SettingScreen());      break;
+  case 5: Screen.push(new LuaScreen());          break;
+  case 6: Screen.push(new GameMenuScreen());     break;
+  case 7: Screen.push(new SettingScreen());      break;
 #ifdef APP_MENU_POWER_OFF
-  case 7: Uni.Power.powerOff(); break;
+  case 8: Uni.Power.powerOff(); break;
 #endif
   }
 }

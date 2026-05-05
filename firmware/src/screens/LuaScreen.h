@@ -4,7 +4,7 @@
 #include "ui/views/LogView.h"
 #include "utils/interpreter/LuaEngine.h"
 
-class LuaRunnerScreen : public ListScreen {
+class LuaScreen : public ListScreen {
 public:
   const char* title()          override { return _state == STATE_BROWSE ? "Lua Runner" : nullptr; }
   bool isFullScreen()          override { return _state != STATE_BROWSE; }
