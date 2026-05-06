@@ -9,21 +9,18 @@ namespace webauthn {
 // Ctaphid via setHandler() with `Ctap2::dispatch` as the callback.
 //
 // Commands implemented:
-//   0x01 authenticatorMakeCredential
-//   0x02 authenticatorGetAssertion
+//   0x01 authenticatorMakeCredential   (rk=true → resident/discoverable creds)
+//   0x02 authenticatorGetAssertion     (empty allowList → resident cred lookup)
 //   0x04 authenticatorGetInfo
+//   0x06 authenticatorClientPIN        (proto v1, subcommands 1-5 + 9)
 //   0x07 authenticatorReset
-//
-// ClientPIN partially implemented (subcommands 0x01 getPINRetries + 0x02
-// getKeyAgreement only — needed by hmac-secret negotiation). Other
-// subcommands (setPIN / changePIN / getPinToken / getPinUvAuthToken*) return
-// CTAP2_ERR_INVALID_OPTION until full Phase 5c lands.
+//   0x0B authenticatorSelection        (CTAP 2.1 §6.9)
 //
 // Commands stubbed:
-//   0x08 authenticatorGetNextAssertion   — multi-credential (deferred)
+//   0x08 authenticatorGetNextAssertion — multi-credential (deferred)
 //
-// User presence (UP): currently auto-asserted (always 1). Phase 8 will wire
-// in a real button-confirm screen via setUserPresenceFn().
+// User presence (UP): wired to a user-presence callback installed by the
+// WebAuthn screen via setUserPresenceFn(); auto-asserted when callback is null.
 class Ctap2 {
 public:
   using UserPresenceFn = bool (*)(const char* rpId, void* user);

@@ -8,10 +8,10 @@ namespace webauthn {
 // Credential persistence and credential-ID wrapping.
 //
 // Layout under primary storage (SD if mounted, else LFS):
-//   /unigeek/utility/fido/master.bin    — 32 B master key (one-time generated)
-//   /unigeek/utility/fido/counter.bin   — 4 B big-endian global signature counter
-//   /unigeek/utility/fido/residents.bin — array of ResidentCred records (Phase 5b)
-//   /unigeek/utility/fido/pin.bin       — 16 B PIN HMAC + 1 B retry counter (Phase 5c)
+//   /unigeek/utility/fido/master.bin         — 32 B master key (one-time generated)
+//   /unigeek/utility/fido/counter.bin        — 4 B big-endian global signature counter
+//   /unigeek/utility/fido/pin.bin            — retries(1) | pinLen(1) | pinHash(16) = 18 B
+//   /unigeek/utility/fido/credentials/<n>.bin — one ResidentCredRecord per discoverable cred
 //
 // Credential ID format (96 bytes opaque to RP):
 //   nonce(16) || rpIdHash(32) || ct(32) || tag(16)
@@ -76,7 +76,36 @@ public:
   static bool decrementPinRetries();
   static bool clearPin         ();
 
-  // Wipe master + counter + resident table + PIN. Master key is then
+  // ── Resident credentials (Phase 5) ────────────────────────────────────
+  // One file per discoverable credential under
+  // /unigeek/utility/fido/credentials/<hex16_rp>_<hex16_user>.bin
+  // hex16_rp   = lowercase hex of rpIdHash[0..7]
+  // hex16_user = lowercase hex of SHA-256(userId)[0..7]
+
+  struct ResidentCredRecord {
+    uint8_t credId[kCredIdSize];     // wrapped credential ID (96 B)
+    uint8_t rpIdHash[kRpIdHashSize]; // full rpIdHash for collision check (32 B)
+    uint8_t userIdLen;               // actual byte length of userId (≤ 64)
+    uint8_t userId[64];              // raw user.id bytes
+    char    rpId[128];               // NUL-padded RP identifier
+    char    userName[65];            // NUL-padded user.name (for CredentialManagement)
+    // Total: 386 bytes — all 1-byte fields, no padding
+  };
+
+  using ResidentCredCb = void (*)(const ResidentCredRecord& rec, void* ctx);
+
+  // Write (or overwrite) a resident credential for the given RP + userId.
+  static bool writeResidentCred(const ResidentCredRecord& rec);
+
+  // Enumerate all resident creds whose rpIdHash matches.
+  // Calls cb for each match; returns the total number of calls made.
+  static int  enumResidentCreds(const uint8_t rpIdHash[kRpIdHashSize],
+                                 ResidentCredCb cb, void* ctx);
+
+  // Delete all resident credential files (called from wipe).
+  static void deleteAllResidentCreds();
+
+  // Wipe master + counter + resident creds + PIN. Master key is then
   // regenerated lazily on next encode call. All previously issued
   // credentials are rendered useless (intended).
   static bool wipe();

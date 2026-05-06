@@ -23,6 +23,9 @@ constexpr const char* kCounterPath = "/unigeek/utility/fido/counter.bin";
 constexpr const char* kDevKeyPath  = "/unigeek/utility/fido/u2f_priv.bin";
 constexpr const char* kDevCertPath = "/unigeek/utility/fido/u2f_cert.der";
 constexpr const char* kPinPath     = "/unigeek/utility/fido/pin.bin";
+constexpr const char* kCredsDir    = "/unigeek/utility/fido/credentials";
+
+static const char kHex[] = "0123456789abcdef";
 
 uint8_t  g_master[CredentialStore::kMasterKeySize];
 bool     g_masterLoaded = false;
@@ -41,6 +44,26 @@ bool     g_devCertLoaded = false;
 // by `Device::initStorage()`. Direct StorageLFS sometimes isn't populated
 // on boards that mount SD as primary.
 IStorage* storage() { return Uni.Storage; }
+
+// Build the 37-char filename (+ NUL) for a resident cred file.
+// Format: <hex16_rpIdHash[0..7]>_<hex16_sha256(userId)[0..7]>.bin
+void credFileName(const uint8_t rpIdHash[32],
+                  const uint8_t* userId, uint8_t userIdLen,
+                  char out[38])
+{
+  for (int i = 0; i < 8; i++) {
+    out[i * 2]     = kHex[rpIdHash[i] >> 4];
+    out[i * 2 + 1] = kHex[rpIdHash[i] & 0x0F];
+  }
+  out[16] = '_';
+  uint8_t uHash[32];
+  WebAuthnCrypto::sha256(userId, userIdLen, uHash);
+  for (int i = 0; i < 8; i++) {
+    out[17 + i * 2]     = kHex[uHash[i] >> 4];
+    out[17 + i * 2 + 1] = kHex[uHash[i] & 0x0F];
+  }
+  memcpy(out + 33, ".bin", 5);  // includes NUL
+}
 
 bool ensureDir()
 {
@@ -65,6 +88,16 @@ bool ensureDir()
   }
   bool ok = storage()->makeDir(kDir);
   WA_LOG("CS makeDir %s -> %d", kDir, (int)ok);
+  return ok;
+}
+
+bool ensureCredsDir()
+{
+  if (!ensureDir()) return false;
+  if (!storage()) return false;
+  if (storage()->exists(kCredsDir)) return true;
+  bool ok = storage()->makeDir(kCredsDir);
+  WA_LOG("CS makeDir %s -> %d", kCredsDir, (int)ok);
   return ok;
 }
 
@@ -365,6 +398,70 @@ bool CredentialStore::clearPin()
   return true;
 }
 
+bool CredentialStore::writeResidentCred(const ResidentCredRecord& rec)
+{
+  if (!init() || !ensureCredsDir()) return false;
+  char fname[38];
+  credFileName(rec.rpIdHash, rec.userId, rec.userIdLen, fname);
+  char path[80];
+  snprintf(path, sizeof(path), "%s/%s", kCredsDir, fname);
+  bool ok = writeBytes(path, reinterpret_cast<const uint8_t*>(&rec), sizeof(rec));
+  WA_LOG("CS writeResidentCred %s -> %d", fname, (int)ok);
+  return ok;
+}
+
+int CredentialStore::enumResidentCreds(const uint8_t rpIdHash[kRpIdHashSize],
+                                        ResidentCredCb cb, void* ctx)
+{
+  if (!storage() || !storage()->exists(kCredsDir)) return 0;
+
+  // Build the 16-char hex prefix for rpIdHash[0..7] for fast pre-filter.
+  char prefix[17];
+  for (int i = 0; i < 8; i++) {
+    prefix[i * 2]     = kHex[rpIdHash[i] >> 4];
+    prefix[i * 2 + 1] = kHex[rpIdHash[i] & 0x0F];
+  }
+  prefix[16] = '\0';
+
+  constexpr uint8_t kMaxEntries = 64;
+  static IStorage::DirEntry entries[kMaxEntries];  // static: dispatch is single-threaded
+  uint8_t n = storage()->listDir(kCredsDir, entries, kMaxEntries);
+
+  int count = 0;
+  static ResidentCredRecord rec;
+  static char path[80];
+
+  for (uint8_t i = 0; i < n; i++) {
+    if (entries[i].isDir) continue;
+    if (strncmp(entries[i].name.c_str(), prefix, 16) != 0) continue;
+    snprintf(path, sizeof(path), "%s/%s", kCredsDir, entries[i].name.c_str());
+    if (!readBytes(path, reinterpret_cast<uint8_t*>(&rec), sizeof(rec))) continue;
+    if (memcmp(rec.rpIdHash, rpIdHash, kRpIdHashSize) != 0) continue;
+    count++;
+    cb(rec, ctx);
+  }
+  memset(&rec, 0, sizeof(rec));
+  return count;
+}
+
+void CredentialStore::deleteAllResidentCreds()
+{
+  if (!storage() || !storage()->exists(kCredsDir)) return;
+
+  constexpr uint8_t kMaxEntries = 64;
+  static IStorage::DirEntry entries[kMaxEntries];
+  uint8_t n = storage()->listDir(kCredsDir, entries, kMaxEntries);
+
+  static char path[80];
+  for (uint8_t i = 0; i < n; i++) {
+    if (entries[i].isDir) continue;
+    snprintf(path, sizeof(path), "%s/%s", kCredsDir, entries[i].name.c_str());
+    storage()->deleteFile(path);
+  }
+  storage()->removeDir(kCredsDir);
+  WA_LOG("CS deleteAllResidentCreds: removed %u files", (unsigned)n);
+}
+
 bool CredentialStore::wipe()
 {
   if (!storage()) return false;
@@ -373,6 +470,7 @@ bool CredentialStore::wipe()
   storage()->deleteFile(kDevKeyPath);
   storage()->deleteFile(kDevCertPath);
   storage()->deleteFile(kPinPath);
+  deleteAllResidentCreds();
   g_devKeyLoaded   = false;
   g_devCertLoaded  = false;
   g_devCertLen     = 0;

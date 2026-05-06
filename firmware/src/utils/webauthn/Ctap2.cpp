@@ -43,6 +43,13 @@ constexpr uint8_t FLAG_UV = 0x04;
 constexpr uint8_t FLAG_AT = 0x40;
 constexpr uint8_t FLAG_ED = 0x80;  // extension data present
 
+// Context for resident-cred enumeration inside GetAssertion.
+struct RkContext {
+  int  count;
+  bool found;
+  CredentialStore::ResidentCredRecord rec;
+};
+
 // Single-byte CTAP2 status response
 inline uint16_t statusOnly(uint8_t* out, uint8_t status)
 {
@@ -254,14 +261,14 @@ uint16_t Ctap2::_handleGetInfo(const uint8_t*, uint16_t,
   w.putBytes(kAAGUID, sizeof(kAAGUID));
 
   // 0x04 options. Per CTAP2 spec text-key canonical order (length, then byte):
-  //   "up" (2) < "clientPin" (9) < "pinUvAuthToken" (14)
-  //   rk omitted — resident keys not supported yet.
+  //   "rk" (2) < "up" (2, 'r'<'u') < "clientPin" (9) < "pinUvAuthToken" (14)
   //   clientPin: present-and-true if a PIN is currently set; present-and-false
   //              if the authenticator supports PIN but none configured.
   //   pinUvAuthToken: present-and-true since we implement proto v1.
   bool pinIsSet = CredentialStore::isPinSet();
   w.putUint(0x04);
-  w.beginMap(3);
+  w.beginMap(4);
+    w.putText("rk");              w.putBool(true);
     w.putText("up");              w.putBool(true);
     w.putText("clientPin");       w.putBool(pinIsSet);
     w.putText("pinUvAuthToken");  w.putBool(true);
@@ -308,8 +315,10 @@ uint16_t Ctap2::_handleMakeCredential(const uint8_t* req, uint16_t reqLen,
   bool     gotCdh = false;
   char     rpId[128]; size_t rpIdLen = 0;
   uint8_t  userId[64]; size_t userIdLen = 0;
+  char     mcUserName[65]; memset(mcUserName, 0, sizeof(mcUserName));
   bool     hasEs256 = false;
   bool     reqHmacSecret = false;
+  bool     reqRk = false;
   const uint8_t* pinUvAuthParam = nullptr;  size_t pupLen = 0;
   uint64_t pinUvAuthProtocol = 0;
 
@@ -349,6 +358,8 @@ uint16_t Ctap2::_handleMakeCredential(const uint8_t* req, uint16_t reqLen,
               return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
             memcpy(userId, p, n);
             userIdLen = n;
+          } else if (klen == 4 && memcmp(key, "name", 4) == 0) {
+            readTextInto(r, mcUserName, sizeof(mcUserName), nullptr);
           } else {
             r.skip();
           }
@@ -388,6 +399,22 @@ uint16_t Ctap2::_handleMakeCredential(const uint8_t* req, uint16_t reqLen,
             bool b;
             if (!r.readBool(&b)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
             if (b) reqHmacSecret = true;
+          } else {
+            r.skip();
+          }
+        }
+        break;
+      }
+      case 0x07: {  // options = { rk?: bool, uv?: bool, up?: bool }
+        size_t optMap;
+        if (!r.readMapHeader(&optMap)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+        for (size_t j = 0; j < optMap; j++) {
+          const char* key; size_t klen;
+          if (!r.readText(&key, &klen)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+          if (klen == 2 && memcmp(key, "rk", 2) == 0) {
+            bool b;
+            if (!r.readBool(&b)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+            reqRk = b;
           } else {
             r.skip();
           }
@@ -465,6 +492,27 @@ uint16_t Ctap2::_handleMakeCredential(const uint8_t* req, uint16_t reqLen,
   if (!CredentialStore::encodeCredentialId(priv, rpIdHash, credId)) {
     WA_LOG("MC fail: encodeCredentialId");
     return statusOnly(out, CTAP2_ERR_PROCESSING);
+  }
+
+  // Persist as a discoverable credential when rk=true was requested.
+  if (reqRk) {
+    static CredentialStore::ResidentCredRecord s_res;
+    memset(&s_res, 0, sizeof(s_res));
+    memcpy(s_res.credId, credId, sizeof(credId));
+    memcpy(s_res.rpIdHash, rpIdHash, sizeof(rpIdHash));
+    s_res.userIdLen = (uint8_t)(userIdLen <= 64 ? userIdLen : 64);
+    memcpy(s_res.userId, userId, s_res.userIdLen);
+    size_t rpCopy = rpIdLen < sizeof(s_res.rpId) - 1 ? rpIdLen : sizeof(s_res.rpId) - 1;
+    memcpy(s_res.rpId, rpId, rpCopy);
+    size_t unLen  = strlen(mcUserName);
+    size_t unCopy = unLen < sizeof(s_res.userName) - 1 ? unLen : sizeof(s_res.userName) - 1;
+    memcpy(s_res.userName, mcUserName, unCopy);
+    if (!CredentialStore::writeResidentCred(s_res)) {
+      WA_LOG("MC fail: writeResidentCred");
+      memset(&s_res, 0, sizeof(s_res));
+      return statusOnly(out, CTAP2_ERR_PROCESSING);
+    }
+    WA_LOG("MC: resident cred written for rpId=%s", rpId);
   }
 
   // ── Build authData ─────────────────────────────────────────────────
@@ -577,6 +625,7 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
   size_t  winnerCredIdLen = 0;
   uint8_t winnerPriv[32];
   bool    found = false;
+  bool    allowListPresent = false;
 
   // hmac-secret extension input (parsed from request key 0x04). All four
   // fields are populated together when the host requests hmac-secret.
@@ -608,6 +657,7 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
         break;
       }
       case 0x03: {  // allowList
+        allowListPresent = true;
         size_t arr; if (!r.readArrayHeader(&arr)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
         // We need rpId before we can decode credential IDs. If rpId hasn't
         // been seen yet (allowList came before key 0x01 — possible but
@@ -706,29 +756,70 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
            (int)gotCdh, (unsigned)rpIdLen);
     return statusOnly(out, CTAP2_ERR_MISSING_PARAMETER);
   }
+
+  // Compute rpIdHash once — reused for resident cred lookup, PIN check, authData.
+  uint8_t rpIdHash[32];
+  WebAuthnCrypto::sha256((const uint8_t*)rpId, rpIdLen, rpIdHash);
+
+  // Resident cred state (populated below if no allowList match)
+  bool    isResident    = false;
+  uint8_t resUserId[64] = {0};
+  uint8_t resUserIdLen  = 0;
+  char    resUserName[65] = {0};
+  int     numCreds      = 1;
+
   if (!found) {
-    WA_LOG("GA fail: no matching cred in allowList (rpId=%s)", rpId);
-    return statusOnly(out, CTAP2_ERR_NO_CREDENTIALS);
+    if (allowListPresent) {
+      WA_LOG("GA fail: no matching cred in allowList (rpId=%s)", rpId);
+      return statusOnly(out, CTAP2_ERR_NO_CREDENTIALS);
+    }
+    // Discoverable credential path — walk the resident cred store.
+    static RkContext s_rk;
+    memset(&s_rk, 0, sizeof(s_rk));
+    CredentialStore::enumResidentCreds(rpIdHash,
+      [](const CredentialStore::ResidentCredRecord& r, void* p) {
+        auto* c = static_cast<RkContext*>(p);
+        c->count++;
+        if (!c->found) { c->rec = r; c->found = true; }
+      }, &s_rk);
+
+    if (!s_rk.found) {
+      WA_LOG("GA fail: no resident creds for rpId=%s", rpId);
+      return statusOnly(out, CTAP2_ERR_NO_CREDENTIALS);
+    }
+    if (!CredentialStore::decodeCredentialId(s_rk.rec.credId,
+                                             CredentialStore::kCredIdSize,
+                                             rpIdHash, winnerPriv)) {
+      WA_LOG("GA fail: decodeCredentialId failed for resident cred");
+      memset(&s_rk, 0, sizeof(s_rk));
+      return statusOnly(out, CTAP2_ERR_NO_CREDENTIALS);
+    }
+    memcpy(winnerCredId, s_rk.rec.credId, CredentialStore::kCredIdSize);
+    winnerCredIdLen = CredentialStore::kCredIdSize;
+    isResident   = true;
+    resUserIdLen = s_rk.rec.userIdLen;
+    memcpy(resUserId, s_rk.rec.userId, resUserIdLen);
+    memcpy(resUserName, s_rk.rec.userName, sizeof(resUserName));
+    numCreds = s_rk.count;
+    found    = true;
+    memset(&s_rk, 0, sizeof(s_rk));
+    WA_LOG("GA: resident cred found (numCreds=%d)", numCreds);
   }
 
   // ── PIN/UV auth verification (CTAP 2.1 §6.1) ────────────────────────
   bool gaUv = false;
   if (gaPinUvAuthParam) {
-    uint8_t gaRpIdHash[32];
-    WebAuthnCrypto::sha256((const uint8_t*)rpId, rpIdLen, gaRpIdHash);
     if (!verifyPinUvAuthParam(gaPinUvAuthProtocol, clientDataHash, 32,
                               gaPinUvAuthParam, gaPupLen)) {
       WA_LOG("GA fail: pinUvAuthParam mismatch");
       return statusOnly(out, CTAP2_ERR_PIN_AUTH_INVALID);
     }
-    if (!checkPinPermissions(PERM_GA, gaRpIdHash)) {
+    if (!checkPinPermissions(PERM_GA, rpIdHash)) {
       WA_LOG("GA fail: token lacks GA perm or RP-locked elsewhere");
       return statusOnly(out, CTAP2_ERR_PIN_AUTH_INVALID);
     }
     gaUv = true;
   } else if (CredentialStore::isPinSet()) {
-    // GetAssertion permits no-PIN flow only if the credential allows it.
-    // We don't yet track per-cred policy, so when a PIN is set we require it.
     WA_LOG("GA fail: PIN set but no pinUvAuthParam");
     return statusOnly(out, CTAP2_ERR_PIN_REQUIRED);
   }
@@ -809,8 +900,6 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
   }
 
   // ── Build authData (no attestedCredentialData this time) ────────────
-  uint8_t rpIdHash[32];
-  WebAuthnCrypto::sha256((const uint8_t*)rpId, rpIdLen, rpIdHash);
   uint32_t counter = CredentialStore::bumpCounter();
 
   // Build the response extensions CBOR if hmac-secret was processed.
@@ -866,19 +955,37 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
   // Canonical CBOR: shorter text key first → "id" (2) before "type" (4).
   // Some hosts (Chrome's webauthn stack) reject GetAssertion responses
   // when keys aren't in canonical order, even if they parse otherwise.
-  w.beginMap(3);
+  //
+  // For resident creds: include 0x04 user (always) and 0x05 numberOfCredentials
+  // (only when > 1, per CTAP2 §6.2) so the browser knows which account signed.
+  bool hasUserName = isResident && resUserName[0] != '\0';
+  int  respKeys    = 3
+                   + (isResident ? 1 : 0)               // 0x04 user
+                   + (isResident && numCreds > 1 ? 1 : 0); // 0x05 numberOfCredentials
+  w.beginMap(respKeys);
     w.putUint(0x01);
       w.beginMap(2);
         w.putText("id");   w.putBytes(winnerCredId, winnerCredIdLen);
         w.putText("type"); w.putText("public-key");
     w.putUint(0x02);  w.putBytes(authData, authLen);
     w.putUint(0x03);  w.putBytes(sigDer, sigLen);
+    if (isResident) {
+      // 0x04 user: "id" (2) before "name" (4) — canonical text-key order.
+      w.putUint(0x04);
+      w.beginMap(hasUserName ? 2 : 1);
+        w.putText("id");   w.putBytes(resUserId, resUserIdLen);
+        if (hasUserName) { w.putText("name"); w.putText(resUserName); }
+      if (numCreds > 1) {
+        w.putUint(0x05);  w.putUint((uint64_t)numCreds);
+      }
+    }
 
   if (!w.ok()) {
     WA_LOG("GA fail: response CBOR encoder overflow (outMax=%u)", (unsigned)outMax);
     return statusOnly(out, CTAP2_ERR_PROCESSING);
   }
-  WA_LOG("GA ok: respLen=%u", (unsigned)(1 + w.size()));
+  WA_LOG("GA ok: respLen=%u resident=%d numCreds=%d",
+         (unsigned)(1 + w.size()), (int)isResident, numCreds);
   return (uint16_t)(1 + w.size());
 }
 
