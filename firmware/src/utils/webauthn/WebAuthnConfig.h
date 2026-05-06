@@ -65,6 +65,7 @@ enum Ctap2Cmd : uint8_t {
   CTAP2_GET_NEXT_ASSERTION     = 0x08,
   CTAP2_CREDENTIAL_MANAGEMENT  = 0x0A,
   CTAP2_SELECTION              = 0x0B,
+  CTAP2_AUTHENTICATOR_CONFIG   = 0x0D,
 };
 
 // CTAP2 status codes (sent as the first byte of every CBOR response)

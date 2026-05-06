@@ -270,8 +270,8 @@ uint16_t Ctap2::_handleGetInfo(const uint8_t*, uint16_t,
 
   // Map keys must be in canonical (ascending) order:
   //   1 versions, 2 extensions, 3 aaguid, 4 options, 5 maxMsgSize,
-  //   6 pinUvAuthProtocols, 9 transports, 10 algorithms
-  w.beginMap(8);
+  //   6 pinUvAuthProtocols, 9 transports, 10 algorithms, 13 minPINLength
+  w.beginMap(9);
 
   // 0x01 versions — advertise CTAP 2.1 since we emit 2.1-only keys
   // (transports 0x09, algorithms 0x0A). U2F_V2 is for CTAP1/AUTHENTICATE
@@ -292,18 +292,23 @@ uint16_t Ctap2::_handleGetInfo(const uint8_t*, uint16_t,
   w.putBytes(kAAGUID, sizeof(kAAGUID));
 
   // 0x04 options. Per CTAP2 spec text-key canonical order (length, then byte):
-  //   "rk"(2) < "up"(2,'r'<'u') < "credMgmt"(8) < "clientPin"(9) < "pinUvAuthToken"(14)
+  //   "rk"(2) < "up"(2,'r'<'u') < "alwaysUv"(8,a<c) < "credMgmt"(8)
+  //     < "authnrCfg"(9,a<c) < "clientPin"(9) < "pinUvAuthToken"(14)
+  //     < "setMinPINLength"(15)
   //   clientPin: present-and-true if a PIN is currently set; present-and-false
   //              if the authenticator supports PIN but none configured.
-  //   pinUvAuthToken: present-and-true since we implement proto v1.
-  bool pinIsSet = CredentialStore::isPinSet();
+  bool pinIsSet  = CredentialStore::isPinSet();
+  bool alwaysUv  = CredentialStore::getAlwaysUv();
   w.putUint(0x04);
-  w.beginMap(5);
-    w.putText("rk");              w.putBool(true);
-    w.putText("up");              w.putBool(true);
-    w.putText("credMgmt");        w.putBool(true);
-    w.putText("clientPin");       w.putBool(pinIsSet);
-    w.putText("pinUvAuthToken");  w.putBool(true);
+  w.beginMap(8);
+    w.putText("rk");               w.putBool(true);
+    w.putText("up");               w.putBool(true);
+    w.putText("alwaysUv");         w.putBool(alwaysUv);
+    w.putText("credMgmt");         w.putBool(true);
+    w.putText("authnrCfg");        w.putBool(true);
+    w.putText("clientPin");        w.putBool(pinIsSet);
+    w.putText("pinUvAuthToken");   w.putBool(true);
+    w.putText("setMinPINLength");  w.putBool(true);
 
   // 0x05 maxMsgSize
   w.putUint(0x05);
@@ -329,6 +334,10 @@ uint16_t Ctap2::_handleGetInfo(const uint8_t*, uint16_t,
     w.beginMap(2);
       w.putText("alg");  w.putInt(COSE_ES256);
       w.putText("type"); w.putText("public-key");
+
+  // 0x0D minPINLength — current configured minimum PIN length.
+  w.putUint(0x0D);
+  w.putUint(CredentialStore::getMinPinLen());
 
   if (!w.ok()) return statusOnly(out, CTAP2_ERR_PROCESSING);
   return (uint16_t)(1 + w.size());
@@ -499,6 +508,10 @@ uint16_t Ctap2::_handleMakeCredential(const uint8_t* req, uint16_t reqLen,
   } else if (CredentialStore::isPinSet()) {
     // PIN is set but the request didn't carry pinUvAuthParam — must reject.
     WA_LOG("MC fail: PIN set but no pinUvAuthParam");
+    return statusOnly(out, CTAP2_ERR_PIN_REQUIRED);
+  } else if (CredentialStore::getAlwaysUv()) {
+    // alwaysUv is on but no PIN exists yet — host must setPIN first.
+    WA_LOG("MC fail: alwaysUv set, no PIN configured");
     return statusOnly(out, CTAP2_ERR_PIN_REQUIRED);
   }
 
@@ -856,6 +869,9 @@ uint16_t Ctap2::_handleGetAssertion(const uint8_t* req, uint16_t reqLen,
   } else if (CredentialStore::isPinSet()) {
     WA_LOG("GA fail: PIN set but no pinUvAuthParam");
     return statusOnly(out, CTAP2_ERR_PIN_REQUIRED);
+  } else if (CredentialStore::getAlwaysUv()) {
+    WA_LOG("GA fail: alwaysUv set, no PIN configured");
+    return statusOnly(out, CTAP2_ERR_PIN_REQUIRED);
   }
 
   WA_LOG("GA: cred matched, requesting UP for rp=%s", rpId);
@@ -1197,6 +1213,8 @@ uint16_t Ctap2::_handleGetNextAssertion(uint8_t* out, uint16_t outMax)
 
 namespace {
 
+// Static floor; runtime min is `CredentialStore::getMinPinLen()` which the
+// host can raise via AuthenticatorConfig.setMinPINLength.
 constexpr uint8_t kPinMinLength = 4;
 
 // Compute the proto v1 sharedSecret = SHA-256(ECDH(devPriv, peerPub).X).
@@ -1383,9 +1401,10 @@ uint16_t Ctap2::_handleClientPin(const uint8_t* req, uint16_t reqLen,
     // Find the actual PIN length (UTF-8 NUL-terminated within the 64-byte pad).
     uint8_t pinLen = 0;
     while (pinLen < 64 && paddedPin[pinLen] != 0) pinLen++;
-    if (pinLen < kPinMinLength) {
+    uint8_t minLen = CredentialStore::getMinPinLen();
+    if (pinLen < minLen) {
       WA_LOG("CP setPIN fail: pin too short (%u < %u)",
-             (unsigned)pinLen, (unsigned)kPinMinLength);
+             (unsigned)pinLen, (unsigned)minLen);
       memset(paddedPin, 0, sizeof(paddedPin));
       return statusOnly(out, CTAP2_ERR_PIN_POLICY_VIOLATION);
     }
@@ -1472,7 +1491,7 @@ uint16_t Ctap2::_handleClientPin(const uint8_t* req, uint16_t reqLen,
       return statusOnly(out, CTAP2_ERR_PROCESSING);
     uint8_t pinLen = 0;
     while (pinLen < 64 && paddedPin[pinLen] != 0) pinLen++;
-    if (pinLen < kPinMinLength) {
+    if (pinLen < CredentialStore::getMinPinLen()) {
       memset(paddedPin, 0, sizeof(paddedPin));
       return statusOnly(out, CTAP2_ERR_PIN_POLICY_VIOLATION);
     }
@@ -1789,6 +1808,134 @@ uint16_t Ctap2::_handleCredentialManagement(const uint8_t* req, uint16_t reqLen,
   return statusOnly(out, CTAP2_ERR_INVALID_OPTION);
 }
 
+// ── AuthenticatorConfig ───────────────────────────────────────────────
+// CTAP 2.1 §6.11. Subcommands implemented:
+//   0x02 toggleAlwaysUv     — flip the alwaysUv flag (no params)
+//   0x03 setMinPINLength    — raise the minimum PIN length (params map)
+// Subcommands not implemented:
+//   0x01 enableEnterpriseAttestation, 0x04 vendorPrototype → INVALID_OPTION
+//
+// pinUvAuthParam = LEFT(HMAC-SHA-256(paut_token,
+//                       0xFF×32 || 0x0D || subCmd || subCmdParamsCBOR), 16)
+// The 0xFF×32 prefix is the AuthenticatorConfig context tag per spec, used
+// to prevent cross-protocol replay against ClientPIN / CM.
+
+uint16_t Ctap2::_handleAuthenticatorConfig(const uint8_t* req, uint16_t reqLen,
+                                            uint8_t* out, uint16_t outMax)
+{
+  CborReader r(req, reqLen);
+  size_t mapCount = 0;
+  if (!r.readMapHeader(&mapCount)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+
+  uint64_t       subCmd          = 0;
+  uint64_t       protocol        = 0;
+  const uint8_t* pinUvAuthParam  = nullptr; size_t pupLen = 0;
+  const uint8_t* subCmdParamsPtr = nullptr; size_t subCmdParamsLen = 0;
+  uint64_t       newMinPinLen    = 0;
+  bool           gotNewMinPinLen = false;
+
+  for (size_t i = 0; i < mapCount; i++) {
+    uint64_t k;
+    if (!r.readUint(&k)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+    switch (k) {
+      case 0x01:
+        if (!r.readUint(&subCmd)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+        break;
+      case 0x02: {  // subCommandParams — capture raw CBOR for pinUvAuthParam mac
+        size_t paramStart = r.pos();
+        size_t pmapCount;
+        if (!r.readMapHeader(&pmapCount)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+        for (size_t j = 0; j < pmapCount; j++) {
+          uint64_t pk;
+          if (!r.readUint(&pk)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+          if (pk == 0x01) {  // setMinPINLength.newMinPINLength
+            if (!r.readUint(&newMinPinLen))
+              return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+            gotNewMinPinLen = true;
+          } else {
+            r.skip();  // forceChangePin (0x02), minPinLengthRPIDs (0x03) — ignore
+          }
+        }
+        subCmdParamsPtr = req + paramStart;
+        subCmdParamsLen = r.pos() - paramStart;
+        break;
+      }
+      case 0x03:
+        if (!r.readUint(&protocol)) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+        break;
+      case 0x04:
+        if (!r.readBytes(&pinUvAuthParam, &pupLen))
+          return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+        break;
+      default:
+        r.skip();
+        break;
+    }
+    if (!r.ok()) return statusOnly(out, CTAP2_ERR_INVALID_CBOR);
+  }
+
+  // All ACfg subcommands require pinUvAuthParam with PERM_ACFG.
+  if (!pinUvAuthParam || pupLen != 16) {
+    WA_LOG("ACfg fail: missing pinUvAuthParam");
+    return statusOnly(out, CTAP2_ERR_MISSING_PARAMETER);
+  }
+  // data = 0xFF×32 || 0x0D || subCmd || subCmdParamsCBOR
+  static uint8_t cfgAuthData[32 + 1 + 1 + 256];
+  memset(cfgAuthData, 0xFF, 32);
+  cfgAuthData[32] = (uint8_t)CTAP2_AUTHENTICATOR_CONFIG;
+  cfgAuthData[33] = (uint8_t)subCmd;
+  size_t cfgAuthLen = 34;
+  if (subCmdParamsPtr && subCmdParamsLen) {
+    if (cfgAuthLen + subCmdParamsLen > sizeof(cfgAuthData))
+      return statusOnly(out, CTAP2_ERR_REQUEST_TOO_LARGE);
+    memcpy(cfgAuthData + cfgAuthLen, subCmdParamsPtr, subCmdParamsLen);
+    cfgAuthLen += subCmdParamsLen;
+  }
+  if (!verifyPinUvAuthParam(protocol, cfgAuthData, cfgAuthLen,
+                            pinUvAuthParam, pupLen)) {
+    WA_LOG("ACfg fail: pinUvAuthParam mismatch (subCmd=0x%02lx)", (unsigned long)subCmd);
+    return statusOnly(out, CTAP2_ERR_PIN_AUTH_INVALID);
+  }
+  if ((paut_permissions & PERM_ACFG) == 0) {
+    WA_LOG("ACfg fail: token lacks ACFG perm (perms=0x%02x)", (unsigned)paut_permissions);
+    return statusOnly(out, CTAP2_ERR_PIN_AUTH_INVALID);
+  }
+
+  // ── 0x02 toggleAlwaysUv ─────────────────────────────────────────────
+  if (subCmd == 0x02) {
+    bool newVal = !CredentialStore::getAlwaysUv();
+    if (!CredentialStore::setAlwaysUv(newVal)) {
+      WA_LOG("ACfg toggleAlwaysUv: storage write fail");
+      return statusOnly(out, CTAP2_ERR_PROCESSING);
+    }
+    WA_LOG("ACfg toggleAlwaysUv -> %d", (int)newVal);
+    return statusOnly(out, CTAP2_OK);
+  }
+
+  // ── 0x03 setMinPINLength ────────────────────────────────────────────
+  if (subCmd == 0x03) {
+    if (!gotNewMinPinLen) {
+      WA_LOG("ACfg setMinPINLength: missing newMinPINLength");
+      return statusOnly(out, CTAP2_ERR_MISSING_PARAMETER);
+    }
+    if (newMinPinLen > 63) {
+      WA_LOG("ACfg setMinPINLength: too large (%llu)", (unsigned long long)newMinPinLen);
+      return statusOnly(out, CTAP2_ERR_PIN_POLICY_VIOLATION);
+    }
+    if (!CredentialStore::setMinPinLen((uint8_t)newMinPinLen)) {
+      // setMinPinLen rejects shrinks (CTAP forbids lowering minimum).
+      WA_LOG("ACfg setMinPINLength: rejected (cannot shrink, current=%u, requested=%llu)",
+             (unsigned)CredentialStore::getMinPinLen(), (unsigned long long)newMinPinLen);
+      return statusOnly(out, CTAP2_ERR_PIN_POLICY_VIOLATION);
+    }
+    WA_LOG("ACfg setMinPINLength -> %u", (unsigned)newMinPinLen);
+    return statusOnly(out, CTAP2_OK);
+  }
+
+  WA_LOG("ACfg fail: unsupported subCmd=0x%02lx", (unsigned long)subCmd);
+  return statusOnly(out, CTAP2_ERR_INVALID_OPTION);
+}
+
 // ── Reset ──────────────────────────────────────────────────────────────
 
 uint16_t Ctap2::_handleReset(uint8_t* out, uint16_t)
@@ -1850,6 +1997,7 @@ uint16_t Ctap2::dispatch(uint8_t cmd,
     case CTAP2_RESET:                   r = _handleReset(resp, respMax);                           break;
     case CTAP2_CLIENT_PIN:              r = _handleClientPin(p, pLen, resp, respMax);              break;
     case CTAP2_CREDENTIAL_MANAGEMENT:   r = _handleCredentialManagement(p, pLen, resp, respMax);   break;
+    case CTAP2_AUTHENTICATOR_CONFIG:    r = _handleAuthenticatorConfig(p, pLen, resp, respMax);    break;
     case CTAP2_GET_NEXT_ASSERTION:      r = _handleGetNextAssertion(resp, respMax);                break;
     case CTAP2_SELECTION:
       // CTAP 2.1 §6.9: pure user-presence gate so the host can pick which

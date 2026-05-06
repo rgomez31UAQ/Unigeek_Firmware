@@ -23,6 +23,7 @@ constexpr const char* kCounterPath = "/unigeek/utility/fido/counter.bin";
 constexpr const char* kDevKeyPath  = "/unigeek/utility/fido/u2f_priv.bin";
 constexpr const char* kDevCertPath = "/unigeek/utility/fido/u2f_cert.der";
 constexpr const char* kPinPath     = "/unigeek/utility/fido/pin.bin";
+constexpr const char* kCfgPath     = "/unigeek/utility/fido/config.bin";
 constexpr const char* kCredsDir    = "/unigeek/utility/fido/credentials";
 
 static const char kHex[] = "0123456789abcdef";
@@ -398,6 +399,64 @@ bool CredentialStore::clearPin()
   return true;
 }
 
+// ── AuthenticatorConfig storage ───────────────────────────────────────
+// Config layout: byte0 flags, byte1 minPinLen, bytes2-3 reserved.
+// Read/write through the same primary storage as everything else.
+
+namespace {
+bool readConfig(uint8_t out[4])
+{
+  if (!storage() || !storage()->exists(kCfgPath)) {
+    out[0] = 0;
+    out[1] = CredentialStore::kCfgPinLenDefault;
+    out[2] = 0;
+    out[3] = 0;
+    return true;
+  }
+  return readBytes(kCfgPath, out, 4);
+}
+
+bool writeConfig(const uint8_t in[4])
+{
+  if (!storage() || !ensureDir()) return false;
+  return writeBytes(kCfgPath, in, 4);
+}
+}  // namespace
+
+bool CredentialStore::getAlwaysUv()
+{
+  uint8_t cfg[4];
+  if (!readConfig(cfg)) return false;
+  return (cfg[0] & kCfgFlagAlwaysUv) != 0;
+}
+
+bool CredentialStore::setAlwaysUv(bool on)
+{
+  uint8_t cfg[4];
+  if (!readConfig(cfg)) return false;
+  if (on)  cfg[0] |=  kCfgFlagAlwaysUv;
+  else     cfg[0] &= ~kCfgFlagAlwaysUv;
+  return writeConfig(cfg);
+}
+
+uint8_t CredentialStore::getMinPinLen()
+{
+  uint8_t cfg[4];
+  if (!readConfig(cfg)) return kCfgPinLenDefault;
+  uint8_t v = cfg[1];
+  return (v < kCfgPinLenDefault) ? kCfgPinLenDefault : v;
+}
+
+bool CredentialStore::setMinPinLen(uint8_t len)
+{
+  if (len < kCfgPinLenDefault) return false;  // CTAP forbids shrinking
+  uint8_t cfg[4];
+  if (!readConfig(cfg)) return false;
+  if (len < cfg[1]) return false;             // must only increase
+  cfg[1] = len;
+  return writeConfig(cfg);
+}
+
 bool CredentialStore::writeResidentCred(const ResidentCredRecord& rec)
 {
   if (!init() || !ensureCredsDir()) return false;
@@ -533,6 +592,7 @@ bool CredentialStore::wipe()
   storage()->deleteFile(kDevKeyPath);
   storage()->deleteFile(kDevCertPath);
   storage()->deleteFile(kPinPath);
+  storage()->deleteFile(kCfgPath);
   deleteAllResidentCreds();
   g_devKeyLoaded   = false;
   g_devCertLoaded  = false;

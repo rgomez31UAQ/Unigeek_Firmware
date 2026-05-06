@@ -17,6 +17,7 @@ namespace webauthn {
 //   0x08 authenticatorGetNextAssertion      (multi-cred discoverable signin)
 //   0x0A authenticatorCredentialManagement  (CTAP 2.1 §6.8, subcommands 1-6)
 //   0x0B authenticatorSelection             (CTAP 2.1 §6.9)
+//   0x0D authenticatorConfig                (CTAP 2.1 §6.11, subcmds 0x02 toggleAlwaysUv + 0x03 setMinPINLength)
 //
 // Commands stubbed:
 //   (none)
@@ -59,6 +60,8 @@ private:
   static uint16_t _handleClientPin    (const uint8_t* req, uint16_t reqLen,
                                        uint8_t* out, uint16_t outMax);
   static uint16_t _handleCredentialManagement(const uint8_t* req, uint16_t reqLen,
+                                              uint8_t* out, uint16_t outMax);
+  static uint16_t _handleAuthenticatorConfig (const uint8_t* req, uint16_t reqLen,
                                               uint8_t* out, uint16_t outMax);
 };
 

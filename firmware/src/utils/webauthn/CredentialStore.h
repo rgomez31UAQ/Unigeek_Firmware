@@ -112,8 +112,20 @@ public:
   // Delete all resident credential files (called from wipe).
   static void deleteAllResidentCreds();
 
-  // Wipe master + counter + resident creds + PIN. Master key is then
-  // regenerated lazily on next encode call. All previously issued
+  // ── AuthenticatorConfig (CTAP 2.1 §6.11) ───────────────────────────────
+  // /unigeek/utility/fido/config.bin = flags(1) | minPinLen(1) | reserved(2)
+  //   flags bit 0 = alwaysUv (always require UV on MC/GA)
+  // Defaults (no file present): flags=0, minPinLen=4.
+  static constexpr uint8_t kCfgFlagAlwaysUv = 0x01;
+  static constexpr uint8_t kCfgPinLenDefault = 4;
+
+  static bool    getAlwaysUv   ();
+  static bool    setAlwaysUv   (bool on);
+  static uint8_t getMinPinLen  ();
+  static bool    setMinPinLen  (uint8_t len);
+
+  // Wipe master + counter + resident creds + PIN + config. Master key is
+  // then regenerated lazily on next encode call. All previously issued
   // credentials are rendered useless (intended).
   static bool wipe();
 };
