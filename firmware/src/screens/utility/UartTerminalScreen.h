@@ -38,7 +38,7 @@ private:
   char _baudLabel[8]      = {};
   char _rxLabel[6]        = {};
   char _txLabel[6]        = {};
-  char _saveModeLabel[12] = {};
+  char _saveModeLabel[16] = {};
   char _saveLabel[32]     = {};
   ListItem _configItems[6];
 

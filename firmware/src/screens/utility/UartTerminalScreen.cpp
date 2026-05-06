@@ -102,10 +102,10 @@ void UartTerminalScreen::_updateLabels() {
   else            snprintf(_txLabel, sizeof(_txLabel), "%d", _txPin);
 
   switch (_saveMode) {
-    case SAVE_FILE:       snprintf(_saveModeLabel, sizeof(_saveModeLabel), "File");    break;
-    case SAVE_STREAM_AP:  snprintf(_saveModeLabel, sizeof(_saveModeLabel), "AP");      break;
-    case SAVE_STREAM_NET: snprintf(_saveModeLabel, sizeof(_saveModeLabel), "Network"); break;
-    default:              snprintf(_saveModeLabel, sizeof(_saveModeLabel), "No");      break;
+    case SAVE_FILE:       snprintf(_saveModeLabel, sizeof(_saveModeLabel), "File");          break;
+    case SAVE_STREAM_AP:  snprintf(_saveModeLabel, sizeof(_saveModeLabel), "Stream AP");     break;
+    case SAVE_STREAM_NET: snprintf(_saveModeLabel, sizeof(_saveModeLabel), "Stream Network"); break;
+    default:              snprintf(_saveModeLabel, sizeof(_saveModeLabel), "None");          break;
   }
 
   if (_saveMode == SAVE_FILE) {
@@ -120,13 +120,14 @@ void UartTerminalScreen::_updateLabels() {
 }
 
 void UartTerminalScreen::_rebuildItems() {
+  uint8_t sel = _selectedIndex;
   _configItems[0] = {"Baud Rate", _baudLabel};
   _configItems[1] = {"RX GPIO",   _rxLabel};
   _configItems[2] = {"TX GPIO",   _txLabel};
-  _configItems[3] = {"Save Mode", _saveModeLabel};
+  _configItems[3] = {"Log Mode",  _saveModeLabel};
   if (_saveMode == SAVE_NO) {
     _configItems[4] = {"Start", nullptr};
-    setItems(_configItems, 5);
+    setItems(_configItems, 5, sel);
   } else {
     const char* label = nullptr;
     if      (_saveMode == SAVE_FILE)       label = "Filename";
@@ -134,7 +135,7 @@ void UartTerminalScreen::_rebuildItems() {
     else if (_saveMode == SAVE_STREAM_NET) label = "Network";
     _configItems[4] = {label, _saveLabel};
     _configItems[5] = {"Start", nullptr};
-    setItems(_configItems, 6);
+    setItems(_configItems, 6, sel);
   }
 }
 
@@ -170,16 +171,16 @@ void UartTerminalScreen::_configTx() {
 
 void UartTerminalScreen::_configSaveMode() {
   static constexpr InputSelectAction::Option modes[] = {
-    {"No",           "no"},
-    {"File",         "file"},
-    {"Stream (AP)",  "ap"},
-    {"Stream (Net)", "net"},
+    {"None",           "no"},
+    {"File",           "file"},
+    {"Stream AP",      "ap"},
+    {"Stream Network", "net"},
   };
   const char* cur = "no";
   if      (_saveMode == SAVE_FILE)       cur = "file";
   else if (_saveMode == SAVE_STREAM_AP)  cur = "ap";
   else if (_saveMode == SAVE_STREAM_NET) cur = "net";
-  const char* v = InputSelectAction::popup("Save Mode", modes, 4, cur);
+  const char* v = InputSelectAction::popup("Log Mode", modes, 4, cur);
   if (v) {
     if      (strcmp(v, "file") == 0) _saveMode = SAVE_FILE;
     else if (strcmp(v, "ap")   == 0) _saveMode = SAVE_STREAM_AP;
