@@ -11,7 +11,7 @@
 // user delete one. Reads + writes /unigeek/utility/fido/credentials/ via
 // CredentialStore. Does NOT touch USB FIDO HID — safe to enter while a
 // host is not connected.
-class WebAuthnPasskeysScreen : public ListScreen {
+class WebAuthnPasskeyListScreen : public ListScreen {
 public:
   const char* title() override { return "Passkeys"; }
 

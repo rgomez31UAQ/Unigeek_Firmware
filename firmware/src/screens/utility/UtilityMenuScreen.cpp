@@ -11,7 +11,7 @@
 #include "screens/utility/PomodoroScreen.h"
 #include "screens/utility/RandomLinePickerScreen.h"
 #ifdef DEVICE_HAS_WEBAUTHN
-#include "screens/utility/WebAuthnPasskeysScreen.h"
+#include "screens/utility/WebAuthnManageScreen.h"
 #endif
 
 void UtilityMenuScreen::onInit() {
@@ -24,14 +24,14 @@ void UtilityMenuScreen::onBack() {
 
 void UtilityMenuScreen::onItemSelected(uint8_t index) {
   // Indices follow _items in the .h — when DEVICE_HAS_WEBAUTHN, "Manage
-  // Passkeys" sits at index 4 and shifts everything after it down by one.
+  // WebAuthn" sits at index 4 and shifts everything after it down by one.
 #ifdef DEVICE_HAS_WEBAUTHN
   switch (index) {
     case 0: Screen.push(new I2CDetectorScreen());      break;
     case 1: Screen.push(new QRCodeScreen());           break;
     case 2: Screen.push(new BarcodeScreen());          break;
     case 3: Screen.push(new FileManagerScreen());      break;
-    case 4: Screen.push(new WebAuthnPasskeysScreen()); break;
+    case 4: Screen.push(new WebAuthnManageScreen());   break;
     case 5: Screen.push(new AchievementScreen());      break;
     case 6: Screen.push(new TotpScreen());             break;
     case 7: Screen.push(new UartTerminalScreen());     break;

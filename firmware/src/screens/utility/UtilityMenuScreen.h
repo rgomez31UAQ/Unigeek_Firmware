@@ -19,7 +19,7 @@ private:
     {"QR Code"},
     {"Barcode"},
     {"File Manager"},
-    {"Manage Passkeys"},
+    {"Manage WebAuthn"},
     {"Achievements"},
     {"TOTP Auth"},
     {"UART Terminal"},

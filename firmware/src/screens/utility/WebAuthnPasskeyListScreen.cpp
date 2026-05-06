@@ -1,4 +1,4 @@
-#include "WebAuthnPasskeysScreen.h"
+#include "WebAuthnPasskeyListScreen.h"
 
 #ifdef DEVICE_HAS_WEBAUTHN
 
@@ -9,10 +9,10 @@
 
 #include <string.h>
 
-void WebAuthnPasskeysScreen::_enumCb(
+void WebAuthnPasskeyListScreen::_enumCb(
     const webauthn::CredentialStore::ResidentCredRecord& rec, void* ctx)
 {
-  auto* self = static_cast<WebAuthnPasskeysScreen*>(ctx);
+  auto* self = static_cast<WebAuthnPasskeyListScreen*>(ctx);
   if (self->_count >= kMaxEntries) return;
   uint8_t i = self->_count;
   self->_entries[i] = rec;
@@ -22,7 +22,7 @@ void WebAuthnPasskeysScreen::_enumCb(
   self->_count++;
 }
 
-void WebAuthnPasskeysScreen::_reload(uint8_t selectedIdx)
+void WebAuthnPasskeyListScreen::_reload(uint8_t selectedIdx)
 {
   _count = 0;
   webauthn::CredentialStore::init();
@@ -32,12 +32,12 @@ void WebAuthnPasskeysScreen::_reload(uint8_t selectedIdx)
   setItems(_items, _count, sel);
 }
 
-void WebAuthnPasskeysScreen::onInit()
+void WebAuthnPasskeyListScreen::onInit()
 {
   _reload();
 }
 
-void WebAuthnPasskeysScreen::onRender()
+void WebAuthnPasskeyListScreen::onRender()
 {
   if (_count == 0) {
     auto& lcd = Uni.Lcd;
@@ -52,13 +52,13 @@ void WebAuthnPasskeysScreen::onRender()
   ListScreen::onRender();
 }
 
-void WebAuthnPasskeysScreen::onItemSelected(uint8_t index)
+void WebAuthnPasskeyListScreen::onItemSelected(uint8_t index)
 {
   if (index >= _count) return;
   _confirmDelete(index);
 }
 
-void WebAuthnPasskeysScreen::_confirmDelete(uint8_t index)
+void WebAuthnPasskeyListScreen::_confirmDelete(uint8_t index)
 {
   static constexpr InputSelectAction::Option opts[] = {
     {"Cancel", "cancel"},
