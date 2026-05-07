@@ -28,6 +28,12 @@ uint8_t  paut_rp_id_hash[32];
 bool     paut_has_rp_id = false;
 uint8_t  paut_boot_fails = 0;       // resets on power cycle / Reset
 bool     paut_locked_until_pc = false;
+uint32_t paut_last_use_ms = 0;      // millis() of last successful token use
+
+// Idle timeout per CTAP 2.1 §6.5.5.7 (matches pico-fido's policy). After
+// 10 min with no token-authenticated command, the token is invalidated and
+// the host has to re-acquire it via getPinUvAuthTokenUsingPinWithPermissions.
+constexpr uint32_t kPautIdleTimeoutMs = 10UL * 60UL * 1000UL;
 
 // CTAP2 ClientPIN permission bits.
 constexpr uint8_t PERM_MC   = 0x01;
@@ -228,24 +234,40 @@ void Ctap2::initPinAuthToken()
   paut_has_rp_id       = false;
   paut_boot_fails      = 0;
   paut_locked_until_pc = false;
+  paut_last_use_ms     = (uint32_t)millis();
 }
 
 namespace {
 
 // Verify pinUvAuthParam = HMAC(token, data)[0..16] (proto v1). Returns true
-// if the auth tag matches our 16-byte session token.
+// if the auth tag matches our 16-byte session token AND the token hasn't
+// idled out. Successful verification refreshes the idle timer.
 bool verifyPinUvAuthParam(uint64_t protocol,
                           const uint8_t* data, size_t dataLen,
                           const uint8_t* tag,  size_t tagLen)
 {
   if (!paut_token_set) return false;
+  // Idle-timeout sweep — invalidate the token entirely so the host re-acquires.
+  uint32_t now = (uint32_t)millis();
+  if ((uint32_t)(now - paut_last_use_ms) > kPautIdleTimeoutMs) {
+    WA_LOG("paut: idle timeout (%lu ms) — invalidating token",
+           (unsigned long)(now - paut_last_use_ms));
+    paut_token_set   = false;
+    paut_permissions = 0;
+    paut_has_rp_id   = false;
+    return false;
+  }
   if (protocol != 1)   return false;          // only v1 supported
   if (tagLen != 16)    return false;
   uint8_t mac[32];
   WebAuthnCrypto::hmacSha256(paut_token, sizeof(paut_token), data, dataLen, mac);
   uint8_t diff = 0;
   for (size_t i = 0; i < 16; i++) diff |= (uint8_t)(mac[i] ^ tag[i]);
-  return diff == 0;
+  if (diff != 0) return false;
+
+  // Refresh idle timer on successful use.
+  paut_last_use_ms = now;
+  return true;
 }
 
 // Check the active token has `requiredPerm` and (if rpId-locked) matches
@@ -1518,6 +1540,7 @@ uint16_t Ctap2::_handleClientPin(const uint8_t* req, uint16_t reqLen,
       paut_permissions = PERM_MC | PERM_GA;
       paut_has_rp_id   = false;
     }
+    paut_last_use_ms = (uint32_t)millis();   // fresh issue → reset idle timer
 
     uint8_t encrypted[16];
     if (!encryptToken(shared, encrypted))
