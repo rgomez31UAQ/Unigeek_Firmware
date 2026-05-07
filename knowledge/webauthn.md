@@ -51,7 +51,7 @@ Under **Utility > Manage WebAuthn** you get four actions:
 |---|---|---|
 | macOS 12+ | Full | All browsers; Safari uses the system-level WebAuthn API |
 | Linux (libfido2 / Chrome / Firefox) | Full | Tested with `fido2-token`, Chrome, Firefox; `udev` rule may be required for non-root access |
-| Windows 10/11 | **Not yet** | Windows rejects the current composite HID descriptor — fix planned in a follow-up release |
+| Windows 10/11 | Full (m5sticks3) | Standard `m5sticks3` build. Run `tools/windows-fido-power.ps1` once from elevated PowerShell to disable USB selective suspend for our VID/PID — without this, the firmware-side watchdog keeps the device responsive but produces a faint USB pulse on the WebAuthn screen. Other S3 boards untested on Windows. |
 | ChromeOS | Untested | Should work since it's a Linux derivative; not yet verified |
 
 ### Browsers

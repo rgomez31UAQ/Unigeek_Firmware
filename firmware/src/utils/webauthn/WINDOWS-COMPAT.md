@@ -1,16 +1,67 @@
 # WebAuthn Windows Compatibility — Working Notes
 
-Status as of 2026-05-07: **device works on macOS / Linux / Chrome / Firefox / Safari, fails on Windows 10/11.**
+Status as of 2026-05-07: **Windows works on the regular `m5sticks3` build.**
+macOS / Linux / Chrome / Firefox / Safari also continue to work as before.
+Tested with Edge on Windows 10/11.
 
-## Known symptom
+## Working configuration (2026-05-07)
 
-On Windows, `webauthn.dll` rejects UniGeek as a security key. Browsers fall
-back to "no security key found" or hang on the host UI. macOS/Linux on the
-same hardware enroll passkeys without complaint.
+1. Build + flash `m5sticks3` normally:
+   ```
+   pio run -e m5sticks3 -t upload
+   ```
+   Path-A (HID-only `m5sticks3_winfido`) was tried during bring-up but
+   turned out unnecessary — the regular composite (CDC + HID) build is
+   recognized by `webauthn.dll` once Windows has bound `HID-compliant fido`
+   to the FIDO HID collection.
 
-## Why
+2. On the host, **disable USB selective suspend** for the device's port —
+   easiest path is `tools/windows-fido-power.ps1` (run from elevated
+   PowerShell). It writes `SelectiveSuspendEnabled=0` and
+   `EnhancedPowerManagementEnabled=0` under every UniGeek instance Windows
+   has registered. Manual alternative: Device Manager → the parent USB
+   Root Hub → Properties → Power Management → uncheck "Allow the computer
+   to turn off this device".
 
-The arduino-esp32 USB stack on ESP32-S3 builds a composite USB device with:
+   Without this, Windows aggressively suspends the device after each CTAP
+   exchange. The umount/remount cycle never recovers cleanly on
+   arduino-esp32's USBHID stack, and the firmware-side watchdog (see
+   below) takes over, producing a faint USB pulse on the WebAuthn screen.
+   With selective suspend off, neither happens — the device stays
+   continuously mounted.
+
+3. Verified end-to-end on Edge: register + signin on **webauthn.io**
+   (PIN-protected discoverable signin).
+
+## Stuck-mount watchdog (firmware fallback)
+
+`USBFidoUtil::poll()` runs an adaptive watchdog: if `tud_umount_cb` fired
+(STOPPED) and no STARTED has come back within 300 ms (after recent
+CTAPHID work) or 5 s (idle), it forces a soft re-attach via
+`tud_disconnect/connect`. Windows then re-enumerates and TinyUSB
+remounts. Cost: a constant ~0.2 Hz USB pulse while the WebAuthn screen
+is active and selective suspend is on. Benefit: the device works without
+any host-side configuration. Once `windows-fido-power.ps1` runs the
+watchdog goes silent (no STOPPED → no kicks).
+
+`USBFidoUtil::begin()` also advertises bmAttributes
+`SELF_POWERED | REMOTE_WAKEUP` (matches Yubikey/SoloKey). In practice
+Windows still chose to unmount instead of soft-suspend even with the
+hint, so it doesn't replace the watchdog — kept as it's standards-
+compliant and harmless.
+
+The proper fix (path C below — TinyUSB-direct, like pico-fido) would
+eliminate the umount churn entirely. Left for follow-up.
+
+## Original symptom (before bring-up)
+
+On Windows, `webauthn.dll` would not engage with UniGeek as a security
+key. Browsers fell back to "no security key found" or hung. macOS/Linux
+on the same hardware enrolled passkeys without complaint.
+
+## Why (initial hypothesis)
+
+The arduino-esp32 USB stack on ESP32-S3 builds a composite USB device:
 
 ```
 Interface 0: CDC Communication   (HWCDC — Serial)
@@ -18,96 +69,67 @@ Interface 1: CDC Data
 Interface 2: HID                 (FIDO, our descriptor)
 ```
 
-Multiple anecdotes from FIDO-on-ESP32 projects (SoloKeys, pico-fido,
-ChameleonUltra) suggest Windows webauthn.dll prefers either:
+Initial reading of FIDO-on-ESP32 prior art (SoloKeys, pico-fido,
+ChameleonUltra) suggested Windows webauthn.dll prefers either a
+HID-only device or a dedicated FIDO HID interface. We tried a
+HID-only variant (`m5sticks3_winfido`, `ARDUINO_USB_CDC_ON_BOOT=0`).
+That confirmed the binding worked, but later testing showed the
+regular composite build also works once Windows has bound
+`HID-compliant fido` to the FIDO collection — the real blocker
+turned out to be selective-suspend lifecycle, not the descriptor.
+The `winfido` variant has been removed.
 
-- A **HID-only** USB device (no CDC alongside), OR
-- A device with the FIDO HID on its **own dedicated interface**, separate
-  from any other HID class on the same composite device
+## Remaining fix paths (left for follow-up)
 
-Today's `USBFidoUtil` already takes exclusive ownership of arduino-esp32's
-single HID interface (via `claimUsbProfile(UsbProfile::WEBAUTHN)`), so
-kbd/mouse aren't on the bus. But CDC remains.
+### Path C — Bypass arduino-esp32 USB entirely
 
-## Fix paths (by complexity)
+Drop `USBHID` / `USB.begin()`. Call `tinyusb_driver_install()`
+directly and provide our own `tud_descriptor_*` callbacks. Full
+control over the device + configuration descriptors. Mirrors
+`pico-fido` architecture.
 
-### A. Disable HWCDC at compile time for WebAuthn-enabled boards
-
-Set `ARDUINO_USB_CDC_ON_BOOT=0` in `platformio.ini` for the affected envs.
-This removes the CDC interfaces; HID becomes the only interface.
-
-**Trade-off:** `Serial` (HWCDC) goes away for that build — but we already
-log to `Serial1` on Grove pins for `m5sticks3` since HWCDC dies once
-TinyUSB takes the PHY. So the regression is small for boards that already
-have a Grove debug path.
-
-**Estimate:** 30 min. Config change + smoke test on Linux first.
-
-### B. TinyUSB direct second-HID interface
-
-Patch the platform's `tinyusb_config.h` to set `CFG_TUD_HID = 2`. Recompile
-`libUSB.a`. Register FIDO as the second HID instance via `tud_hid_n_*`.
-
-**Trade-off:** platform-level patch — `patch.py` would need to apply
-`CFG_TUD_HID` patches before every build, OR users vendor a custom
-arduino-esp32 fork. Significant maintenance overhead.
-
-**Estimate:** 1–2 days, including platform patch + arduino-esp32 fork.
-
-### C. Bypass arduino-esp32 USB entirely, use TinyUSB direct
-
-Drop `USBHID` / `USB.begin()`. Call `tinyusb_driver_install()` ourselves,
-provide our own `tud_descriptor_*` callbacks. Full control over the device
-descriptor, configuration descriptor, every interface byte.
-
-**Trade-off:** loses arduino-esp32's USB conveniences — every other USB
-profile (kbd, mouse) on this boot would need similar treatment, OR we
-keep them via arduino-esp32 and reconcile descriptors at runtime.
+Eliminates the umount-on-suspend issue at the source — no need for
+the watchdog or the `windows-fido-power.ps1` workaround. Other USB
+profiles (kbd, mouse) need similar treatment OR run alongside our
+custom TinyUSB stack via descriptor reconciliation.
 
 **Estimate:** 3–5 days. Highest reward, highest risk.
-
-## Recommended attempt order
-
-1. **Try A first** — cheap, might just work. Disable HWCDC for one board
-   env (`m5sticks3` since it already has Serial1 debug), flash, plug into
-   Windows. If `chrome://settings/securityKeys` shows the device, ship A
-   for all WebAuthn-enabled boards and call it done.
-2. **If A fails**, plug both UniGeek and a working FIDO key (Yubikey,
-   SoloKey) into the Windows machine and capture both USB descriptors via
-   `USBView.exe` or `Wireshark + USBPcap`. Diff them.
-3. **Based on the diff**, decide between B and C.
 
 ## Windows test checklist
 
 When testing on a Windows machine, capture:
 
-- [ ] Output of `chrome://device-log` filtered to `usb` category
-- [ ] Output of `chrome://settings/securityKeys` page
-- [ ] Device Manager → Human Interface Devices → properties → Details tab
-      → Hardware Ids (should show `HID\VID_303A&PID_xxxx`)
+- [ ] Output of `chrome://device-log` (or `edge://device-log`) filtered
+      to `usb` category during a register attempt
+- [ ] Device Manager → Human Interface Devices → properties → Details
+      tab → Hardware Ids (should show `HID\VID_303A&PID_1001`)
 - [ ] Device Manager → ditto → Compatible Ids (should include
       `HID_DEVICE_UP:F1D0_U:0001`)
 - [ ] `USBView.exe` dump of the full descriptor tree
-- [ ] Optional: capture register attempt with `webauthn.io` and check
-      what fails (browser console)
+- [ ] Optional: register attempt with `webauthn.io` and check what
+      fails (browser console)
 
-## Files to look at when implementing the fix
+For host-side diagnosis without the browser:
 
-- `firmware/src/utils/webauthn/USBFidoUtil.cpp` — current arduino-esp32
-  `USBHID` integration. The `kFidoReportDescriptor` array there is
-  spec-correct (matches Yubikey 5).
+- `scripts/webauthn/win_probe.py` — Windows-native CTAPHID probe via
+  python-fido2. Run from **elevated** PowerShell — Windows ACL on
+  FIDO HID blocks user-mode `CreateFile` since Win10 1903.
+
+## Files involved
+
+- `firmware/src/utils/webauthn/USBFidoUtil.cpp` — `USBHID` integration,
+  watchdog, bmAttributes setup. Descriptor (`kFidoReportDescriptor`)
+  matches Yubikey 5.
 - `firmware/src/utils/webauthn/UsbProfile.cpp` — single-HID-interface
-  arbiter. Already prevents kbd/mouse from co-existing on the same boot.
-- `platformio.ini` — `build_flags` per env. Where to set
-  `ARDUINO_USB_CDC_ON_BOOT=0` for path A.
-- `patch.py` — the platform validator. Can extend with TinyUSB config
-  overrides for path B.
+  arbiter. Prevents kbd/mouse from co-existing on the same boot.
+- `tools/windows-fido-power.ps1` — host-side selective-suspend disable.
+- `tools/windows-fido-power.md` — script README + background.
 
 ## Reference implementations
 
 - **pico-fido** (`../pico-fido`): TinyUSB-direct FIDO HID for Pi Pico W.
   See `src/usb/usb_descriptors.c` for the descriptor template Windows
-  accepts.
+  accepts. Reference for path C.
 - **SoloKey 2**: `tinyusb_config.h` + ST32-Cube descriptors. HID-only
   composite device, no CDC.
 - **ChameleonUltra**: `Application/src/usb_main.c` — sets CDC AND HID,

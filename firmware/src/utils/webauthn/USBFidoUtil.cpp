@@ -5,8 +5,23 @@
 #include "UsbProfile.h"
 #include "WebAuthnLog.h"
 
+#include <Arduino.h>     // millis(), delay()
 #include <USB.h>
+#include <tusb.h>        // tud_disconnect / tud_connect for stuck-mount kick
 #include <string.h>
+
+// Per-frame RX log: extremely useful during initial Windows bring-up but
+// floods the on-device log ring (12 lines) once everything works. Off by
+// default; set -DWEBAUTHN_DEBUG_RX=1 in build_flags to re-enable while
+// debugging USB/HID delivery issues.
+#ifndef WEBAUTHN_DEBUG_RX
+#define WEBAUTHN_DEBUG_RX 0
+#endif
+#if WEBAUTHN_DEBUG_RX
+#define WA_LOG_RX(fmt, ...) WA_LOG(fmt, ##__VA_ARGS__)
+#else
+#define WA_LOG_RX(fmt, ...) ((void)0)
+#endif
 
 namespace webauthn {
 
@@ -60,13 +75,52 @@ USBFidoUtil::USBFidoUtil()
 }
 
 namespace {
+// Stuck-mount watchdog state. Windows webauthn.dll closes its handle after
+// each CTAP exchange; arduino-esp32's TinyUSB fires tud_umount_cb (= STOPPED)
+// but the host never re-issues SET_CONFIGURATION, so tud_mount_cb (= STARTED)
+// never returns and our HID OUT endpoint stays unarmed. Without periodic
+// nudges from poll(), the device falls dead after the first close.
+//
+// poll() forces a soft re-attach (tud_disconnect/connect) every time STOPPED
+// has stood >300 ms unrecovered. This produces a constant ~1.5 Hz mount/
+// unmount cycle when the device is on the WebAuthn screen but unused — the
+// price of working around the lifecycle bug. The cycle keeps the OUT
+// endpoint armed so that whenever the host *does* want to talk, the next
+// SET_CONFIGURATION lands on a ready stack. The proper fix is path C in
+// firmware/src/utils/webauthn/WINDOWS-COMPAT.md (drop arduino-esp32 USBHID
+// for direct TinyUSB, like pico-fido).
+//
+// Logging is rate-limited to once per second so the on-device WebAuthn log
+// ring isn't flooded with "USB stuck" lines during the idle pulse.
+volatile uint32_t g_lastStopMs    = 0;
+volatile bool     g_mountedOnce   = false;
+volatile uint32_t g_lastKickLogMs = 0;
+// Most recent CTAPHID frame from the host (any direction). poll() uses this
+// to decide whether to recover at "active" speed (300 ms) or "idle" speed
+// (5 s). Set in _onOutput on every received report.
+volatile uint32_t g_lastWorkMs    = 0;
+// Last time we emitted a "heartbeat" IN report. Periodic 64-B writes keep
+// the IN endpoint non-idle from Windows' perspective so selective suspend
+// doesn't kick in (which would unmount us — see watchdog block above).
+// Keyboards don't have this problem because Windows polls them at 125 Hz
+// for keystrokes; FIDO HID has zero outbound traffic when idle, so we
+// have to manufacture some.
+uint32_t g_lastBeatMs = 0;
+
 void usbEventThunk(void*, esp_event_base_t base, int32_t event_id, void* event_data)
 {
   if (base == ARDUINO_USB_EVENTS) {
     const char* name = "?";
     switch (event_id) {
-      case ARDUINO_USB_STARTED_EVENT:    name = "STARTED";    break;
-      case ARDUINO_USB_STOPPED_EVENT:    name = "STOPPED";    break;
+      case ARDUINO_USB_STARTED_EVENT:
+        name = "STARTED";
+        g_lastStopMs  = 0;
+        g_mountedOnce = true;
+        break;
+      case ARDUINO_USB_STOPPED_EVENT:
+        name = "STOPPED";
+        g_lastStopMs = millis();
+        break;
       case ARDUINO_USB_SUSPEND_EVENT:    name = "SUSPEND";    break;
       case ARDUINO_USB_RESUME_EVENT:     name = "RESUME";     break;
     }
@@ -89,6 +143,15 @@ void USBFidoUtil::begin()
   WA_LOG("USBFidoUtil::begin (registered=%d)", (int)_registered);
   USB.onEvent(usbEventThunk);
   _hid.onEvent(usbEventThunk);
+  // Real FIDO keys (Yubikey, SoloKey) advertise SELF_POWERED + REMOTE_WAKEUP
+  // in bmAttributes. arduino-esp32's default omits REMOTE_WAKEUP, which makes
+  // Windows fall back to bus-reset/unmount on selective suspend instead of
+  // soft tud_suspend_cb / tud_resume_cb. Setting it here before USB.begin()
+  // applies the new bmAttributes byte. usbAttributes() is a no-op once
+  // USB.begin() has been called (any earlier USB profile loses); fine for
+  // WebAuthn since claimUsbProfile() guarantees we're first.
+  USB.usbAttributes(TUSB_DESC_CONFIG_ATT_SELF_POWERED |
+                    TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP);
   USB.begin();      // idempotent — also called by USBKeyboardUtil
   _hid.begin();     // idempotent
   _started = true;
@@ -109,6 +172,44 @@ void USBFidoUtil::setOnReport(OnReportFn cb, void* user)
 
 void USBFidoUtil::poll()
 {
+  // Stuck-mount watchdog. Adaptive cadence:
+  //   • If the host wrote a CTAPHID frame in the last 30 s, kick aggressively
+  //     after 300 ms of STOPPED — keeps the device snappy mid-session.
+  //   • Otherwise (truly idle), kick slowly every 5 s. Still wakes promptly
+  //     when Windows decides to write again, but keeps USB activity to a
+  //     dull pulse instead of the ~1.5 Hz buzz of constant recovery.
+  uint32_t now = millis();
+  bool recentWork = g_lastWorkMs && (uint32_t)(now - g_lastWorkMs) < 30000;
+  uint32_t threshold = recentWork ? 300 : 5000;
+  if (g_mountedOnce && g_lastStopMs &&
+      (uint32_t)(now - g_lastStopMs) > threshold) {
+    if ((uint32_t)(now - g_lastKickLogMs) > 5000) {
+      WA_LOG("USB stuck: tud_disconnect/connect (%s)",
+             recentWork ? "active" : "idle");
+      g_lastKickLogMs = now;
+    }
+    g_lastStopMs = 0;
+    tud_disconnect();
+    delay(50);
+    tud_connect();
+  }
+
+  // Idle-bus heartbeat. Send a 64-B all-zero IN report every 100 ms whenever
+  // the device is mounted but not in an active CTAPHID session. CID 0 is
+  // reserved by CTAPHID spec, so any host that decodes the frame discards it
+  // — but the bus traffic itself prevents Windows from selective-suspending
+  // the endpoint. See keyboard analogy in the comment near g_lastBeatMs.
+  //
+  // Suppress during real CTAP work (recentWork) so we never interleave with
+  // a response in flight.
+  if (_started && !recentWork &&
+      (uint32_t)(now - g_lastBeatMs) >= 100) {
+    static const uint8_t kBeat[kHidReportSize] = {0};
+    if (_hid.SendReport(FIDO_REPORT_ID, (uint8_t*)kBeat, kHidReportSize)) {
+      g_lastBeatMs = now;
+    }
+  }
+
   // Drain entries on the consumer thread. Single-consumer assumed.
   while (_qTail != _qHead) {
     const RingEntry& e = _queue[_qTail];
@@ -142,13 +243,32 @@ uint16_t USBFidoUtil::_onGetFeature(uint8_t report_id, uint8_t*, uint16_t len)
   return 0;
 }
 
-void USBFidoUtil::_onSetFeature(uint8_t report_id, const uint8_t*, uint16_t len)
+void USBFidoUtil::_onSetFeature(uint8_t report_id, const uint8_t* buffer, uint16_t len)
 {
-  WA_LOG("FIDO _onSetFeature id=%u len=%u", report_id, len);
+  // arduino-esp32's USBHID dispatch routes OUT-endpoint reports to _onOutput
+  // ONLY when (report_id == 0 && report_type == 0). Some libfido2 / Windows
+  // stacks send report_type=OUTPUT (=2) instead, which lands here. Treat any
+  // 64-byte payload as a misrouted CTAPHID frame and forward to the queue so
+  // both paths terminate at the CTAPHID parser.
+  WA_LOG_RX("FIDO _onSetFeature id=%u len=%u", report_id, len);
+  if (len == kHidReportSize && buffer != nullptr) {
+    uint8_t next = (uint8_t)((_qHead + 1) % kQueueDepth);
+    if (next != _qTail) {
+      memcpy(_queue[_qHead].buf, buffer, kHidReportSize);
+      _qHead = next;
+    } else {
+      WA_LOG("FIDO RX dropped: queue full (from setFeature)");
+    }
+  }
 }
 
 void USBFidoUtil::_onOutput(uint8_t report_id, const uint8_t* buffer, uint16_t len)
 {
+  // Per-frame trace, gated behind -DWEBAUTHN_DEBUG_RX=1. Used to disambiguate
+  // "host never wrote" vs "host wrote, our pipeline ate it" during USB stack
+  // bring-up. The "RX dropped" branches below stay unconditional — those are
+  // real errors worth seeing every time.
+  WA_LOG_RX("FIDO _onOutput id=%u len=%u", report_id, len);
   if (report_id != FIDO_REPORT_ID) {
     WA_LOG("FIDO RX dropped: report_id=%u (want %u)", report_id, FIDO_REPORT_ID);
     return;
@@ -157,6 +277,7 @@ void USBFidoUtil::_onOutput(uint8_t report_id, const uint8_t* buffer, uint16_t l
     WA_LOG("FIDO RX dropped: len=%u (want %u)", len, (unsigned)kHidReportSize);
     return;
   }
+  g_lastWorkMs = millis();   // mark active session for adaptive watchdog
 
   // Single-producer (USB ISR). Drop on overflow rather than block the ISR.
   uint8_t next = (uint8_t)((_qHead + 1) % kQueueDepth);
