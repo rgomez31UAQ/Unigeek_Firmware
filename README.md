@@ -105,7 +105,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Ducky Script** — Run script files from storage to automate keystrokes ([details](knowledge/ducky-script.md))
 - **Mouse Jiggle** — Send periodic small mouse movements over BLE or USB to keep the host awake
 - **Password Manager** — Deterministic vault protected by a master password; entries store label, type, case, and length; passwords are generated from SHA256(master+label+params) so no plaintext is stored; view a generated password on-screen or auto-type it via HID with a single press ([details](knowledge/password-manager.md))
-- **WebAuthn** — Act as a USB FIDO2 / WebAuthn passkey for browser sign-in (CTAP2 + legacy U2F authenticate, ESP32-S3 only) ([details](knowledge/webauthn.md))
+- **WebAuthn** — Act as a USB FIDO2 / WebAuthn passkey for browser sign-in (CTAP2 + legacy U2F register/authenticate, ESP32-S3 only); resident credentials, ClientPIN proto v1, hmac-secret / PRF, largeBlob, GetNextAssertion, CredentialManagement, AuthenticatorConfig (toggleAlwaysUv / setMinPINLength); PIN auth token with 10-minute idle timeout; BIP-39 seed backup and restore; on-device passkey manager + Windows-friendly stuck-mount watchdog ([details](knowledge/webauthn.md))
 
 ### Utility
 - **I2C Detector** — Scan I2C bus and list all responding device addresses
@@ -115,7 +115,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **File Hex Viewer** — View any file as a scrollable hex dump with offset, hex byte columns, and ASCII representation
 - **Achievements** — View all achievements grouped by domain (13 domains, 244 entries, ≈ 99 100 EXP pool); shows tier (Bronze/Silver/Gold/Platinum), description, and unlock status; long-press an unlocked achievement to set it as your Agent Title ([details](knowledge/achievements.md))
 - **TOTP Auth** — Time-based one-time password authenticator; add accounts by name and Base32 secret, view live 6- or 8-digit codes with a countdown progress bar, hold an account row to view or delete it; keeps display on while viewing a code ([details](knowledge/totp-auth.md))
-- **UART Terminal** — Serial terminal over configurable GPIO pins; set baud rate, RX and TX GPIOs, switch between string and hex send mode (UP/DOWN toggle), send commands via dialog, receive data in real time, and optionally save the session log to storage ([details](knowledge/uart-terminal.md))
+- **UART Terminal** — Serial terminal over configurable GPIO pins; set baud rate, RX and TX GPIOs, switch between string and hex send mode (UP/DOWN toggle), send commands via dialog, receive data in real time, and pick a Log Mode: Off / File (`/unigeek/utility/uart/<name>.log`) / Stream AP / Stream Network (Telnet on TCP 23, up to 4 clients) ([details](knowledge/uart-terminal.md))
 - **Pomodoro Timer** — 25/5-minute focus timer; configurable work (15–60 min) and break (5–15 min) durations; press to pause/resume; speaker beep on phase transition; tracks session count and shows progress bar; keeps display on while running
 - **Random Line Picker** — Select up to 30 text files from `/unigeek/utility/random_line/`, then shuffle and display a random line from the combined pool; press OK to cycle to the next random line
 
@@ -373,4 +373,4 @@ This project was built with inspiration and reference from:
 - sticks3 ir receive not functional (RMT/ES8311 conflict); transmit works
 - implement thermal camera
 
-<!-- README last synced at commit: 1b933a7 (Lua promoted to main menu; uni.update(), textDatum, PSRAM VM tuning) -->
+<!-- README last synced at commit: 96c6fd4 (WebAuthn full CTAP2.1: PIN, passkeys, hmac-secret, largeBlob, BIP-39 backup/restore, Windows watchdog; UART Log Mode adds File / Stream AP / Stream Network) -->

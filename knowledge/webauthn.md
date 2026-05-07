@@ -51,8 +51,11 @@ Under **Utility > Manage WebAuthn** you get four actions:
 |---|---|---|
 | macOS 12+ | Full | All browsers; Safari uses the system-level WebAuthn API |
 | Linux (libfido2 / Chrome / Firefox) | Full | Tested with `fido2-token`, Chrome, Firefox; `udev` rule may be required for non-root access |
-| Windows 10/11 | Full (m5sticks3) | Standard `m5sticks3` build. Run `tools/windows-fido-power.ps1` once from elevated PowerShell to disable USB selective suspend for our VID/PID — without this, the firmware-side watchdog keeps the device responsive but produces a faint USB pulse on the WebAuthn screen. Other S3 boards untested on Windows. |
+| Windows 10/11 | Full | Works on every ESP32-S3 build that exposes WebAuthn. The firmware's stuck-mount watchdog handles Windows selective suspend transparently — no host-side script or driver setup required. |
 | ChromeOS | Untested | Should work since it's a Linux derivative; not yet verified |
+
+> [!note]
+> On Windows, expect the device to automatically restart its USB bus connection **about 4 times** during initial enumeration / driver attach (and again whenever a process opens the FIDO HID handle). The WebAuthn screen briefly flips between **Active** and **Standby** while this happens — it's the firmware's stuck-mount watchdog (`USBFidoUtil::poll()`) issuing `tud_disconnect/connect` to recover from arduino-esp32's misbehaviour around Windows selective suspend. No action needed; the device settles into **Active** within a second or two.
 
 ### Browsers
 
