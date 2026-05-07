@@ -84,11 +84,6 @@ static const uint8_t SCK  = SPI_SCK_PIN;
 #define DEVICE_HAS_VOLUME_CONTROL     // I2S amp supports setVolume()
 #define DEVICE_HAS_USB_HID            // ESP32-S3 native USB HID
 #define DEVICE_HAS_WEBAUTHN           // FIDO2 / WebAuthn USB security key (CTAP2 + U2F)
-// WA debug log over Grove UART. ARDUINO_USB_MODE=1 makes Serial (HWCDC) unusable
-// once USB.begin() switches the PHY to TinyUSB for FIDO HID, so route to Serial1
-// on the Grove pins (shares pins with GPS — disable GPS while debugging WA).
-#define WEBAUTHN_LOG_STREAM  Serial1
-#define WEBAUTHN_LOG_BEGIN() Serial1.begin(115200, SERIAL_8N1, GPS_RX, GPS_TX)
 #define APP_MENU_POWER_OFF            // AXP2101 power-off
 #define DEVICE_HAS_TOUCH_NAV          // touch-only navigation (no physical buttons)
 #define DEVICE_HAS_SCREEN_ORIENT        // display rotates 180° for right-hand mode

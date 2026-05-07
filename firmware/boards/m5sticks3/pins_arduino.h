@@ -97,5 +97,11 @@ static const uint8_t SCL = GROVE_SCL;
 #define DEVICE_HAS_VOLUME_CONTROL     // I2S amp supports setVolume()
 #define DEVICE_HAS_USB_HID            // ESP32-S3 native USB HID
 #define DEVICE_HAS_WEBAUTHN           // FIDO2 / WebAuthn USB security key (CTAP2 + U2F)
+// WA debug log over Grove UART. ARDUINO_USB_MODE=1 makes Serial (HWCDC) unusable
+// once USB.begin() switches the PHY to TinyUSB for FIDO HID, so route to Serial1
+// on the Grove pins. Wire a USB-Serial adapter: adapter RX → GROVE_SDA (GPIO 9),
+// GND → GND. Read at 115200 8N1. Disables Grove I2C while debugging.
+#define WEBAUTHN_LOG_STREAM  Serial1
+#define WEBAUTHN_LOG_BEGIN() Serial1.begin(115200, SERIAL_8N1, GROVE_SCL, GROVE_SDA)
 #define DEVICE_HAS_SCREEN_ORIENT        // screen rotation + UP/DOWN swap for left/right hand orientation
 #define APP_MENU_POWER_OFF            // M5PM1 power-off
