@@ -86,9 +86,9 @@ namespace {
 // unmount cycle when the device is on the WebAuthn screen but unused — the
 // price of working around the lifecycle bug. The cycle keeps the OUT
 // endpoint armed so that whenever the host *does* want to talk, the next
-// SET_CONFIGURATION lands on a ready stack. The proper fix is path C in
-// firmware/src/utils/webauthn/WINDOWS-COMPAT.md (drop arduino-esp32 USBHID
-// for direct TinyUSB, like pico-fido).
+// SET_CONFIGURATION lands on a ready stack. The proper fix is path C
+// (drop arduino-esp32 USBHID for direct TinyUSB, like pico-fido) — see
+// the Obsidian vault note `project/unigeek/webauthn-windows.md`.
 //
 // Logging is rate-limited to once per second so the on-device WebAuthn log
 // ring isn't flooded with "USB stuck" lines during the idle pulse.
