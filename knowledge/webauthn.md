@@ -4,7 +4,20 @@ Accessed from **HID > WebAuthn (USB)**. ESP32-S3 boards only.
 
 UniGeek can act as a hardware security key, presenting itself to the host as a USB FIDO2 / WebAuthn authenticator. Browsers (Chrome, Safari, Firefox) and native apps that support WebAuthn can use it as a **passkey** for sign-in — no username, no password, just confirm on the device.
 
-## Setup
+## First-time setup — Generate the master key
+
+WebAuthn does not auto-generate the device's master key. Until you create one, the WebAuthn screen shows a "Setup needed" page and the host can't register anything.
+
+1. Open **Utility > Manage WebAuthn**
+2. Pick **BIP39 Generate** (the label switches to **BIP39 Regenerate** once a master already exists)
+3. Confirm the warning, then pick a WiFi network from the scan list — internet is required so the device can sync its RTC via NTP for stronger random-number entropy
+4. Wait for the sync (a few seconds) and the auto-generation
+5. Write down the 24 BIP-39 words shown on screen — this is your only backup. Anyone who sees them can clone every passkey on the device.
+
+> [!warn]
+> Regenerating wipes every existing passkey on the device — old credential IDs are bound to the old master key and become uncrackable garbage. Only regenerate when you accept losing all current credentials.
+
+## Daily use
 
 1. Plug the device into a host computer over USB
 2. Open **HID > WebAuthn (USB)**
@@ -13,6 +26,22 @@ UniGeek can act as a hardware security key, presenting itself to the host as a U
 
 > [!note]
 > WebAuthn is a single-claim USB profile. If the device's USB has already been claimed by **HID > USB MouseKeyboard** this boot, the screen shows **USB busy** and asks you to reboot. Open WebAuthn before any other USB profile in a session.
+
+## Manage WebAuthn menu
+
+Under **Utility > Manage WebAuthn** you get four actions:
+
+| Item | What it does |
+|---|---|
+| **BIP39 Generate** / **BIP39 Regenerate** | Creates the master key with WiFi+NTP-fueled randomness, then displays the 24-word seed. Regen wipes every existing cred. |
+| **BIP39 Restore** | Re-enters a 24-word seed onto a new device (or after a wipe) so previously issued credentials still verify. Wipes any current state first. |
+| **BIP39 Backup** | Re-displays the existing 24-word seed (PIN-gated when a PIN is set). Use this to verify you wrote it down correctly. |
+| **Passkeys** | Lists every resident credential by RP and userName; press to delete. |
+
+### Restore flow on different boards
+
+- **Cardputer / cardputer_adv / t_lora_pager** (full keyboards) — type each word; ENTER commits when the prefix narrows to a single match (or when the typed text is itself a complete BIP-39 word — covers `fit` / `fitness`-style overlaps).
+- **m5sticks3 / t_display_s3 / m5_cores3** (no keyboard) — pick legal next letters from a grid that auto-narrows; once ≤ N matches remain (N depends on screen size, e.g. 12 on m5sticks3, 33 on CoreS3), the grid switches to a tap-to-pick word list. CoreS3 supports finger-hover highlighting.
 
 ## Where it works
 
@@ -161,14 +190,15 @@ Reset is a host-driven command — `fido2-token -R /dev/hidrawN` or your browser
 - U2F batch-attestation device key + cert
 
 > [!danger]
-> Reset is irreversible. Every site you've registered with this key will need to re-enroll a new credential. There is no backup option (yet).
+> Reset is irreversible **without a BIP-39 backup**. If you wrote down the 24 words at generation time, you can return the device to the same master via **Utility > Manage WebAuthn > BIP39 Restore**, and previously registered credentials still verify. Without the backup, every site needs re-enrollment.
 
 ## Storage
 
 ```
-/unigeek/utility/fido/master.bin       32-byte master key (one-time, generated on first use)
+/unigeek/utility/fido/master.bin       32-byte master key (created via Manage WebAuthn > BIP39 Generate)
 /unigeek/utility/fido/counter.bin      4-byte big-endian global signature counter
 /unigeek/utility/fido/pin.bin          retries(1) + pinLen(1) + pinHash(16) = 18 bytes
+/unigeek/utility/fido/config.bin       flags(1) + minPinLen(1) + reserved(2) — alwaysUv flag etc.
 /unigeek/utility/fido/u2f_priv.bin     32-byte ECDSA P-256 batch-attestation key
 /unigeek/utility/fido/u2f_cert.der     ~500-byte self-signed P-256 certificate
 /unigeek/utility/fido/credentials/     one 386-byte file per resident credential
