@@ -96,6 +96,14 @@ Create a new firmware release. Usage: `/release <version>` (e.g. `/release 1.3.0
 
 12. **Do NOT** push until the user explicitly confirms.
 
+13. **Publish to M5Burner**: After the push has succeeded, run
+
+    ```bash
+    python scripts/m5burner.py upload <version>
+    ```
+
+    The script's pre-flight verifies each `builds/unigeek-m5*.bin` actually contains the version string (NUL-terminated) before posting, so a forgotten `PLATFORMIO_BUILD_SRC_FLAGS` from step 3 will surface here as a hard error instead of a silent mis-labelled upload. Reads the `m5_token` from `.env` (header `m5_auth_token`); add it locally if missing — see `.env.sample`. Six entries are posted: `UniGeek Cardputer`, `UniGeek Cardputer Adv`, `UniGeek CoreS3`, `UniGeek StickC Plus 1.1`, `UniGeek StickC Plus 2`, `UniGeek StickS3`. If any individual POST fails, the script prints the failures and exits non-zero — the release itself is still good (GitHub release + tag are already up); just retry the M5Burner step after fixing whatever the API complained about.
+
 ## Knowledge file conventions
 
 If the release cycle touches `knowledge/*.md`, verify each file follows the renderer conventions in `website/content/features/index.js`:
