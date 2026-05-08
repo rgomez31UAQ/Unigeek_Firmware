@@ -372,4 +372,4 @@ This project was built with inspiration and reference from:
 - sticks3 ir receive not functional (RMT/ES8311 conflict); transmit works
 - implement thermal camera
 
-<!-- README last synced at commit: 96c6fd4 (WebAuthn full CTAP2.1: PIN, passkeys, hmac-secret, largeBlob, BIP-39 backup/restore, Windows watchdog; UART Log Mode adds File / Stream AP / Stream Network) -->
+<!-- README last synced at commit: d3730bf (webauthn: type-to-confirm passkey delete; input: 4-way nav for grid actions; lua: dedicated FreeRTOS task + PSRAM source buffer; mainmenu: touch hover + Home tile; hid: rename USB Web Authn) -->

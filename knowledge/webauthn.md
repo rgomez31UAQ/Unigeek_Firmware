@@ -1,6 +1,6 @@
 # WebAuthn / FIDO2
 
-Accessed from **HID > WebAuthn (USB)**. ESP32-S3 boards only.
+Accessed from **HID > USB Web Authn**. ESP32-S3 boards only.
 
 UniGeek can act as a hardware security key, presenting itself to the host as a USB FIDO2 / WebAuthn authenticator. Browsers (Chrome, Safari, Firefox) and native apps that support WebAuthn can use it as a **passkey** for sign-in — no username, no password, just confirm on the device.
 
@@ -20,7 +20,7 @@ WebAuthn does not auto-generate the device's master key. Until you create one, t
 ## Daily use
 
 1. Plug the device into a host computer over USB
-2. Open **HID > WebAuthn (USB)**
+2. Open **HID > USB Web Authn**
 3. The screen reads **Active** once the host has shaken hands with the FIDO HID transport
 4. On the host, register the key wherever it offers "Use a security key" or "Add a passkey" (e.g. github.com → Security → Passkeys → Add)
 
@@ -36,7 +36,7 @@ Under **Utility > Manage WebAuthn** you get four actions:
 | **BIP39 Generate** / **BIP39 Regenerate** | Creates the master key with WiFi+NTP-fueled randomness, then displays the 24-word seed. Regen wipes every existing cred. |
 | **BIP39 Restore** | Re-enters a 24-word seed onto a new device (or after a wipe) so previously issued credentials still verify. Wipes any current state first. |
 | **BIP39 Backup** | Re-displays the existing 24-word seed (PIN-gated when a PIN is set). Use this to verify you wrote it down correctly. |
-| **Passkeys** | Lists every resident credential by RP and userName; press to delete. |
+| **Passkeys** | Lists every resident credential by RP and userName; press an entry then type `yes` to confirm deletion. |
 
 ### Restore flow on different boards
 
@@ -85,7 +85,7 @@ Most major SaaS that advertises "Sign in with a security key" or "Sign in with a
 
 ### Add a passkey to GitHub
 
-1. Open **HID > WebAuthn (USB)** on the device
+1. Open **HID > USB Web Authn** on the device
 2. On the host: github.com → Settings → Password and authentication → Passkeys → **Add a passkey**
 3. The browser prompts to use a security key — pick "USB security key"
 4. The device's screen shows **Confirm: github.com** — press **ENTER**
