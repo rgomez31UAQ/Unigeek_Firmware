@@ -257,7 +257,21 @@ private:
         }
         delay(10); continue;
       } else if (dir == INavigation::DIR_BACK) {
-        _commitTap(); _cancelled = true;
+        // Mirror DEL: drop a pending multi-tap first, then chip away at the
+        // committed input, and only cancel once everything is empty.
+        if (_pendingChar.length() > 0) {
+          _pendingChar = "";
+          _tapCount    = 0;
+          _lastTapTime = 0;
+          _cursorVisible = true; _lastBlinkTime = millis();
+          _drawGridInput();
+        } else if (_input.length() > 0) {
+          _input.remove(_input.length() - 1);
+          _cursorVisible = true; _lastBlinkTime = millis();
+          _drawGridInput();
+        } else {
+          _cancelled = true;
+        }
       }
 
       if (!_done && !_cancelled && prev != _scrollPos) {

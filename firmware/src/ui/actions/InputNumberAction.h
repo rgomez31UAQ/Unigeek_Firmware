@@ -200,7 +200,14 @@ private:
         }
         delay(10); continue;
       } else if (dir == INavigation::DIR_BACK) {
-        _cancelled = true;
+        if (_input.length() > 0) {
+          _input.remove(_input.length() - 1);
+          if (_error.length() > 0) { _error = ""; _drawGridInfo(); }
+          _cursorVisible = true; _lastBlinkTime = millis();
+          _drawGridInput();
+        } else {
+          _cancelled = true;
+        }
       }
 
       if (!_done && !_cancelled && prev != _scrollPos) {
