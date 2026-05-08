@@ -4,7 +4,7 @@
 
 #include "core/Device.h"
 #include "core/ConfigManager.h"
-#include "ui/actions/InputSelectAction.h"
+#include "ui/actions/InputTextAction.h"
 #include "ui/actions/ShowStatusAction.h"
 
 #include <string.h>
@@ -60,12 +60,8 @@ void WebAuthnPasskeyListScreen::onItemSelected(uint8_t index)
 
 void WebAuthnPasskeyListScreen::_confirmDelete(uint8_t index)
 {
-  static constexpr InputSelectAction::Option opts[] = {
-    {"Cancel", "cancel"},
-    {"Delete", "delete"},
-  };
-  const char* sel = InputSelectAction::popup(_entries[index].rpId, opts, 2, "cancel");
-  if (!sel || strcmp(sel, "delete") != 0) {
+  String typed = InputTextAction::popup("Type \"yes\" to delete");
+  if (InputTextAction::wasCancelled() || !typed.equalsIgnoreCase("yes")) {
     render();
     return;
   }
