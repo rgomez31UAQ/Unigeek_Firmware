@@ -1,6 +1,8 @@
--- dino.lua — Dino Jump game with sprite-buffered frames (no flicker).
--- Compose each frame into an off-screen sprite and push in one shot. Falls
--- back to direct lcd rendering if the sprite buffer can't be allocated.
+-- dino.lua — Dino Jump.
+-- Mostly direct overdraw (cheap, fast). The dino sits in a small sprite-backed
+-- "lane" that spans its full vertical motion range, so when it jumps the new
+-- pose appears in one push instead of an erase-then-draw flash. Cactus motion
+-- stays as plain overdraw — moving every frame already masks any erase blink.
 
 local lcd = require("uni.lcd")
 local sd  = require("uni.sd")
@@ -22,26 +24,17 @@ local C_YELLOW = lcd.color(255, 220,   0)
 local C_GREY   = lcd.color( 70,  70,  70)
 local C_BLACK  = lcd.color(  0,   0,   0)
 
--- Pick a draw target: sprite if it fits, else a thin shim around lcd.
--- Using method-call syntax (`t:rect(...)`) means the helpers below work the
--- same regardless of which one we got.
-local sp = lcd.sprite(W, H)
-local t
+-- Dino sprite "lane" — fixed x band wide enough for body+head+legs, tall
+-- enough to span ground rest pose to peak-of-jump. ~19 × ~50 ≈ 1.9 KB.
+local LANE_X = DX - 2
+local LANE_W = DW + 8
+local LANE_Y = GY - DH - 28
+local LANE_H = (GY + 5) - LANE_Y
+local GROUND_Y_IN_LANE = (GY + 1) - LANE_Y
 
-if sp then
-  t = sp
-else
-  uni.debug("dino: sprite OOM, falling back to direct lcd")
-  t = {
-    fill       = function(_, c)             lcd.fillScreen(c) end,
-    rect       = function(_, x,y,w,h,c)     lcd.rect(x,y,w,h,c) end,
-    print      = function(_, x,y,s)         lcd.print(x,y,s) end,
-    textSize   = function(_, n)             lcd.textSize(n) end,
-    textColor  = function(_, fg, bg)
-      if bg ~= nil then lcd.textColor(fg, bg) else lcd.textColor(fg) end
-    end,
-    push       = function() end,
-  }
+local dino_sp = lcd.sprite(LANE_W, LANE_H)
+if not dino_sp then
+  uni.debug("dino: sprite OOM, falling back to overdraw")
 end
 
 local hiScore = 0
@@ -50,10 +43,10 @@ if raw and #raw > 0 then hiScore = math.floor(tonumber(raw) or 0) end
 
 math.randomseed(math.floor(uni.millis()))
 
--- game state
 local gstate = "idle"
 local score, dinoY, jumpV, onGnd
 local obsX, obsH, speed, tick, leg, newHi
+local prevDY, prevOX, prevOH
 
 local function _reset()
   score  = 0
@@ -66,88 +59,52 @@ local function _reset()
   tick   = 0
   newHi  = false
   leg    = 0
+  prevDY = math.floor(GY - DH)
+  prevOX = math.floor(W + 40)
+  prevOH = math.floor(obsH)
 end
 
-local function _drawDino(target, dy, running)
-  local iy = math.floor(dy)
-  target:rect(DX,          iy,     DW, DH, C_GREEN)
-  target:rect(DX + DW - 4, iy - 4,  7,  6, C_GREEN)
-  target:rect(DX + DW + 1, iy - 3,  2,  2, C_BLACK)
-  target:rect(DX + DW - 4, iy + 2,  4,  2, C_DARK)
+-- Compose the dino into a generic surface using the same shape both for the
+-- on-screen overdraw path and the sprite-buffered path. `drawRect` matches
+-- lcd.rect's signature; (ox, oy) is where the dino's body top-left lands.
+local function _composeDino(drawRect, ox, oy, running)
+  drawRect(ox,          oy,     DW, DH, C_GREEN)
+  drawRect(ox + DW - 4, oy - 4,  7,  6, C_GREEN)
+  drawRect(ox + DW + 1, oy - 3,  2,  2, C_BLACK)
+  drawRect(ox + DW - 4, oy + 2,  4,  2, C_DARK)
   if not running or math.floor(leg / 4) % 2 == 0 then
-    target:rect(DX + 2, iy + DH,     4, 4, C_GREEN)
-    target:rect(DX + 8, iy + DH + 1, 4, 3, C_GREEN)
+    drawRect(ox + 2, oy + DH,     4, 4, C_GREEN)
+    drawRect(ox + 8, oy + DH + 1, 4, 3, C_GREEN)
   else
-    target:rect(DX + 2, iy + DH + 1, 4, 3, C_GREEN)
-    target:rect(DX + 8, iy + DH,     4, 4, C_GREEN)
+    drawRect(ox + 2, oy + DH + 1, 4, 3, C_GREEN)
+    drawRect(ox + 8, oy + DH,     4, 4, C_GREEN)
   end
 end
 
-local function _drawCactus(target, ox, oh)
+local function _drawDinoLcd(dy, running)
+  _composeDino(lcd.rect, DX, math.floor(dy), running)
+end
+
+local function _drawDinoSprite(dy, running)
+  dino_sp:fill(C_BLACK)
+  dino_sp:rect(0, GROUND_Y_IN_LANE, LANE_W, 2, C_GREY)
+  _composeDino(
+    function(x, y, w, h, c) dino_sp:rect(x, y, w, h, c) end,
+    DX - LANE_X, math.floor(dy) - LANE_Y, running)
+  dino_sp:push(LANE_X, LANE_Y)
+end
+
+local function _drawCactus(ox, oh)
   local ix = math.floor(ox)
   local iy = math.floor(oh)
-  target:rect(ix,       GY - iy, OW, iy, C_ORANGE)
+  lcd.rect(ix,       GY - iy, OW, iy, C_ORANGE)
   if iy > 14 then
-    target:rect(ix - 4, GY - iy + 5, 4, 5, C_ORANGE)
-    target:rect(ix - 4, GY - iy + 5, 5, 3, C_ORANGE)
+    lcd.rect(ix - 4, GY - iy + 5, 4, 5, C_ORANGE)
+    lcd.rect(ix - 4, GY - iy + 5, 5, 3, C_ORANGE)
   end
   if iy > 10 then
-    target:rect(ix + OW,     GY - iy + 8, 4, 4, C_ORANGE)
-    target:rect(ix + OW - 1, GY - iy + 8, 5, 3, C_ORANGE)
-  end
-end
-
-local function _drawGround(target)
-  target:rect(0, GY + 1, W, 2, C_GREY)
-end
-
-local function _drawIdle(target)
-  target:fill(C_BLACK)
-  _drawGround(target)
-  target:textSize(2); target:textColor(C_WHITE)
-  target:print(math.floor(W/2) - 52, math.floor(H/2) - 28, "DINO JUMP")
-  target:textSize(1); target:textColor(C_GREY)
-  target:print(math.floor(W/2) - 30, math.floor(H/2) - 4, "OK / UP to start")
-  if hiScore > 0 then
-    target:textColor(C_YELLOW)
-    target:print(math.floor(W/2) - 28, math.floor(H/2) + 10, "Best: " .. hiScore)
-  end
-  _drawDino(target, GY - DH, false)
-end
-
-local function _drawOver(target)
-  target:fill(C_BLACK)
-  _drawGround(target)
-  target:textSize(2); target:textColor(C_RED)
-  target:print(math.floor(W/2) - 52, math.floor(H/2) - 26, "GAME OVER")
-  target:textSize(1); target:textColor(C_WHITE)
-  target:print(math.floor(W/2) - 26, math.floor(H/2) - 4, "Score: " .. score)
-  if newHi then
-    target:textColor(C_YELLOW)
-    target:print(math.floor(W/2) - 28, math.floor(H/2) + 8, "NEW BEST!")
-  else
-    target:textColor(C_GREY)
-    target:print(math.floor(W/2) - 28, math.floor(H/2) + 8, "Best:  " .. hiScore)
-  end
-  target:textColor(C_GREY)
-  target:print(math.floor(W/2) - 32, math.floor(H/2) + 22, "OK: retry")
-  _drawDino(target, GY - DH, false)
-end
-
-local function _drawPlay(target)
-  target:fill(C_BLACK)
-  _drawGround(target)
-  _drawCactus(target, obsX, obsH)
-  _drawDino(target, dinoY, onGnd)
-
-  -- HUD: composed into the sprite alongside everything else, so it appears
-  -- at the same instant as the dino+cactus — no torn-frame look.
-  target:textSize(1)
-  target:textColor(C_WHITE, C_BLACK)
-  target:print(0, 0, string.format("Score:%-5d", score))
-  if hiScore > 0 then
-    target:textColor(C_GREY, C_BLACK)
-    target:print(W - 54, 0, string.format("Best:%-4d", hiScore))
+    lcd.rect(ix + OW,     GY - iy + 8, 4, 4, C_ORANGE)
+    lcd.rect(ix + OW - 1, GY - iy + 8, 5, 3, C_ORANGE)
   end
 end
 
@@ -171,29 +128,68 @@ while true do
   local entered = (gstate ~= prevState)
   prevState = gstate
 
+  -- ── IDLE ──────────────────────────────────────────────────────────
   if gstate == "idle" then
     if entered then
-      _drawIdle(t)
-      t:push(0, 0)
+      lcd.clear()
+      lcd.rect(0, GY + 1, W, 2, C_GREY)
+      lcd.textSize(2)
+      lcd.textColor(C_WHITE)
+      lcd.print(math.floor(W/2) - 52, math.floor(H/2) - 28, "DINO JUMP")
+      lcd.textSize(1)
+      lcd.textColor(C_GREY)
+      lcd.print(math.floor(W/2) - 30, math.floor(H/2) - 4, "OK / UP to start")
+      if hiScore > 0 then
+        lcd.textColor(C_YELLOW)
+        lcd.print(math.floor(W/2) - 28, math.floor(H/2) + 10, "Best: " .. hiScore)
+      end
+      _drawDinoLcd(GY - DH, false)
     end
+
     if btn == "ok" or btn == "up" then
       _reset()
+      lcd.clear()
+      lcd.rect(0, GY + 1, W, 2, C_GREY)
       gstate = "play"
     end
 
+  -- ── GAME OVER ─────────────────────────────────────────────────────
   elseif gstate == "over" then
     if entered then
-      _drawOver(t)
-      t:push(0, 0)
+      lcd.clear()
+      lcd.rect(0, GY + 1, W, 2, C_GREY)
+      lcd.textSize(2)
+      lcd.textColor(C_RED)
+      lcd.print(math.floor(W/2) - 52, math.floor(H/2) - 26, "GAME OVER")
+      lcd.textSize(1)
+      lcd.textColor(C_WHITE)
+      lcd.print(math.floor(W/2) - 26, math.floor(H/2) - 4, "Score: " .. score)
+      if newHi then
+        lcd.textColor(C_YELLOW)
+        lcd.print(math.floor(W/2) - 28, math.floor(H/2) + 8, "NEW BEST!")
+      else
+        lcd.textColor(C_GREY)
+        lcd.print(math.floor(W/2) - 28, math.floor(H/2) + 8, "Best:  " .. hiScore)
+      end
+      lcd.textColor(C_GREY)
+      lcd.print(math.floor(W/2) - 32, math.floor(H/2) + 22, "OK: retry")
+      _drawDinoLcd(GY - DH, false)
     end
+
     if btn == "ok" or btn == "up" then
       _reset()
+      lcd.clear()
+      lcd.rect(0, GY + 1, W, 2, C_GREY)
       gstate = "play"
     end
 
-  else  -- play
+  -- ── PLAY ──────────────────────────────────────────────────────────
+  else
     tick = tick + 1
     leg  = leg + 1
+
+    local pox = prevOX
+    local poh = prevOH
 
     if (btn == "ok" or btn == "up") and onGnd then
       jumpV = JUMP_FORCE
@@ -221,8 +217,37 @@ while true do
       uni.beep(660, 30)
     end
 
-    _drawPlay(t)
-    t:push(0, 0)
+    -- Cactus erase (the lane sprite handles dino erase implicitly).
+    if pox < W + 5 then
+      lcd.rect(pox - 5, GY - poh - 2, OW + 11, poh + 5, C_BLACK)
+    end
+    -- Repaint ground line outside the dino lane only — the lane redraws its
+    -- own slice of the ground when it pushes, so blasting the full strip here
+    -- would just race the lane push every frame.
+    lcd.rect(0, GY + 1, LANE_X, 2, C_GREY)
+    lcd.rect(LANE_X + LANE_W, GY + 1, W - (LANE_X + LANE_W), 2, C_GREY)
+
+    _drawCactus(obsX, obsH)
+    if dino_sp then
+      _drawDinoSprite(dinoY, onGnd)
+    else
+      lcd.rect(DX - 1, prevDY - 5, DW + 6, DH + 11, C_BLACK)
+      _drawDinoLcd(dinoY, onGnd)
+    end
+
+    -- HUD: bg fills behind glyphs — no erase rect needed.
+    lcd.textSize(1)
+    lcd.textColor(C_WHITE, C_BLACK)
+    lcd.print(0, 0, string.format("Score:%-5d", score))
+    if hiScore > 0 then
+      lcd.textColor(C_GREY, C_BLACK)
+      lcd.print(W - 54, 0, string.format("Best:%-4d", hiScore))
+    end
+    lcd.textColor(C_WHITE)
+
+    prevDY = math.floor(dinoY)
+    prevOX = math.floor(obsX)
+    prevOH = math.floor(obsH)
 
     if _collision() then
       uni.beep(150, 120)
@@ -239,4 +264,4 @@ while true do
   uni.delay(16)
 end
 
-if sp then sp:free() end
+if dino_sp then dino_sp:free() end
