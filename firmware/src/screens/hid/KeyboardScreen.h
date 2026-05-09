@@ -33,6 +33,7 @@ private:
   int               _mode;
   HIDKeyboardUtil*  _keyboard    = nullptr;
   uint32_t          _lastBatMs   = 0;
+  bool              _profileMismatch = false;  // USB taken by WebAuthn this boot
 
   // Partial-redraw flags — chrome (black fill + static footer) painted once.
   bool _connectedChromeDrawn = false;

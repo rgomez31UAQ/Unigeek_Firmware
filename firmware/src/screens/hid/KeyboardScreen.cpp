@@ -10,6 +10,9 @@
 #include "utils/keyboard/USBKeyboardUtil.h"  // must come before BLEKeyboardUtil — TinyUSB hid.h enum must be processed before NimBLE HIDTypes.h macro
 #endif
 #include "utils/keyboard/BLEKeyboardUtil.h"
+#ifdef DEVICE_HAS_WEBAUTHN
+#include "utils/webauthn/UsbProfile.h"
+#endif
 #include "utils/keyboard/DuckScriptUtil.h"
 
 // ── Constructor / Destructor ────────────────────────────────────────────────
@@ -43,12 +46,28 @@ KeyboardScreen::~KeyboardScreen()
 
 void KeyboardScreen::onInit()
 {
+#if defined(DEVICE_HAS_USB_HID) && defined(DEVICE_HAS_WEBAUTHN)
+  if (_mode == MODE_USB &&
+      webauthn::activeUsbProfile() == webauthn::UsbProfile::WEBAUTHN) {
+    _profileMismatch = true;
+    return;
+  }
+#endif
   _keyboard->begin();
   _goMenu();
 }
 
 void KeyboardScreen::onUpdate()
 {
+  if (_profileMismatch) {
+    if (Uni.Nav->wasPressed()) {
+      auto dir = Uni.Nav->readDirection();
+      if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS)
+        Screen.goBack();
+    }
+    return;
+  }
+
   if (_mode == MODE_BLE)
     StatusBar::bleConnected() = _keyboard->isConnected();
 
@@ -69,6 +88,24 @@ void KeyboardScreen::onUpdate()
 
 void KeyboardScreen::onRender()
 {
+  if (_profileMismatch) {
+    auto& lcd = Uni.Lcd;
+    lcd.fillRect(bodyX(), bodyY(), bodyW(), bodyH(), TFT_BLACK);
+    lcd.setTextDatum(MC_DATUM);
+    const int cx = bodyX() + bodyW() / 2;
+    const int cy = bodyY() + bodyH() / 2;
+    lcd.setTextSize(2);
+    lcd.setTextColor(TFT_RED, TFT_BLACK);
+    lcd.drawString("USB busy", cx, cy - 16);
+    lcd.setTextSize(1);
+    lcd.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    lcd.drawString("WebAuthn already", cx, cy + 4);
+    lcd.drawString("claimed USB this boot.", cx, cy + 16);
+    lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
+    lcd.drawString("Reboot, then open Keyboard first.", cx, cy + 32);
+    return;
+  }
+
   if (_state == STATE_KEYBOARD) {
     _renderConnected();
   } else if (_state == STATE_RUNNING_SCRIPT) {
