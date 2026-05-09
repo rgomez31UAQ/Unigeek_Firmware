@@ -371,13 +371,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
----
-
-## TODO
-
-- LoRa
-- ST25 nfc implementation for lora https://github.com/m5stack/M5Unit-NFC
-- sticks3 ir receive not functional (RMT/ES8311 conflict); transmit works
-- implement thermal camera
-
 <!-- README last synced at commit: c536e51 (lua: tier-2 modules input/dialog/notify/json/path/time/config + uni.nav, lcd primitives + sprites, sd CRUD ops; input action BACK = backspace; m5burner uploader script + version-flagged release builds) -->
