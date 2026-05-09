@@ -121,6 +121,8 @@ public:
       { 247, "wifi_cast_bomb_hit",       "Rick Roll",              1, 1, "Successfully cast a video to a smart device" },
       { 248, "wifi_bonjour_spam_first",  "Phantom Caller",         1, 0, "Start a Bonjour service spam session" },
       { 249, "wifi_bonjour_spam_1min",   "Network Mirage",         1, 1, "Run Bonjour spam for 1 minute" },
+      { 250, "wifi_printer_prank_first", "Toner Tagger",           1, 0, "Discover a network printer" },
+      { 251, "wifi_printer_prank_hit",   "Office Bard",            1, 1, "Successfully send a print job to a network printer" },
       // ── Bluetooth (domain 2) ──────────────────────────────────────────────
       { 63, "ble_analyzer_scan",         "Bluetooth Scout",        2, 0, "Scan for nearby BLE devices" },
       { 64, "ble_analyzer_detail",       "BLE Inspector",          2, 0, "View details of a BLE device" },

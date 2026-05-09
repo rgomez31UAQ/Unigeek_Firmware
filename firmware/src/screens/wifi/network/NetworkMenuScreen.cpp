@@ -16,6 +16,7 @@
 #include "screens/wifi/network/WigleScreen.h"
 #include "screens/wifi/network/CastBombScreen.h"
 #include "screens/wifi/network/BonjourSpamScreen.h"
+#include "screens/wifi/network/PrinterPrankScreen.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/actions/ShowQRCodeAction.h"
 #include <WiFi.h>
@@ -71,6 +72,7 @@ void NetworkMenuScreen::onItemSelected(uint8_t index) {
       case 9: Screen.push(new WigleScreen()); break;
       case 10: Screen.push(new CastBombScreen()); break;
       case 11: Screen.push(new BonjourSpamScreen()); break;
+      case 12: Screen.push(new PrinterPrankScreen()); break;
     }
   } else if (_state == STATE_INFORMATION) {
     _showMenu();
