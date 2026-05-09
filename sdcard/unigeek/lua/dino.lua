@@ -49,6 +49,11 @@ local CACTUS_LANE_TOP = GY - CACTUS_LANE_H
 local cactus_sp = lcd.sprite(CACTUS_LANE_W, CACTUS_LANE_H)
 if not cactus_sp then uni.debug("cactus: lane sprite OOM") end
 
+-- Pre-alloc drawRect closures — avoids creating new closure objects every frame,
+-- which fragments internal SRAM and eventually causes Lua OOM after extended play.
+local _dinoSpDraw   = dino_sp   and function(x,y,w,h,c) dino_sp:rect(x,y,w,h,c)   end or nil
+local _cactusSpDraw = cactus_sp and function(x,y,w,h,c) cactus_sp:rect(x,y,w,h,c) end or nil
+
 local hiScore = 0
 local raw = sd.read("/unigeek/games/lua_dino.txt")
 if raw and #raw > 0 then hiScore = math.floor(tonumber(raw) or 0) end
@@ -128,14 +133,10 @@ local function _drawDinoSprite(dy, running, cactus_x, cactus_h)
   local cleft  = math.floor(cactus_x) - 4
   local cright = math.floor(cactus_x) + OW + 4
   if cright >= LANE_X and cleft < LANE_X + LANE_W then
-    _composeCactus(
-      function(x, y, w, h, c) dino_sp:rect(x, y, w, h, c) end,
-      cactus_x, cactus_h, LANE_X, LANE_Y)
+    _composeCactus(_dinoSpDraw, cactus_x, cactus_h, LANE_X, LANE_Y)
   end
 
-  _composeDino(
-    function(x, y, w, h, c) dino_sp:rect(x, y, w, h, c) end,
-    DX - LANE_X, math.floor(dy) - LANE_Y, running)
+  _composeDino(_dinoSpDraw, DX - LANE_X, math.floor(dy) - LANE_Y, running)
   dino_sp:push(LANE_X, LANE_Y)
 end
 
@@ -146,9 +147,7 @@ local function _drawCactusSprite(ox, oh)
   -- frame's cactus position in one push.
   local origin_x = math.floor(ox) - 4
   cactus_sp:fill(C_BLACK)
-  _composeCactus(
-    function(x, y, w, h, c) cactus_sp:rect(x, y, w, h, c) end,
-    ox, oh, origin_x, CACTUS_LANE_TOP)
+  _composeCactus(_cactusSpDraw, ox, oh, origin_x, CACTUS_LANE_TOP)
   cactus_sp:push(origin_x, CACTUS_LANE_TOP)
 end
 
@@ -253,7 +252,7 @@ while true do
     if obsX < -OW - 10 then
       obsX  = W + math.random(30, 70)
       obsH  = 16 + math.random(0, 22)
-      speed = speed + 0.04
+      speed = math.min(speed + 0.04, 10.0)
     end
 
     if tick % 8 == 0 then score = score + 1 end
