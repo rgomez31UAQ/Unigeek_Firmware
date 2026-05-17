@@ -65,17 +65,21 @@ private:
   void _showBadUSBCategoriesForOS(uint8_t osIndex);
   void _downloadBadUSBCategory(uint8_t index);
 
-  // Lua script browser (hierarchical, individual file download)
+  // Lua script browser (hierarchical, individual file download).
+  // Path list is fetched once from <repo>/map.txt and re-scanned per level —
+  // no per-folder API calls, no rate limit.
   static constexpr uint8_t kMaxLuaEntries = 48;
   ListItem _luaItems[kMaxLuaEntries];
   String   _luaLabels[kMaxLuaEntries];   // display label (with trailing / for folders)
-  String   _luaNames[kMaxLuaEntries];    // raw entry name from manifest
+  String   _luaNames[kMaxLuaEntries];    // raw entry name (folder or file)
   bool     _luaIsFolder[kMaxLuaEntries] = {};
   uint8_t  _luaCount = 0;
   String   _luaPath;                      // current relative path; "" = repo root
+  String   _luaMap;                       // cached map.txt contents
 
   void _showLuaRoot();
-  bool _fetchLuaLevel(const String& path);
+  bool _loadLuaMap();
+  bool _populateLuaLevel(const String& path);
   void _luaSelect(uint8_t index);
   void _downloadLuaScript(uint8_t index);
   void _luaPopPath();
@@ -86,10 +90,10 @@ private:
     "https://raw.githubusercontent.com/lshaf/Flipper-IRDB/main";
   static constexpr const char* BADUSB_REPO_BASE =
     "https://raw.githubusercontent.com/lshaf/badusb-collection/main";
-  static constexpr const char* LUA_API_BASE =
-    "https://api.github.com/repos/lshaf/unigeek-lua/contents";
   static constexpr const char* LUA_RAW_BASE =
     "https://raw.githubusercontent.com/lshaf/unigeek-lua/main";
+  static constexpr const char* LUA_MAP_URL =
+    "https://raw.githubusercontent.com/lshaf/unigeek-lua/main/map.txt";
   static constexpr const char* DUCKY_BASE =
     "/unigeek/hid/duckyscript/downloads";
   static constexpr const char* IR_DL_BASE =

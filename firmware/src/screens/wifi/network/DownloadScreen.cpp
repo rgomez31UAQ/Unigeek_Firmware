@@ -9,7 +9,6 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <cJSON.h>
 
 void DownloadScreen::onInit() {
   if (!Uni.Storage || !Uni.Storage->isAvailable()) {
@@ -701,89 +700,116 @@ void DownloadScreen::_downloadBadUSBCategory(uint8_t index) {
 
 // ── Lua Scripts ───────────────────────────────────────────
 //
-// Hierarchical browse of github.com/lshaf/unigeek-lua via the Contents API.
-// Each level is a JSON array of { name, type, ... }. Folders ("type":"dir")
-// descend; .lua files ("type":"file") download to /unigeek/lua/<path>/<name>.
-// Folders are listed before files at each level. No manifest file required.
-// GitHub unauthenticated API rate limit is 60/hr per IP.
+// Hierarchical browse of github.com/lshaf/unigeek-lua. A single `map.txt`
+// at the repo root lists every script path (one per line, e.g.
+// "utility/morse/generator.lua"). It's fetched once on entry and cached;
+// each level is derived locally by scanning the cached lines.
+// Folders are listed before files at each level.
 
 void DownloadScreen::_showLuaRoot() {
   if (WiFi.status() != WL_CONNECTED) {
     ShowStatusAction::show("WiFi not connected");
     return;
   }
+  if (!_loadLuaMap()) return;
   _luaPath = "";
-  if (!_fetchLuaLevel(_luaPath)) return;
+  if (!_populateLuaLevel(_luaPath)) return;
   _state = STATE_LUA_BROWSE;
   strcpy(_titleBuf, "Lua Scripts");
   _navReadyAt = millis() + 200;
   setItems(_luaItems, _luaCount);
 }
 
-bool DownloadScreen::_fetchLuaLevel(const String& path) {
+bool DownloadScreen::_loadLuaMap() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
 
-  ProgressView::init();
-  ProgressView::progress("Fetching...", 0);
-
-  String url = String(LUA_API_BASE);
-  if (path.length() > 0) url += "/" + path;
-  url += "?ref=main";
-
-  http.begin(client, url);
+  ShowStatusAction::show("Fetching map.txt...", 0);
+  http.begin(client, LUA_MAP_URL);
   http.addHeader("User-Agent", "ESP32-UniGeek");
-  http.addHeader("Accept", "application/vnd.github+json");
+  http.addHeader("Cache-Control", "no-cache");
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
     http.end();
-    String msg = (code == 403)
-      ? "GitHub rate limit hit"
-      : ("Failed (" + String(code) + ")");
-    ShowStatusAction::show(msg.c_str());
+    ShowStatusAction::show(("map.txt failed (" + String(code) + ")").c_str());
     render();
     return false;
   }
-
-  String body = http.getString();
+  _luaMap = http.getString();
   http.end();
 
-  cJSON* root = cJSON_Parse(body.c_str());
-  if (!root || !cJSON_IsArray(root)) {
-    if (root) cJSON_Delete(root);
-    ShowStatusAction::show("Bad API response");
+  if (_luaMap.length() == 0) {
+    ShowStatusAction::show("map.txt is empty");
     render();
     return false;
   }
+  return true;
+}
 
-  // Two passes: folders first, then .lua files. Stable order within each pass.
+bool DownloadScreen::_populateLuaLevel(const String& path) {
+  // prefix is what every line at this level must start with.
+  String prefix = path.length() > 0 ? (path + "/") : String("");
+
   _luaCount = 0;
-  for (int pass = 0; pass < 2 && _luaCount < kMaxLuaEntries; pass++) {
-    bool wantFolder = (pass == 0);
-    cJSON* entry = nullptr;
-    cJSON_ArrayForEach(entry, root) {
-      if (_luaCount >= kMaxLuaEntries) break;
-      cJSON* jType = cJSON_GetObjectItem(entry, "type");
-      cJSON* jName = cJSON_GetObjectItem(entry, "name");
-      if (!cJSON_IsString(jType) || !cJSON_IsString(jName)) continue;
 
-      bool isDir = strcmp(jType->valuestring, "dir") == 0;
-      if (isDir != wantFolder) continue;
+  // Pass 1: folders (unique first-segment-after-prefix that has a child path).
+  int pos = 0;
+  while (pos < (int)_luaMap.length() && _luaCount < kMaxLuaEntries) {
+    int nl = _luaMap.indexOf('\n', pos);
+    if (nl == -1) nl = _luaMap.length();
+    String line = _luaMap.substring(pos, nl);
+    line.trim();
+    if (line.startsWith("\xEF\xBB\xBF")) line = line.substring(3);
+    pos = nl + 1;
 
-      String name = jName->valuestring;
-      if (!isDir && !name.endsWith(".lua")) continue;  // skip non-lua files
-      if (name.length() == 0) continue;
+    if (line.length() == 0 || line.startsWith("#")) continue;
+    if (prefix.length() > 0 && !line.startsWith(prefix)) continue;
 
-      _luaIsFolder[_luaCount] = isDir;
-      _luaNames[_luaCount]    = name;
-      _luaLabels[_luaCount]   = isDir ? (name + "/") : name;
-      _luaItems[_luaCount]    = {_luaLabels[_luaCount].c_str()};
-      _luaCount++;
+    String rest = line.substring(prefix.length());
+    int slash = rest.indexOf('/');
+    if (slash < 0) continue;  // file at this level — handled in pass 2
+
+    String folder = rest.substring(0, slash);
+    if (folder.length() == 0) continue;
+
+    bool dup = false;
+    for (uint8_t i = 0; i < _luaCount; i++) {
+      if (_luaIsFolder[i] && _luaNames[i] == folder) { dup = true; break; }
     }
+    if (dup) continue;
+
+    _luaIsFolder[_luaCount] = true;
+    _luaNames[_luaCount]    = folder;
+    _luaLabels[_luaCount]   = folder + "/";
+    _luaItems[_luaCount]    = {_luaLabels[_luaCount].c_str()};
+    _luaCount++;
   }
 
-  cJSON_Delete(root);
+  // Pass 2: .lua files directly at this level.
+  pos = 0;
+  while (pos < (int)_luaMap.length() && _luaCount < kMaxLuaEntries) {
+    int nl = _luaMap.indexOf('\n', pos);
+    if (nl == -1) nl = _luaMap.length();
+    String line = _luaMap.substring(pos, nl);
+    line.trim();
+    if (line.startsWith("\xEF\xBB\xBF")) line = line.substring(3);
+    pos = nl + 1;
+
+    if (line.length() == 0 || line.startsWith("#")) continue;
+    if (prefix.length() > 0 && !line.startsWith(prefix)) continue;
+
+    String rest = line.substring(prefix.length());
+    if (rest.indexOf('/') >= 0) continue;            // not at this level
+    if (!rest.endsWith(".lua")) continue;            // ignore non-lua entries
+    if (rest.length() == 0) continue;
+
+    _luaIsFolder[_luaCount] = false;
+    _luaNames[_luaCount]    = rest;
+    _luaLabels[_luaCount]   = rest;
+    _luaItems[_luaCount]    = {_luaLabels[_luaCount].c_str()};
+    _luaCount++;
+  }
 
   if (_luaCount == 0) {
     ShowStatusAction::show("Empty folder");
@@ -800,7 +826,7 @@ void DownloadScreen::_luaSelect(uint8_t index) {
     String next = _luaPath.length() > 0
       ? (_luaPath + "/" + _luaNames[index])
       : _luaNames[index];
-    if (!_fetchLuaLevel(next)) return;
+    if (!_populateLuaLevel(next)) return;
     _luaPath = next;
     int slash = _luaPath.lastIndexOf('/');
     String tail = slash < 0 ? _luaPath : _luaPath.substring(slash + 1);
@@ -818,7 +844,7 @@ void DownloadScreen::_luaSelect(uint8_t index) {
 void DownloadScreen::_luaPopPath() {
   int slash = _luaPath.lastIndexOf('/');
   String parent = slash < 0 ? String("") : _luaPath.substring(0, slash);
-  if (!_fetchLuaLevel(parent)) return;
+  if (!_populateLuaLevel(parent)) return;
   _luaPath = parent;
   if (_luaPath.length() == 0) {
     strcpy(_titleBuf, "Lua Scripts");
@@ -861,7 +887,7 @@ void DownloadScreen::_downloadLuaScript(uint8_t index) {
   if (n == 1) Achievement.unlock("wifi_download_lua");
 
   ShowStatusAction::show(("Saved: " + name).c_str(), 1500);
-  // Stay on the current level so the user can grab more scripts.
-  setItems(_luaItems, _luaCount);
+  // Keep the cursor on the just-downloaded row so the user can move to the
+  // next script without re-finding their place.
   render();
 }
