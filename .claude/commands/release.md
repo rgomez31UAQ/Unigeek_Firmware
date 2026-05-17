@@ -14,17 +14,28 @@ Create a new firmware release. Usage: `/release <version>` (e.g. `/release 1.3.0
 
 2. **Version check**: Compare the requested version against the latest tag. If the new version is lower than or equal to the latest tag, **warn the user and stop** — do not proceed until they confirm or provide a corrected version.
 
-3. **Build all environments with the version baked in**: Run
+3. **Build all environments with the version baked in** *(run in background and continue with step 4 in parallel)*: Run
 
    ```bash
    PLATFORMIO_BUILD_SRC_FLAGS='-DFIRMWARE_VERSION='\''"<version>"'\''' ./scripts/build_all.sh
    ```
 
-   on macOS/Linux (Windows: `scripts/build_all.bat` — set `PLATFORMIO_BUILD_SRC_FLAGS` in the same shell first). Substitute `<version>` for the release version (e.g. `1.7.3`). The flag stamps `FIRMWARE_VERSION` into every `builds/unigeek-<env>.bin` so they double as M5Burner upload artefacts (`scripts/m5burner.py upload <version>`). Without it, AboutScreen falls back to `"dev"` and `m5burner.py`'s pre-flight version check will reject the bins.
+   on macOS/Linux. On Windows use PowerShell:
+
+   ```powershell
+   $env:PLATFORMIO_BUILD_SRC_FLAGS = "-DFIRMWARE_VERSION='`"<version>`"'"
+   .\scripts\build_all.ps1 -Jobs 6
+   ```
+
+   `build_all.sh` and `build_all.ps1` share the same env list — keep them in sync when adding boards. Substitute `<version>` for the release version (e.g. `1.7.3`). The flag stamps `FIRMWARE_VERSION` into every `builds/unigeek-<env>.bin` so they double as M5Burner upload artefacts (`scripts/m5burner.py upload <version>`). Without it, AboutScreen falls back to `"dev"` and `m5burner.py`'s pre-flight version check will reject the bins.
+
+   **Use `run_in_background: true`** — the build takes several minutes; you'll be notified when it finishes. Kick off step 4 (website build) in the same message so both run concurrently.
 
    If any build fails, **stop and report the error** — do not proceed with the release.
 
-4. **Build website**: Run `cd website && npm run build` to verify the website builds without errors. If the build fails, **stop and report the error** — do not proceed with the release. Also spot-check that any knowledge/*.md changes in this cycle render on the features pages (see **Knowledge file conventions** at the end of this file).
+4. **Build website** *(run in background, parallel with step 3)*: Run `cd website && npm run build` to verify the website builds without errors. If `next: command not found`, run `npm install` first (or chain it: `cd website && npm install && npm run build`). Also use `run_in_background: true` so it runs alongside the firmware build. If the build fails, **stop and report the error** — do not proceed with the release. Also spot-check that any knowledge/*.md changes in this cycle render on the features pages (see **Knowledge file conventions** at the end of this file).
+
+   Wait for *both* background tasks to complete before moving to step 5.
 
 5. **Analyze commits**: Run `git log <prev_tag>..HEAD --oneline` to see all commits since the last release. Also check what already existed at the previous tag to avoid listing mid-development upgrades as new features.
 
