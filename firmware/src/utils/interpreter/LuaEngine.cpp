@@ -13,6 +13,9 @@
 #include <time.h>
 #include <cJSON.h>
 #include <stdlib.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 
 char LuaEngine::exitSentinel = '\0';
 
@@ -126,6 +129,9 @@ void LuaEngine::deinit() {
   // Drop any popup state so the next script starts with a clean slot.
   _popupType        = POPUP_NONE;
   _popupOptionCount = 0;
+  // Tear down WiFi if the script was the one that brought it up, and clear
+  // any HTTP transport state so the next script starts on a clean network.
+  _cleanupNetwork();
 }
 
 // ── Script loading ────────────────────────────────────────────────────
@@ -268,6 +274,8 @@ void LuaEngine::_registerBindings() {
   lua_pushcfunction(_lua, _lua_load_path);   lua_setfield(_lua, -2, "uni.path");
   lua_pushcfunction(_lua, _lua_load_time);   lua_setfield(_lua, -2, "uni.time");
   lua_pushcfunction(_lua, _lua_load_config); lua_setfield(_lua, -2, "uni.config");
+  lua_pushcfunction(_lua, _lua_load_wifi);   lua_setfield(_lua, -2, "uni.wifi");
+  lua_pushcfunction(_lua, _lua_load_http);   lua_setfield(_lua, -2, "uni.http");
   lua_pop(_lua, 2);
 
   // Sprite metatable lives in the registry; attached to each sprite userdata.
@@ -933,6 +941,175 @@ int LuaEngine::_lua_load_config(lua_State* L) {
   lua_newtable(L);
   lua_pushcfunction(L, _config_get); lua_setfield(L, -2, "get");
   return 1;
+}
+
+// ── uni.wifi / uni.http ───────────────────────────────────────────────
+//
+// The script is responsible for asking. We only disconnect on exit when
+// wifi.connect() was the one that actually brought the radio up — if the
+// user had WiFi connected before launching the script (Web File Manager,
+// Wardrive, …) we leave it alone.
+//
+// HTTP doesn't keep persistent state between calls. Each request gets a
+// fresh local WiFiClientSecure + HTTPClient and the response body is read
+// into a Lua string, capped at kHttpMaxBody bytes to keep a stray URL from
+// OOM'ing the VM.
+
+int LuaEngine::_lua_load_wifi(lua_State* L) {
+  lua_newtable(L);
+  lua_pushcfunction(L, _wifi_status);     lua_setfield(L, -2, "status");
+  lua_pushcfunction(L, _wifi_ssid);       lua_setfield(L, -2, "ssid");
+  lua_pushcfunction(L, _wifi_ip);         lua_setfield(L, -2, "ip");
+  lua_pushcfunction(L, _wifi_connect);    lua_setfield(L, -2, "connect");
+  lua_pushcfunction(L, _wifi_disconnect); lua_setfield(L, -2, "disconnect");
+  return 1;
+}
+
+int LuaEngine::_lua_load_http(lua_State* L) {
+  lua_newtable(L);
+  lua_pushcfunction(L, _http_get);  lua_setfield(L, -2, "get");
+  lua_pushcfunction(L, _http_post); lua_setfield(L, -2, "post");
+  return 1;
+}
+
+int LuaEngine::_wifi_status(lua_State* L) {
+  const char* s;
+  switch (WiFi.status()) {
+    case WL_CONNECTED:       s = "connected";    break;
+    case WL_IDLE_STATUS:     s = "connecting";   break;
+    case WL_NO_SSID_AVAIL:   s = "no_ssid";      break;
+    case WL_CONNECT_FAILED:  s = "failed";       break;
+    case WL_CONNECTION_LOST: s = "lost";         break;
+    case WL_DISCONNECTED:    s = "disconnected"; break;
+    default:                 s = "off";          break;
+  }
+  lua_pushstring(L, s);
+  return 1;
+}
+
+int LuaEngine::_wifi_ssid(lua_State* L) {
+  String s = (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : String("");
+  lua_pushstring(L, s.c_str());
+  return 1;
+}
+
+int LuaEngine::_wifi_ip(lua_State* L) {
+  String s = (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("");
+  lua_pushstring(L, s.c_str());
+  return 1;
+}
+
+int LuaEngine::_wifi_connect(lua_State* L) {
+  LuaEngine* eng = _fromState(L);
+  const char* ssid     = luaL_checkstring(L, 1);
+  const char* pass     = luaL_optstring(L, 2, "");
+  uint32_t    timeoutMs = (uint32_t)luaL_optnumber(L, 3, 10000);
+
+  if (WiFi.status() == WL_CONNECTED && WiFi.SSID() == ssid) {
+    lua_pushboolean(L, 1);  // already connected to the requested AP
+    return 1;
+  }
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, pass);
+
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED) {
+    if (eng && eng->_exitRequested) break;
+    if (millis() - start >= timeoutMs) break;
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+
+  bool ok = (WiFi.status() == WL_CONNECTED);
+  if (ok && eng) eng->_scriptStartedWifi = true;
+  lua_pushboolean(L, ok ? 1 : 0);
+  return 1;
+}
+
+int LuaEngine::_wifi_disconnect(lua_State* L) {
+  LuaEngine* eng = _fromState(L);
+  WiFi.disconnect(true);
+  if (eng) eng->_scriptStartedWifi = false;
+  return 0;
+}
+
+static constexpr size_t kHttpMaxBody = 256 * 1024;  // 256 KB cap
+
+static int _http_request(lua_State* L, const char* method, const char* url,
+                         const char* body, size_t bodyLen) {
+  if (WiFi.status() != WL_CONNECTED) {
+    lua_pushnil(L);
+    lua_pushinteger(L, -1);
+    return 2;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  http.setTimeout(15000);
+  if (!http.begin(client, url)) {
+    lua_pushnil(L);
+    lua_pushinteger(L, -2);
+    return 2;
+  }
+  http.addHeader("User-Agent", "ESP32-UniGeek");
+
+  int code;
+  if (strcmp(method, "POST") == 0) {
+    code = http.POST((uint8_t*)body, bodyLen);
+  } else {
+    code = http.GET();
+  }
+
+  if (code <= 0) {
+    http.end();
+    lua_pushnil(L);
+    lua_pushinteger(L, code);
+    return 2;
+  }
+
+  int len = http.getSize();
+  if (len > 0 && (size_t)len > kHttpMaxBody) {
+    http.end();
+    lua_pushnil(L);
+    lua_pushinteger(L, -3);   // too large
+    return 2;
+  }
+  String resp = http.getString();
+  http.end();
+
+  if (resp.length() > kHttpMaxBody) {
+    lua_pushnil(L);
+    lua_pushinteger(L, -3);
+    return 2;
+  }
+
+  lua_pushlstring(L, resp.c_str(), resp.length());
+  lua_pushinteger(L, code);
+  return 2;
+}
+
+int LuaEngine::_http_get(lua_State* L) {
+  const char* url = luaL_checkstring(L, 1);
+  return _http_request(L, "GET", url, nullptr, 0);
+}
+
+int LuaEngine::_http_post(lua_State* L) {
+  const char* url = luaL_checkstring(L, 1);
+  size_t      blen;
+  const char* body = luaL_optlstring(L, 2, "", &blen);
+  return _http_request(L, "POST", url, body, blen);
+}
+
+void LuaEngine::_cleanupNetwork() {
+  // Only tear down WiFi if the script itself brought it up — otherwise
+  // we'd disconnect the Web File Manager or whatever else is using it.
+  if (_scriptStartedWifi) {
+    WiFi.disconnect(true);
+    _scriptStartedWifi = false;
+  }
+  // HTTPClient state isn't cached — each call uses a local instance that's
+  // destroyed when the binding returns. Nothing else to clean here.
 }
 
 // ── Popup bridge ──────────────────────────────────────────────────────

@@ -129,6 +129,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Data (`uni.json` / `uni.path`)** — cJSON encode/decode, plus path join / basename / dirname / ext helpers
   - **Storage (`uni.sd`)** — read / write / append / list / exists / remove / rename / mkdir / size
   - **Device (`uni.time` / `uni.config`)** — RTC clock (`time.now()` → year/month/day/hour/min/sec/wday/epoch); read theme color, device name, brightness, volume from ConfigManager
+  - **Network (`uni.wifi` / `uni.http`)** — station-mode connect/status/ip/ssid plus blocking GET/POST (TLS via `setInsecure`); runner auto-disconnects on exit if the script brought WiFi up; response bodies capped at 256 KB
   - **System (`uni`)** — `debug` (serial), `delay`, `millis`, `heap`, `beep`
 
 ### Games

@@ -176,6 +176,27 @@ private:
   static int _lua_load_path(lua_State* L);
   static int _lua_load_time(lua_State* L);
   static int _lua_load_config(lua_State* L);
+  static int _lua_load_wifi(lua_State* L);
+  static int _lua_load_http(lua_State* L);
+
+  // uni.wifi.* — block-until-connected + status helpers.
+  static int _wifi_status(lua_State* L);
+  static int _wifi_ssid(lua_State* L);
+  static int _wifi_ip(lua_State* L);
+  static int _wifi_connect(lua_State* L);
+  static int _wifi_disconnect(lua_State* L);
+
+  // uni.http.* — blocking GET/POST. Reuse WiFiClientSecure with setInsecure.
+  static int _http_get(lua_State* L);
+  static int _http_post(lua_State* L);
+
+  // True if the script's wifi.connect() actually brought the radio up — used
+  // by _cleanupNetwork() to disconnect on exit only when we're the originator.
+  bool _scriptStartedWifi = false;
+
+  // Tear down anything the script touched on the network side: WiFi (only if
+  // the script started it) and any cached HTTP transport state.
+  void _cleanupNetwork();
 
   // uni.input.* — popup-bridge to firmware Input*Action classes.
   static int _input_text(lua_State* L);
