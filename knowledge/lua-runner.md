@@ -12,6 +12,16 @@ Lua Runner lets you write and run **Lua 5.1 scripts** directly on the device, no
 3. Select the file. The script starts immediately.
 4. Press **Back** at any time — the script catches it and exits cleanly.
 
+### Where to get scripts
+
+A curated collection of community scripts lives at [github.com/lshaf/unigeek-lua](https://github.com/lshaf/unigeek-lua). Two ways to install them:
+
+- **On-device** — open **Download → Lua** while connected to WiFi. The screen browses the repo as a folder tree (sourced from `map.txt` at the repo root) and saves each picked script to `/unigeek/lua/<path>/<name>.lua` straight onto the SD card. No SD removal, no manifest, no rate limit.
+- **Manually** — clone or download files from the repo and drop them under `/unigeek/lua/` on the SD card yourself. Useful when you want to edit before installing, or want scripts that haven't been added to `map.txt` yet.
+
+> [!tip]
+> Want to contribute? PR a script to `lshaf/unigeek-lua` and add its path to `map.txt` so it shows up in the on-device browser.
+
 ---
 
 ## How Scripts Execute
@@ -171,6 +181,17 @@ uni.beep(880,  30)   -- short blip
 uni.beep(1200, 20)   -- jump sound
 uni.beep(150,  120)  -- collision thud
 ```
+
+---
+
+### `math.random` / `math.randomseed`
+
+The runner reseeds **both** Arduino's `random()` and Lua's `math.random()` from the device's hardware RNG (`esp_random()` mixed with MAC, RTC, micros, and an NVS-persisted rolling chain) every time a script starts. **You don't need to call `math.randomseed()` at all** — every run is already seeded with fresh entropy.
+
+If you *do* call `math.randomseed(n)`, the argument is **folded into** that same entropy chain rather than used verbatim. So `math.randomseed(uni.millis())` won't lock you into a narrow per-boot seed range; it just adds a tiny bit of extra mixing on top of the hardware RNG. Result: identical behaviour for reproducibility purposes (you'll still get a different sequence each run), but no longer correlated to whatever value you passed in.
+
+> [!tip]
+> Drop `math.randomseed(uni.millis())` from new scripts — it's now a no-op for most practical purposes. Keep it only as a hint to readers that the script wants random behaviour.
 
 ---
 

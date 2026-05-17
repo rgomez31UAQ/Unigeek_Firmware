@@ -2,6 +2,7 @@
 #include "core/Device.h"
 #include "core/INavigation.h"
 #include "core/ConfigManager.h"
+#include "core/RandomSeed.h"
 #include "ui/actions/InputTextAction.h"
 #include "ui/actions/InputNumberAction.h"
 #include "ui/actions/InputSelectAction.h"
@@ -11,6 +12,7 @@
 #include <freertos/task.h>
 #include <time.h>
 #include <cJSON.h>
+#include <stdlib.h>
 
 char LuaEngine::exitSentinel = '\0';
 
@@ -75,6 +77,23 @@ bool LuaEngine::init() {
   lua_sethook(_lua, _countHook, LUA_MASKCOUNT, 1000);
 
   luaL_openlibs(_lua);
+
+  // Reseed both Arduino's random() and Lua's math.random() before the script
+  // starts so naïve scripts that skip math.randomseed still get a fresh
+  // sequence every run. Hardware entropy via esp_random() (mixed with MAC,
+  // RTC, micros, persisted rolling chain) lives in RandomSeed::reseed().
+  uint32_t s = RandomSeed::reseed();
+  srand(s);
+
+  // Replace Lua's stock math.randomseed with our binding so a script's seed
+  // is folded into the same RandomSeed chain as the rest of the firmware.
+  lua_getglobal(_lua, "math");
+  if (lua_istable(_lua, -1)) {
+    lua_pushcfunction(_lua, _math_randomseed);
+    lua_setfield(_lua, -2, "randomseed");
+  }
+  lua_pop(_lua, 1);
+
   _registerBindings();
   _exitRequested = false;
   _chunkRef = LUA_NOREF;
@@ -343,6 +362,16 @@ int LuaEngine::_uni_beep(lua_State* L) {
   int ms   = (int)luaL_checknumber(L, 2);
   if (Uni.Speaker) Uni.Speaker->tone(freq, ms);
 #endif
+  return 0;
+}
+
+int LuaEngine::_math_randomseed(lua_State* L) {
+  // Lua 5.1 calls math.randomseed with a single numeric arg. Fold it into the
+  // RandomSeed chain (hardware RNG + rolling chain + MAC + time + caller seed)
+  // and apply the result to both Arduino's random() and Lua's math.random().
+  uint32_t userSeed = (uint32_t)luaL_checknumber(L, 1);
+  uint32_t mixed    = RandomSeed::reseed(userSeed);
+  srand(mixed);
   return 0;
 }
 

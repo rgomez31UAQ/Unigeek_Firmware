@@ -16,11 +16,17 @@ namespace RandomSeed {
 
 static uint32_t _prevSeed = 0;
 
-static inline uint32_t _buildSeed() {
+// `extra` is mixed into the chain — pass a caller-supplied seed (e.g. the
+// argument to Lua's math.randomseed) so the user's intent is honored while
+// still riding on the device's hardware entropy + rolling chain.
+static inline uint32_t _buildSeed(uint32_t extra = 0) {
   uint32_t seed = esp_random();
 
   // Mix in previous seed (rolling chain)
   seed ^= _prevSeed;
+
+  // Mix in caller-supplied seed
+  seed ^= extra;
 
   // Mix in MAC address (unique per device)
   uint8_t mac[6];
@@ -52,9 +58,10 @@ static inline void init() {
   randomSeed(seed);
 }
 
-static inline void reseed() {
-  uint32_t seed = _buildSeed();
+static inline uint32_t reseed(uint32_t extra = 0) {
+  uint32_t seed = _buildSeed(extra);
   randomSeed(seed);
+  return seed;
 }
 
 }  // namespace RandomSeed

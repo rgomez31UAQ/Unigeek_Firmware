@@ -102,6 +102,11 @@ private:
   static int _uni_beep(lua_State* L);
   static int _lua_exit(lua_State* L);
 
+  // Override for Lua's stock math.randomseed — folds the user-supplied seed
+  // into RandomSeed's entropy chain and re-applies it to both Arduino's
+  // random() and Lua's math.random().
+  static int _math_randomseed(lua_State* L);
+
   // uni.lcd / uni.sd / uni.nav lazy loaders (registered in package.preload)
   static int _lua_load_lcd(lua_State* L);
   static int _lua_load_sd(lua_State* L);
