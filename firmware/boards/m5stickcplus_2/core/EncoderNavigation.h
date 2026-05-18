@@ -7,9 +7,9 @@
 #pragma once
 
 #include "core/INavigation.h"
-#include "M5HatMiniEncoderC.h"
+#include "utils/M5HatMiniEncoderC_Soft.h"
 
-M5HatMiniEncoderC encoder;
+static M5HatMiniEncoderC_Soft encoder;
 
 class EncoderNavigation : public INavigation
 {

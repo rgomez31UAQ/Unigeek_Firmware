@@ -30,7 +30,9 @@ Device* Device::createInstance() {
 
   // Internal I2C for BM8563 RTC
   Wire1.begin(INTERNAL_SDA, INTERNAL_SCL);
-  // Note: Wire (ExI2C / encoder HAT) is begun by applyNavMode() — see below.
+  Wire.begin(GROVE_SDA, GROVE_SCL);          // Grove I2C (ExI2C)
+  // Encoder HAT runs on a software-bit-banged bus (utils/M5HatMiniEncoderC_Soft.h)
+  // on GPIO 0/26 — independent of Wire/Wire1.
 
   // PWM backlight
   display.initBacklight();
@@ -49,14 +51,9 @@ Device* Device::createInstance() {
 
 void Device::applyNavMode() {
   String mode = Config.get(APP_CONFIG_NAV_MODE, APP_CONFIG_NAV_MODE_DEFAULT);
-  // Wire is shared between ExI2C (Grove, 32/33) and the EncoderC HAT (0/26).
-  // arduino-esp32 v2.0.17's TwoWire::begin() does not cleanly switch pins on a
-  // second call — end() first, then let the chosen nav own the bus.
-  Wire.end();
   if (mode == "encoder") {
-    switchNavigation(&encoderNavigation);  // encoder.begin() → Wire.begin(0, 26, 200kHz)
+    switchNavigation(&encoderNavigation);
   } else {
-    Wire.begin(GROVE_SDA, GROVE_SCL);
     switchNavigation(&navigation);
   }
 }
