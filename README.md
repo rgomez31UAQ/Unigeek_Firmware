@@ -42,14 +42,15 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **IP Scanner** — Scan the local network for active devices
   - **Port Scanner** — Scan open ports on a target IP address
   - **Web File Manager** — Manage device files from a browser over WiFi; verify and save WPA passwords against captured handshakes (`saveCrack`); browse and stream wordlists from device storage; browser-side PBKDF2 crack engine via embedded `crack.wasm` ([details](knowledge/web-file-manager.md))
-  - **Download** — Download files from GitHub directly to device storage
+  - **Download** — Download files from GitHub directly to device storage ([details](knowledge/download.md))
     - **Web File Manager** — HTML/CSS/JS interface for browser-based file management (auto-checks for updates)
     - **Firmware Sample Files** — Portal templates (Google, Facebook, WiFi login), DuckyScript payloads (hello world, reverse shell, WiFi password grab, rickroll, disable defender), QR code samples, DNS spoofing config, and rockyou_mini password wordlist
     - **Infrared Files** — Browse and download IR remote files by category (TVs, ACs, Fans, Projectors, etc.) from [Flipper-IRDB](https://github.com/lshaf/Flipper-IRDB), saved to `/unigeek/ir/downloads/`
     - **BadUSB Scripts** — Browse and download DuckyScript payloads from the badusb-collection by OS and category, saved to `/unigeek/hid/duckyscript/`
+    - **Lua Scripts** — Hierarchical browse of the [lshaf/unigeek-lua](https://github.com/lshaf/unigeek-lua) repo driven by a single `map.txt` at the repo root (fetched once, navigated locally); folders descend, `.lua` files download to `/unigeek/lua/<path>/`
   - **MITM Attack** — Man-in-the-middle with DHCP starvation, deauth burst, rogue DHCP, DNS spoofing, and web file manager ([details](knowledge/network-mitm.md))
   - **CCTV Sniffer** — Discover network cameras, identify brands, test credentials, and stream live video ([details](knowledge/cctv-toolkit.md))
-  - **Wigle** — Upload wardrive logs, view user stats, and manage Wigle API token ([details](knowledge/gps-wardriving.md))
+  - **Wigle** — Upload wardrive logs, view user stats, manage Wigle API token, and view captured wardrive paths on an inline ESRI World Imagery map (tiles cached to SD under `/unigeek/maps/`) ([details](knowledge/gps-wardriving.md))
   - **Cast Bomb** — Discover DIAL-capable smart TVs and Chromecasts on the LAN and push a YouTube video at them; preset list (Rick Astley, All Star, Trololo, Sandstorm, He's a Pirate) plus custom video ID; cast to one device or all at once ([details](knowledge/cast-bomb.md))
   - **Bonjour Spam** — Flood the LAN with fake mDNS service announcements; toggleable categories (Spotify Connect, AirPlay, Google Cast, Printer, SMB Workstation) populate phantom targets in nearby devices' service pickers ([details](knowledge/bonjour-spam.md))
   - **Printer Prank** — Discover SSDP-advertised network printers and send short joke text jobs via JetDirect (port 9100); preset list (Affirmation, Hydrate, Compliment, Update Required, Hello Void) plus custom message; print to one device or all at once ([details](knowledge/printer-prank.md))
@@ -60,11 +61,11 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Karma Support** — Companion screen for a second device; receives deploy commands over ESP-NOW and hosts the fake WPA2 AP on behalf of the attack device; MAC-locked to the paired attacker after first connect; auto-resets if no heartbeat received for 5 s ([details](knowledge/karma-eapol.md))
 - **Karma Detector** — Scan for rogue APs responding to probes by broadcasting fake probe requests across all channels and monitoring for unexpected responses
 - **WiFi Analyzer** — Scan and display nearby networks with signal strength and channel info
-- **Packet Monitor** — Visualize WiFi traffic by channel
+- **Packet Monitor** — Visualize WiFi traffic by channel as a glowing line chart
 - **WiFi Deauther** — Disconnect clients from a target network
 - **Deauther Detector** — Monitor for deauthentication attacks nearby
 - **WiFi Watchdog** — Passive promiscuous monitor with five views: overall summary, deauth/disassoc events, probe request leaks, beacon flood detection, and evil twin AP detection
-- **Beacon Attack** — Flood the area with fake SSIDs; Spam mode (dictionary or random names) or Flood mode targeting a specific AP with high-rate cloned beacons
+- **Beacon Attack** — Flood the area with fake SSIDs; Spam mode (random names, built-in dictionary, or any `.txt` SSID list loaded from SD via the file browser, rate-limited on channels 1/6/11) or Flood mode targeting a specific AP with high-rate cloned beacons
 - **CIW Zeroclick** — Broadcast SSIDs with injection payloads to test how nearby devices handle untrusted network names
 - **ESPNOW Chat** — Peer-to-peer text chat over ESP-NOW (no router needed)
 - **EAPOL Capture** — Capture WPA2 handshakes from nearby networks and save to storage; configurable discovery dwell, attack dwell, channel hopping, and max deauth attempts ([details](knowledge/eapol.md))
@@ -107,7 +108,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Keyboard Relay** — Forward physical keypresses directly to the connected host in real time (keyboard devices only)
 - **Ducky Script** — Run script files from storage to automate keystrokes ([details](knowledge/ducky-script.md))
 - **Mouse Jiggle** — Send periodic small mouse movements over BLE or USB to keep the host awake
-- **Password Manager** — Deterministic vault protected by a master password; entries store label, type, case, and length; passwords are generated from SHA256(master+label+params) so no plaintext is stored; view a generated password on-screen or auto-type it via HID with a single press ([details](knowledge/password-manager.md))
+- **Password Manager** — Deterministic vault protected by a master password; entries store label, type, case, length, and a per-entry **Source**: Local derives via SHA256(master+label+params), WebAuthn derives via HMAC-SHA-256 keyed by the device's WebAuthn `master.bin` (binds the password to both the typed master *and* this physical device); no plaintext is stored. View a generated password on-screen or auto-type it via HID with a single press ([details](knowledge/password-manager.md))
 - **WebAuthn** — Act as a USB FIDO2 / WebAuthn passkey for browser sign-in (CTAP2 + legacy U2F register/authenticate, ESP32-S3 only); resident credentials, ClientPIN proto v1, hmac-secret / PRF, largeBlob, GetNextAssertion, CredentialManagement, AuthenticatorConfig (toggleAlwaysUv / setMinPINLength); PIN auth token with 10-minute idle timeout; BIP-39 seed backup and restore; on-device passkey manager + Windows-friendly stuck-mount watchdog ([details](knowledge/webauthn.md))
 
 ### Utility
@@ -160,6 +161,9 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - Animated water scene with mascot; press OK/UP to cast, OK/UP again in the window to reel
   - Perfect-reel bonus: keep the indicator in the centre zone with no misses
   - Top 5 session high scores persisted to SD; 6 achievements
+- **Music Composer** — Nokia-style RTTTL step editor for boards with a speaker (buzzer or I2S); up to 64 steps each with a MIDI pitch (C2–C7) or rest plus a length code (1/N), per-song BPM 40–300; save/load `.rtttl` files under `/unigeek/music/` via the file browser; 7 built-in public-domain demos (Twinkle, Ode to Joy, Frère Jacques, Jingle Bells, Mary Lamb…) ([details](knowledge/music-composer.md))
+  - UP/DOWN audition the current step's pitch on tone(); PRESS opens the action menu (Play, Octave ±1, Toggle rest, length, Insert/Delete, BPM, Rename, Save, Clear)
+  - 4-way devices use LEFT/RIGHT to move the cursor; 3-button sticks get a "Move step…" number picker plus Prev/Next entries
 
 ### Modules
 - **NFC (MFRC522)** — MIFARE Classic card reader and key recovery tool ([details](knowledge/nfc-mifare.md))
@@ -188,6 +192,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Wardrive Mode** — Driving (default, active WiFi scan) or Walking (passive promiscuous sniffing)
   - **Wardriving** — Log nearby WiFi and BLE devices with GPS coordinates in Wigle CSV format
   - **Wigle Integration** — Connect to WiFi, upload wardrive logs, view user stats, manage API token
+  - **Map View** — Render any saved wardrive CSV as a path on a Web-Mercator z11 ESRI World Imagery map; tiles cached under `/unigeek/maps/{z}/{x}/{y}.jpg`; pan with d-pad on 4-way devices, axis-toggle chip on 2-button; PRESS recenters on the path bbox
 - **IR Remote** — Infrared transceiver for capturing, replaying, and managing IR signals ([details](knowledge/ir-remote.md))
   - **TX/RX Pin** — Configurable GPIO pins for IR transmitter and receiver (saved per device)
   - **Receive** — Capture IR signals with automatic protocol detection (NEC, Samsung, Sony, RC5, RC6, Kaseikyo, Pioneer, RCA and more), duplicate filtering, and signal details as sublabels
@@ -375,4 +380,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
-<!-- README last synced at commit: c536e51 (lua: tier-2 modules input/dialog/notify/json/path/time/config + uni.nav, lcd primitives + sprites, sd CRUD ops; input action BACK = backspace; m5burner uploader script + version-flagged release builds) -->
+<!-- README last synced at commit: df32e67 (cast-bomb / bonjour-spam / printer-prank, music composer game, lua scripts download, wigle/gps wardrive map view, password manager WebAuthn HMAC source, beacon-spam SD dicts + ch 1/6/11 rate limit, packet monitor line chart, uni.wifi + uni.http) -->

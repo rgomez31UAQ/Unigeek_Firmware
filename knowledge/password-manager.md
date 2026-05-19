@@ -27,8 +27,21 @@ After unlocking, the screen lists all saved entries followed by an **Add New** i
 | Type | Alphanumeric · Alphabet only · Alphanumeric + Symbols |
 | Case | Lower case · Upper case · Mixed case |
 | Length | 8 – 34 characters |
+| Source | Local · WebAuthn |
 
-Press **Save** to commit the entry. The password is deterministic — the same label, type, case, and length always produce the same password for a given master key.
+Press **Save** to commit the entry. The password is deterministic — the same label, type, case, length, *and source* always produce the same password for a given master key.
+
+### Source: Local vs WebAuthn
+
+The **Source** field picks the derivation function:
+
+- **Local** — `SHA-256(masterPw || fields)`. Portable: the same master + label + fields produces the same password on any UniGeek device (or any other tool that implements the same algorithm).
+- **WebAuthn** — `HMAC-SHA-256(master.bin, masterPw || fields)`, where `master.bin` is the BIP-39-derived WebAuthn master key on this device. Binds the password to **both** the typed master password and **this physical device** — the entry cannot be regenerated without both the master password and a UniGeek holding the same `master.bin`.
+
+The Source picker defaults to **WebAuthn** if `master.bin` exists, otherwise **Local**. If you wipe and regenerate `master.bin` (via WebAuthn → BIP-39 Generate), any existing `WebAuthn`-source entries fail to view with a `WebAuthn master missing` toast — back up your BIP-39 seed if you rely on WebAuthn-source passwords.
+
+> [!tip]
+> The vault format gained an optional 5th field for `source`. Records saved before this change decode as `Local` automatically — no migration needed.
 
 ## View Screen
 
@@ -43,14 +56,19 @@ Displays the generated password for the selected entry.
 
 ## How Passwords Are Generated
 
-Passwords are never stored. Each time you view an entry, the password is derived as:
+Passwords are never stored. Each time you view an entry, the password is derived from the entry's `source`:
 
 ```
-seed = masterPw + "|" + label + "|" + type + "|" + caseMode + "|" + length
-password = SHA256(seed) mapped to the chosen charset
+seed   = masterPw + "|" + label + "|" + type + "|" + caseMode + "|" + length
+
+# Source = Local
+digest = SHA-256(seed)
+
+# Source = WebAuthn
+digest = HMAC-SHA-256(key = /unigeek/webauthn/master.bin, msg = seed)
 ```
 
-Changing any field (including the master password) produces a completely different output.
+The 32-byte `digest` is then mapped to the chosen charset (alphanumeric / alphabet / alphanumeric+symbols) and truncated to the requested length. Changing any field — master password, label, type, case, length, or source — produces a completely different output.
 
 ## Storage
 

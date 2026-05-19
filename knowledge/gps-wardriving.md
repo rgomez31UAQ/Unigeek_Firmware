@@ -70,6 +70,19 @@ View your Wigle profile: username, rank, month rank, WiFi/Cell/BT discovered, Wi
 
 Lists wardrive CSV files sorted by name (newest first). Uploaded files are marked with "Uploaded" sublabel and renamed with `_uploaded` suffix. Requires internet connection and a valid Wigle token.
 
+### Map View
+
+Available from both **Modules > GPS** and **WiFi > Network > Wigle** (Wigle path requires WiFi). Picks a wardrive CSV with the same file browser as Upload, then renders the path on a Web-Mercator z11 ESRI World Imagery map.
+
+- Tiles streamed from `https://server.arcgisonline.com/.../World_Imagery/MapServer/tile/{z}/{y}/{x}` and cached on SD at `/unigeek/maps/{z}/{x}/{y}.jpg`. After the first viewing, replays are offline.
+- Path drawn as a thick yellow polyline; start marker is a green dot, end marker is a red dot. Drawing is clipped to the screen body so the title and status bars stay clean.
+- **Pan** — 4-way devices get N/S/E/W direct from the d-pad; 2-button devices toggle a `N/S ↔ E/W` axis chip with PRESS, then nudge with UP/DOWN.
+- **Recenter** — PRESS (4-way) snaps the view back to the path's bounding box.
+- **Back** — returns to the wardrive file picker, not all the way out of the screen.
+
+> [!tip]
+> The first map load over WiFi can take several seconds while tiles fetch and decode. Subsequent loads of the same area are instant from the SD cache. Tiles are JPEG, so a long wardrive over a wide area can fill `/unigeek/maps/` quickly — clear the folder from File Manager if you want to start fresh.
+
 ## Storage
 
 ```
