@@ -97,62 +97,63 @@ void PasswordManagerScreen::onRender()
 void PasswordManagerScreen::onItemSelected(uint8_t index)
 {
   if (_state == STATE_ADD) {
-    switch (index) {
-      case 0: {
-        String v = InputTextAction::popup("Label", _pendingLabel.c_str());
-        if (!InputTextAction::wasCancelled()) _pendingLabel = v;
+    // Index layout depends on whether the Source row is present.
+    // With webauthn:    0=Label 1=Source 2=Type 3=Case 4=Length 5=Save
+    // Without webauthn: 0=Label         1=Type 2=Case 3=Length 4=Save
+#ifdef DEVICE_HAS_WEBAUTHN
+    constexpr uint8_t IDX_LABEL = 0, IDX_SOURCE = 1, IDX_TYPE = 2,
+                      IDX_CASE = 3, IDX_LEN = 4, IDX_SAVE = 5;
+#else
+    constexpr uint8_t IDX_LABEL = 0, IDX_TYPE = 1, IDX_CASE = 2,
+                      IDX_LEN = 3, IDX_SAVE = 4;
+    constexpr uint8_t IDX_SOURCE = 0xFF;  // never matches
+#endif
+
+    if (index == IDX_LABEL) {
+      String v = InputTextAction::popup("Label", _pendingLabel.c_str());
+      if (!InputTextAction::wasCancelled()) _pendingLabel = v;
+      _updateAddLabels(); render();
+    } else if (index == IDX_SOURCE) {
+      if (!_waMasterAvailable()) {
+        ShowStatusAction::show("Run Utility > Manage WebAuthn > BIP39 Generate", 2200);
+        _pendingSource = SRC_LEGACY;
         _updateAddLabels(); render();
-        break;
+        return;
       }
-      case 1: {
-        if (!_waMasterAvailable()) {
-          ShowStatusAction::show("Setup WebAuthn master first", 1500);
-          _pendingSource = SRC_LEGACY;
-          _updateAddLabels(); render();
-          break;
-        }
-        static constexpr InputSelectAction::Option srcOpts[] = {
-          {"Local (master pw only)",     "0"},
-          {"WebAuthn (pw + master.bin)", "1"},
-        };
-        const char* r = InputSelectAction::popup("Source", srcOpts, 2,
-                          String(_pendingSource).c_str());
-        if (r) _pendingSource = (uint8_t)atoi(r);
-        _updateAddLabels(); render();
-        break;
-      }
-      case 2: {
-        static constexpr InputSelectAction::Option typeOpts[] = {
-          {"Alphanumeric (letters+digits)", "0"},
-          {"Alphabet only (letters)",       "1"},
-          {"Alphanumeric + Symbols",        "2"},
-        };
-        const char* r = InputSelectAction::popup("Password Type", typeOpts, 3,
-                          String(_pendingType).c_str());
-        if (r) _pendingType = (uint8_t)atoi(r);
-        _updateAddLabels(); render();
-        break;
-      }
-      case 3: {
-        static constexpr InputSelectAction::Option caseOpts[] = {
-          {"Lower case (a-z)", "0"},
-          {"Upper case (A-Z)", "1"},
-          {"Mixed case (A-Za-z)", "2"},
-        };
-        const char* r = InputSelectAction::popup("Case", caseOpts, 3,
-                          String(_pendingCase).c_str());
-        if (r) _pendingCase = (uint8_t)atoi(r);
-        _updateAddLabels(); render();
-        break;
-      }
-      case 4: {
-        int v = InputNumberAction::popup("Length (8-34)", 8, 34, _pendingLen);
-        if (!InputNumberAction::wasCancelled()) _pendingLen = (uint8_t)v;
-        _updateAddLabels(); render();
-        break;
-      }
-      case 5: _saveEntry(); break;
-      default: break;
+      static constexpr InputSelectAction::Option srcOpts[] = {
+        {"Local (master pw only)",     "0"},
+        {"WebAuthn (pw + master.bin)", "1"},
+      };
+      const char* r = InputSelectAction::popup("Source", srcOpts, 2,
+                        String(_pendingSource).c_str());
+      if (r) _pendingSource = (uint8_t)atoi(r);
+      _updateAddLabels(); render();
+    } else if (index == IDX_TYPE) {
+      static constexpr InputSelectAction::Option typeOpts[] = {
+        {"Alphanumeric (letters+digits)", "0"},
+        {"Alphabet only (letters)",       "1"},
+        {"Alphanumeric + Symbols",        "2"},
+      };
+      const char* r = InputSelectAction::popup("Password Type", typeOpts, 3,
+                        String(_pendingType).c_str());
+      if (r) _pendingType = (uint8_t)atoi(r);
+      _updateAddLabels(); render();
+    } else if (index == IDX_CASE) {
+      static constexpr InputSelectAction::Option caseOpts[] = {
+        {"Lower case (a-z)", "0"},
+        {"Upper case (A-Z)", "1"},
+        {"Mixed case (A-Za-z)", "2"},
+      };
+      const char* r = InputSelectAction::popup("Case", caseOpts, 3,
+                        String(_pendingCase).c_str());
+      if (r) _pendingCase = (uint8_t)atoi(r);
+      _updateAddLabels(); render();
+    } else if (index == IDX_LEN) {
+      int v = InputNumberAction::popup("Length (8-34)", 8, 34, _pendingLen);
+      if (!InputNumberAction::wasCancelled()) _pendingLen = (uint8_t)v;
+      _updateAddLabels(); render();
+    } else if (index == IDX_SAVE) {
+      _saveEntry();
     }
     return;
   }
@@ -342,14 +343,19 @@ void PasswordManagerScreen::_enterAdd()
   _pendingLen    = 16;
   _pendingSource = _waMasterAvailable() ? SRC_WEBAUTHN : SRC_LEGACY;
   _updateAddLabels();
-  _addItems[0] = { "Label",  _addLblBuf };
-  _addItems[1] = { "Source", _addSrcBuf };
-  _addItems[2] = { "Type",   _addTypeBuf };
-  _addItems[3] = { "Case",   _addCaseBuf };
-  _addItems[4] = { "Length", _addLenBuf };
-  _addItems[5] = { "Save",   nullptr };
+
+  uint8_t n = 0;
+  _addItems[n++] = { "Label",  _addLblBuf };
+#ifdef DEVICE_HAS_WEBAUTHN
+  _addItems[n++] = { "Source", _addSrcBuf };
+#endif
+  _addItems[n++] = { "Type",   _addTypeBuf };
+  _addItems[n++] = { "Case",   _addCaseBuf };
+  _addItems[n++] = { "Length", _addLenBuf };
+  _addItems[n++] = { "Save",   nullptr };
+
   _state = STATE_ADD;
-  setItems(_addItems, 6);
+  setItems(_addItems, n);
   render();
 }
 
@@ -418,7 +424,11 @@ void PasswordManagerScreen::_enterView(uint8_t index)
 {
   _viewIdx = index;
   if (!_generatePassword(_entries[index], _viewPw, sizeof(_viewPw) - 1)) {
+#ifdef DEVICE_HAS_WEBAUTHN
     ShowStatusAction::show("WebAuthn master missing", 1500);
+#else
+    ShowStatusAction::show("WebAuthn not supported on this board", 2200);
+#endif
     _reloadMenu();
     render();
     return;
@@ -441,6 +451,7 @@ void PasswordManagerScreen::_showEntryOptions(uint8_t index)
     _enterView(index);
   } else if (strcmp(r, "type") == 0) {
     _enterView(index);
+    if (_state != STATE_VIEW) return;  // _enterView aborted (e.g. webauthn master missing)
     _typePassword();
     render();
   } else if (strcmp(r, "delete") == 0) {
