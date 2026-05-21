@@ -52,13 +52,19 @@ struct BrowseFileView {
   static void showLoading();
 
   // Load a directory: flash loading, sort dirs-first then alpha, build Item rows.
-  //   mode         - ALL, DIRECTORY, or a file extension string like ".ir"
-  //   fileSublabel - sublabel on file rows; nullptr = none
-  //                  Directory rows always get "DIR".
+  //   mode           - ALL, DIRECTORY, or a file extension string like ".ir"
+  //   fileSublabel   - sublabel on file rows; nullptr = none
+  //                    Directory rows always get "DIR".
+  //   prependParent  - when true and dir is not "/", inserts a ".." entry as
+  //                    the first row whose path resolves to the parent dir.
+  //                    Callers handling isDir entries by re-calling load() with
+  //                    `entry.path` get parent navigation for free; opt-out for
+  //                    screens that maintain their own pathHistory.
   // Returns populated count. Returns 0 if storage unavailable.
   uint8_t load(BaseScreen* host, const String& dir,
-               Mode        mode         = {},
-               const char* fileSublabel = nullptr);
+               Mode        mode          = {},
+               const char* fileSublabel  = nullptr,
+               bool        prependParent = false);
 
   uint8_t        count()          const { return _count; }
   const Entry&   entry(uint8_t i) const { return _entries[i]; }

@@ -150,8 +150,15 @@ void GameMusicComposerScreen::onRender() {
 }
 
 void GameMusicComposerScreen::onBack() {
-  if (_state == STATE_FILES || _state == STATE_BUILTIN) { _enterMenu(); return; }
-  if (_state == STATE_EDIT || _state == STATE_PLAY)     { _enterMenu(); return; }
+  if (_state == STATE_FILES) {
+    if (_filesDir == "/" || _filesDir.length() == 0) { _enterMenu(); return; }
+    int slash = _filesDir.lastIndexOf('/');
+    _filesDir = (slash > 0) ? _filesDir.substring(0, slash) : "/";
+    _enterFiles();
+    return;
+  }
+  if (_state == STATE_BUILTIN)                       { _enterMenu(); return; }
+  if (_state == STATE_EDIT || _state == STATE_PLAY)  { _enterMenu(); return; }
   Screen.goBack();
 }
 
@@ -166,13 +173,17 @@ void GameMusicComposerScreen::onItemSelected(uint8_t index) {
   }
   if (_state == STATE_FILES) {
     const auto& e = _browser.entry(index);
-    if (e.isDir) return;  // music dir is flat — ignore
+    if (e.isDir) {                       // ".." or any subdir
+      _filesDir = e.path;
+      _enterFiles();
+      return;
+    }
     if (_loadFile(e.path)) {
       _filename = e.path;
       _enterEdit();
     } else {
       ShowStatusAction::show("Load failed");
-      render();  // ShowStatusAction left a black hole in the file list
+      render();
     }
     return;
   }
@@ -203,8 +214,10 @@ void GameMusicComposerScreen::_enterMenu() {
 
 void GameMusicComposerScreen::_enterFiles() {
   _state = STATE_FILES;
-  uint8_t n = _browser.load(this, kMusicDir, BrowseFileView::Mode(".rtttl"), "song");
-  if (n == 0) {
+  if (_filesDir.length() == 0) _filesDir = kMusicDir;
+  uint8_t n = _browser.load(this, _filesDir, BrowseFileView::Mode(".rtttl"),
+                            "song", /*prependParent=*/true);
+  if (n == 0 && _filesDir == kMusicDir) {
     ShowStatusAction::show("No saved songs");
     _enterMenu();
     return;

@@ -206,7 +206,14 @@ void PN532I2cScreen::onBack() {
       _goMain();
       break;
     case STATE_DICT_SELECT:
-      _goMifare();
+      if (_dictPickDir == "/" || _dictPickDir.length() == 0) {
+        _dictPickDir = "";
+        _goMifare();
+      } else {
+        int slash = _dictPickDir.lastIndexOf('/');
+        _dictPickDir = (slash > 0) ? _dictPickDir.substring(0, slash) : "/";
+        _doDictionaryPicker();
+      }
       break;
     case STATE_NTAG_MENU:
       _goMain();
@@ -600,8 +607,9 @@ void PN532I2cScreen::_doDictionaryPicker() {
   if (!_hasCard) { ShowStatusAction::show("Authenticate first"); _goMifare(); return; }
 
   _state = STATE_DICT_SELECT;
-  uint8_t n = _browser.load(this, _dictPath, ".txt");
-  if (n == 0) {
+  if (_dictPickDir.length() == 0) _dictPickDir = _dictPath;
+  uint8_t n = _browser.load(this, _dictPickDir, ".txt", nullptr, /*prependParent=*/true);
+  if (n == 0 && _dictPickDir == _dictPath) {
     ShowStatusAction::show("No dictionary files");
     _goMifare();
     return;
@@ -626,7 +634,13 @@ static bool _parseHexKeyI2c(const String& line, uint8_t out[6]) {
 
 void PN532I2cScreen::_doDictionaryAttackWithFile(uint8_t fileIndex) {
   if (fileIndex >= _browser.count()) return;
-  String filePath = _browser.entry(fileIndex).path;
+  const auto& e = _browser.entry(fileIndex);
+  if (e.isDir) {
+    _dictPickDir = e.path;
+    _doDictionaryPicker();
+    return;
+  }
+  String filePath = e.path;
   String content = Uni.Storage->readFile(filePath.c_str());
   if (content.length() == 0) { ShowStatusAction::show("Empty file"); return; }
 

@@ -404,12 +404,18 @@ void ChameleonMfcScreen::_callDump() {
 // ── Dictionary Attack ──
 
 void ChameleonMfcScreen::_loadDictPicker() {
-  _dictItems[0] = {"Built-in keys"};
-  uint8_t n = _browser.load(this, _kDictDir, ".txt");
-  for (uint8_t i = 0; i < n; i++) _dictItems[1 + i] = _browser.items()[i];
+  if (_dictPickDir.length() == 0) _dictPickDir = _kDictDir;
+  uint8_t n = _browser.load(this, _dictPickDir, ".txt", nullptr, /*prependParent=*/true);
+
+  uint8_t baseOffset = 0;
+  if (_dictPickDir == _kDictDir) {
+    _dictItems[0] = {"Built-in keys"};
+    baseOffset    = 1;
+  }
+  for (uint8_t i = 0; i < n; i++) _dictItems[i + baseOffset] = _browser.items()[i];
   _dictFileCount = n;
   _state = STATE_DICT_SEL;
-  setItems(_dictItems, 1 + n);
+  setItems(_dictItems, (uint8_t)(n + baseOffset));
   render();
 }
 
@@ -1034,13 +1040,20 @@ void ChameleonMfcScreen::onItemSelected(uint8_t index) {
       case 4: _callNestedAttack();    break;
     }
   } else if (_state == STATE_DICT_SEL) {
-    if (index == 0) {
+    uint8_t baseOffset = (_dictPickDir == _kDictDir) ? 1 : 0;
+    if (baseOffset && index == 0) {
       _dictKeyCount = kMfcBuiltinCount;
       memcpy(_dictKeys, kMfcBuiltinKeys, kMfcBuiltinCount * 6);
     } else {
-      uint8_t fi = index - 1;
+      uint8_t fi = index - baseOffset;
       if (fi >= _browser.count()) return;
-      if (!_loadDictFile(_browser.entry(fi).path.c_str())) {
+      const auto& e = _browser.entry(fi);
+      if (e.isDir) {
+        _dictPickDir = e.path;
+        _loadDictPicker();
+        return;
+      }
+      if (!_loadDictFile(e.path.c_str())) {
         ShowStatusAction::show("Load keys failed", 1200);
         render();
         return;
@@ -1059,8 +1072,19 @@ void ChameleonMfcScreen::onBack() {
   switch (_state) {
     case STATE_MF_MENU:
       Screen.goBack(); break;
+    case STATE_DICT_SEL: {
+      // Climb the picker; exit to MF menu only when already at "/".
+      if (_dictPickDir == "/" || _dictPickDir.length() == 0) {
+        _dictPickDir = "";
+        _goMfMenu();
+        return;
+      }
+      int slash = _dictPickDir.lastIndexOf('/');
+      _dictPickDir = (slash > 0) ? _dictPickDir.substring(0, slash) : "/";
+      _loadDictPicker();
+      return;
+    }
     case STATE_SHOW_KEYS:
-    case STATE_DICT_SEL:
     case STATE_STATIC_NESTED_LOG:
     case STATE_NESTED_LOG:
       _goMfMenu(); break;

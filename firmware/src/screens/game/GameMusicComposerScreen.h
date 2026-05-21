@@ -46,6 +46,7 @@ private:
 
   // ── File listing ─────────────────────────────────────────────────────────────
   BrowseFileView _browser;
+  String         _filesDir;   // current directory in the Open Saved... browser
 
   // ── Menu items (one buffer reused per state) ─────────────────────────────────
   ListItem  _menuItems[3];

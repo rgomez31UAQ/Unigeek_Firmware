@@ -8,7 +8,7 @@
 
 void LuaScreen::_loadDir(const String& path) {
   _currentDir = path;
-  _browser.load(this, path, ".lua");
+  _browser.load(this, path, ".lua", nullptr, /*prependParent=*/true);
   setItems(_browser.items(), _browser.count());
 }
 
@@ -61,13 +61,12 @@ void LuaScreen::onRender() {
 
 void LuaScreen::onBack() {
   if (_state != STATE_BROWSE) return;
-  if (_currentDir == ROOT_DIR) {
+  if (_currentDir == "/" || _currentDir.length() == 0) {
     Screen.goBack();
     return;
   }
   int slash = _currentDir.lastIndexOf('/');
-  String parent = (slash > 0) ? _currentDir.substring(0, slash) : ROOT_DIR;
-  if (parent.length() == 0) parent = ROOT_DIR;
+  String parent = (slash > 0) ? _currentDir.substring(0, slash) : "/";
   _loadDir(parent);
 }
 

@@ -179,18 +179,19 @@ void WifiEapolBruteForceScreen::onRender() {
 
 void WifiEapolBruteForceScreen::onBack() {
   if (_state == STATE_SELECT_PCAP || _state == STATE_SELECT_WORDLIST) {
-    if (_currentDir == _browseRoot) {
-      // At root → cancel selection, back to menu
+    // At "/" → cancel and back to menu. Otherwise climb. _browseRoot is no
+    // longer a clamp — lets users pick a .pcap / wordlist from anywhere on
+    // storage, not just /unigeek/wifi/.
+    if (_currentDir == "/" || _currentDir.length() == 0) {
       _showMenu();
-    } else {
-      // Go up one level
-      int slash = _currentDir.lastIndexOf('/');
-      String parent = (slash > 0) ? _currentDir.substring(0, slash) : _browseRoot;
-      const char* ext = (_state == STATE_SELECT_PCAP) ? ".pcap" : nullptr;
-      _currentDir = parent;
-      _listFiles(ext);
-      setItems(_fileItems, (uint8_t)_fileCount);
+      return;
     }
+    int slash = _currentDir.lastIndexOf('/');
+    String parent = (slash > 0) ? _currentDir.substring(0, slash) : "/";
+    const char* ext = (_state == STATE_SELECT_PCAP) ? ".pcap" : nullptr;
+    _currentDir = parent;
+    _listFiles(ext);
+    setItems(_fileItems, (uint8_t)_fileCount);
     return;
   }
   Screen.goBack();
@@ -275,6 +276,17 @@ bool WifiEapolBruteForceScreen::_listFiles(const char* ext) {
   const char* dir = _currentDir.c_str();
   if (!Uni.Storage || !Uni.Storage->isAvailable()) return false;
   BrowseFileView::showLoading();
+
+  // ".." → parent. Pinned first so it's always visible above sorted entries.
+  if (_currentDir != "/" && _currentDir.length() > 0 && _fileCount < kMaxFiles) {
+    int slash = _currentDir.lastIndexOf('/');
+    String parent = (slash > 0) ? _currentDir.substring(0, slash) : "/";
+    _fileIsDir[_fileCount]  = true;
+    _fileLabels[_fileCount] = "..";
+    _filePaths[_fileCount]  = parent;
+    _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), "Up"};
+    _fileCount++;
+  }
 
   // Heap-allocate to avoid ~4.8 KB of stack pressure that overflows on
   // low-headroom boards (StickS3 + WebAuthn leaves very little stack free).

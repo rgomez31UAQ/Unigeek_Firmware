@@ -93,6 +93,8 @@ void WifiEvilTwinScreen::onItemSelected(uint8_t index)
         break;
       case 3: { // Portal
         _state = STATE_SELECT_PORTAL;
+        // Portal folder must live under PORTALS_DIR (hardcoded into the
+        // captive server) — no parent navigation here; BACK already cancels.
         uint8_t n = _browser.load(this, CaptivePortalServer::PORTALS_DIR,
                                   BrowseFileView::Mode::DIRECTORY);
         if (n == 0) {

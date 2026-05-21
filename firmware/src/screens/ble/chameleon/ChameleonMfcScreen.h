@@ -80,6 +80,7 @@ private:
   BrowseFileView _browser;
   ListItem _dictItems[1 + BrowseFileView::kCap];
   uint8_t  _dictFileCount = 0;
+  String   _dictPickDir;        // current directory in the dict picker
   static constexpr uint16_t MAX_DICT_KEYS = 256;
   uint8_t  _dictKeys[MAX_DICT_KEYS][6] = {};
   uint16_t _dictKeyCount = 0;

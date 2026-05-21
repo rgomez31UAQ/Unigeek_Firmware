@@ -37,11 +37,18 @@ uint8_t ChameleonMfcDictScreen::_trailerBlock(uint8_t sector) {
 }
 
 void ChameleonMfcDictScreen::_loadFilePicker() {
-  _items[0] = {"Built-in keys"};
-  uint8_t n = _browser.load(this, kDictDir, ".txt");
-  for (uint8_t i = 0; i < n; i++) _items[1 + i] = _browser.items()[i];
+  if (_pickDir.length() == 0) _pickDir = kDictDir;
+  uint8_t n = _browser.load(this, _pickDir, ".txt", nullptr, /*prependParent=*/true);
+
+  // "Built-in keys" only at the default kDictDir — pinned at index 0.
+  uint8_t baseOffset = 0;
+  if (_pickDir == kDictDir) {
+    _items[0]   = {"Built-in keys"};
+    baseOffset  = 1;
+  }
+  for (uint8_t i = 0; i < n; i++) _items[i + baseOffset] = _browser.items()[i];
   _fileCount = n;
-  setItems(_items, 1 + n);
+  setItems(_items, (uint8_t)(n + baseOffset));
 }
 
 void ChameleonMfcDictScreen::onInit() {
@@ -50,6 +57,19 @@ void ChameleonMfcDictScreen::onInit() {
 }
 
 void ChameleonMfcDictScreen::onBack() {
+  if (_state == STATE_SELECT) {
+    // Climb the picker. At "/" or empty, exit the screen.
+    if (_pickDir == "/" || _pickDir.length() == 0) {
+      _pickDir = "";
+      Screen.goBack();
+      return;
+    }
+    int slash = _pickDir.lastIndexOf('/');
+    _pickDir = (slash > 0) ? _pickDir.substring(0, slash) : "/";
+    _loadFilePicker();
+    render();
+    return;
+  }
   Screen.goBack();
 }
 
@@ -116,19 +136,29 @@ void ChameleonMfcDictScreen::onRender() {
 void ChameleonMfcDictScreen::onItemSelected(uint8_t index) {
   if (_state != STATE_SELECT) return;
 
+  // Index 0 is "Built-in keys" only when in the default kDictDir.
+  uint8_t baseOffset = (_pickDir == kDictDir) ? 1 : 0;
+
   char srcLabel[40];
-  if (index == 0) {
+  if (baseOffset && index == 0) {
     _loadBuiltinKeys();
     snprintf(srcLabel, sizeof(srcLabel), "Built-in");
   } else {
-    uint8_t fi = index - 1;
+    uint8_t fi = index - baseOffset;
     if (fi >= _browser.count()) return;
-    if (!_loadFileKeys(_browser.entry(fi).path.c_str())) {
+    const auto& e = _browser.entry(fi);
+    if (e.isDir) {                       // ".." or any subdir
+      _pickDir = e.path;
+      _loadFilePicker();
+      render();
+      return;
+    }
+    if (!_loadFileKeys(e.path.c_str())) {
       ShowStatusAction::show("Load keys failed", 1200);
       render();
       return;
     }
-    snprintf(srcLabel, sizeof(srcLabel), "%s", _browser.entry(fi).name.c_str());
+    snprintf(srcLabel, sizeof(srcLabel), "%s", e.name.c_str());
   }
 
   if (_keyCount == 0) {

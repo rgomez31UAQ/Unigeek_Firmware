@@ -137,7 +137,16 @@ void MFRC522Screen::onBack() {
     _currentCard = {};
     _mf1AuthKeys.fill({});
     _goMainMenu();
-  } else if (_state == STATE_SHOW_KEY || _state == STATE_MEMORY_READER || _state == STATE_DICT_SELECT || _state == STATE_NESTED || _state == STATE_STATIC_NESTED) {
+  } else if (_state == STATE_DICT_SELECT) {
+    if (_dictPickDir == "/" || _dictPickDir.length() == 0) {
+      _dictPickDir = "";
+      _goMifareClassic();
+    } else {
+      int slash = _dictPickDir.lastIndexOf('/');
+      _dictPickDir = (slash > 0) ? _dictPickDir.substring(0, slash) : "/";
+      _callDictionaryAttack();
+    }
+  } else if (_state == STATE_SHOW_KEY || _state == STATE_MEMORY_READER || _state == STATE_NESTED || _state == STATE_STATIC_NESTED) {
     _goMifareClassic();
   }
 }
@@ -623,8 +632,9 @@ void MFRC522Screen::_callMemoryReader() {
 
 void MFRC522Screen::_callDictionaryAttack() {
   _state = STATE_DICT_SELECT;
-  uint8_t n = _browser.load(this, _dictPath, ".txt");
-  if (n == 0) {
+  if (_dictPickDir.length() == 0) _dictPickDir = _dictPath;
+  uint8_t n = _browser.load(this, _dictPickDir, ".txt", nullptr, /*prependParent=*/true);
+  if (n == 0 && _dictPickDir == _dictPath) {
     ShowStatusAction::show("No dictionary files in nfc/dictionaries/");
     _goMifareClassic();
     return;
@@ -654,8 +664,13 @@ static bool _parseHexKey(const String& line, uint8_t* out) {
 
 void MFRC522Screen::_callDictAttackWithFile(uint8_t fileIndex) {
   if (fileIndex >= _browser.count()) return;
-
-  String filePath = _browser.entry(fileIndex).path;
+  const auto& e = _browser.entry(fileIndex);
+  if (e.isDir) {
+    _dictPickDir = e.path;
+    _callDictionaryAttack();
+    return;
+  }
+  String filePath = e.path;
   String content = Uni.Storage->readFile(filePath.c_str());
   if (content.length() == 0) {
     ShowStatusAction::show("Empty dictionary file");

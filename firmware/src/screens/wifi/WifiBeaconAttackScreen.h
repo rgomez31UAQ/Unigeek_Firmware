@@ -65,6 +65,7 @@ private:
   // ── File picker (BrowseFileView + virtual "Built In" entry at index 0) ─
   BrowseFileView _browser;
   ListItem       _pickerItems[BrowseFileView::kCap + 1] = {};
+  String         _pickerDir;   // current directory in the file picker
 
   String   _modeSub;
   String   _targetSub;

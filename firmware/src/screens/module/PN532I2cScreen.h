@@ -103,6 +103,7 @@ private:
 
   static constexpr const char* _dictPath = "/unigeek/nfc/dictionaries";
   BrowseFileView _browser;
+  String         _dictPickDir;   // current dir in the dict picker
 
   bool _initModule();
   void _cleanup();

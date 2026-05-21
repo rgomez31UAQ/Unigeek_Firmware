@@ -25,6 +25,7 @@ private:
   BrowseFileView _browser;
   ListItem _items[1 + BrowseFileView::kCap];    // "Built-in" + file list
   uint8_t  _fileCount = 0;
+  String   _pickDir;            // current directory in the picker
 
   // ── Attack state ──
   uint8_t  _uid[7]    = {};

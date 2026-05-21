@@ -86,11 +86,15 @@ public:
     if (!dir) return 0;
     uint8_t count = 0;
     while (count < max) {
-      fs::File f = dir.openNextFile();
-      if (!f) break;
-      out[count].name  = f.name();
-      out[count].isDir = f.isDirectory();
-      f.close();
+      // Lightweight iteration — no File handle allocated per entry. Matches
+      // Bruce's readFs and dramatically reduces open/close overhead on
+      // directories with many entries.
+      bool   isDir;
+      String full = dir.getNextFileName(&isDir);
+      if (full.length() == 0) break;
+      int slash = full.lastIndexOf('/');
+      out[count].name  = (slash >= 0) ? full.substring(slash + 1) : full;
+      out[count].isDir = isDir;
       count++;
     }
     dir.close();

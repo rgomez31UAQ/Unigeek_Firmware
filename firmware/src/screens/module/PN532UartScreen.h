@@ -100,6 +100,7 @@ private:
   // Dictionary file picker
   static constexpr const char* _dictPath = "/unigeek/nfc/dictionaries";
   BrowseFileView _browser;
+  String         _dictPickDir;     // current dir in the dict picker
 
   // Dump image and load file picker
   static constexpr const char* _dumpPath = "/unigeek/nfc/dumps";

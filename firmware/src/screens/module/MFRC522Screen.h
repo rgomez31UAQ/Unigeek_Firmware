@@ -101,6 +101,7 @@ private:
   // Dictionary attack file selection
   static constexpr const char* _dictPath = "/unigeek/nfc/dictionaries";
   BrowseFileView _browser;
+  String         _dictPickDir;     // current dir in the dict picker
 
   std::string _uidToString(byte* uid, byte len) {
     std::string s;
