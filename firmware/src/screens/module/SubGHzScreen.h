@@ -49,17 +49,20 @@ private:
   int8_t _gdo0Pin = -1;
   bool   _rfDetectFired = false;  // achievement guard, resets each scan session
 
-  // Menu (5 items: Frequency | Detect Freq | Receive | Send | Jammer)
-  static constexpr uint8_t kMenuCount = 5;
+  // Menu (6 items: Frequency | Detect Freq | Receive | Send | Jammer | Mfcodes)
+  static constexpr uint8_t kMenuCount = 6;
   ListItem _menuItems[kMenuCount] = {
     {"Frequency"},
     {"Detect Freq"},
     {"Receive"},
     {"Send"},
     {"Jammer"},
+    {"Mfcodes"},
   };
   String _freqSub;
+  String _mfcodesSub;
   void _updateSublabels();
   void _selectFrequency();
   void _startScan();
+  void _reloadMfcodes();
 };

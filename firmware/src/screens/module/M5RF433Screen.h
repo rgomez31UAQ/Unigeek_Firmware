@@ -37,10 +37,14 @@ private:
   int8_t _txPin = -1;
   int8_t _rxPin = -1;
 
-  static constexpr uint8_t kMenuCount = 3;
+  static constexpr uint8_t kMenuCount = 4;
   ListItem _menuItems[kMenuCount] = {
     {"Receive"},
     {"Send"},
     {"Jammer"},
+    {"Mfcodes"},
   };
+  String _mfcodesSub;
+  void _updateMfcodesSub();
+  void _reloadMfcodes();
 };

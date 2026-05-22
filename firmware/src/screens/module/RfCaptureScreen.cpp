@@ -6,6 +6,7 @@
 #include "ui/actions/InputSelectAction.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/views/ProgressView.h"
+#include "utils/rf/KeeloqUtil.h"
 
 // ── Lifecycle hooks ──────────────────────────────────────────────────────────
 
@@ -282,13 +283,22 @@ void RfCaptureScreen::_showReceiveList() {
 void RfCaptureScreen::_handleCaptureSelection(uint8_t index) {
   if (index >= _capturedCount) return;
 
-  static constexpr InputSelectAction::Option captureOpts[] = {
+  // Show "Replay +1" only when KeeLoq decoded AND the manufacturer key is
+  // still in the keystore — step() would no-op otherwise.
+  const Signal& sig = _capturedSignals[index];
+  bool keeloqStep = (sig.protocol == "RcSwitch" && sig.preset == "23" &&
+                    sig.mf_name.length() > 0);
+
+  InputSelectAction::Option captureOpts[5] = {
     {"Info",   "info"},
     {"Replay", "replay"},
-    {"Save",   "save"},
-    {"Delete", "delete"},
   };
-  const char* choice = InputSelectAction::popup("Options", captureOpts, 4);
+  uint8_t optCount = 2;
+  if (keeloqStep) captureOpts[optCount++] = {"Replay +1", "replay_step"};
+  captureOpts[optCount++] = {"Save",   "save"};
+  captureOpts[optCount++] = {"Delete", "delete"};
+
+  const char* choice = InputSelectAction::popup("Options", captureOpts, optCount);
   if (!choice) { render(); return; }
 
   if (strcmp(choice, "info") == 0) {
@@ -296,7 +306,10 @@ void RfCaptureScreen::_handleCaptureSelection(uint8_t index) {
     return;
   }
 
-  if (strcmp(choice, "replay") == 0) {
+  if (strcmp(choice, "replay_step") == 0) {
+    _replayStepKeeloqSignal(index);
+
+  } else if (strcmp(choice, "replay") == 0) {
     _sendCapturedSignal(index);
 
   } else if (strcmp(choice, "save") == 0) {
@@ -327,6 +340,12 @@ void RfCaptureScreen::_rebuildCapturedItems() {
     const Signal& sig = _capturedSignals[i];
     if (_capturedSaved[i]) {
       _capturedSubLabels[i] = "Saved";
+    } else if (sig.protocol == "RcSwitch" && sig.preset == "23" && sig.mf_name.length() > 0) {
+      // KeeLoq with manufacturer identified — show counter so Replay +1
+      // advance is visible in the list sublabel.
+      char buf[40];
+      snprintf(buf, sizeof(buf), "%s cnt=%u", sig.mf_name.c_str(), sig.cnt);
+      _capturedSubLabels[i] = buf;
     } else if (sig.protocol == "RcSwitch") {
       char buf[32];
       snprintf(buf, sizeof(buf), "0x%llX P%s %db",
@@ -352,6 +371,32 @@ void RfCaptureScreen::_sendCapturedSignal(uint8_t index) {
   int n = Achievement.inc("rf_send_first");
   if (n == 1) Achievement.unlock("rf_send_first");
   ShowStatusAction::show("Replayed", 1000);
+  render();
+}
+
+void RfCaptureScreen::_replayStepKeeloqSignal(uint8_t index) {
+  if (index >= _capturedCount) return;
+
+  Signal& sig = _capturedSignals[index];
+  if (!KeeloqUtil::step(sig)) {
+    ShowStatusAction::show("Manufacturer key missing");
+    render();
+    return;
+  }
+
+  ProgressView::init();
+  char buf[48];
+  snprintf(buf, sizeof(buf), "Replay %s cnt=%u", sig.mf_name.c_str(), sig.cnt);
+  ProgressView::progress(buf, 50);
+  _radioSendCaptured(sig);
+  _rebuildCapturedItems();
+
+  int nk = Achievement.inc("rf_keeloq_step_replay");
+  if (nk == 1) Achievement.unlock("rf_keeloq_step_replay");
+  int n = Achievement.inc("rf_send_first");
+  if (n == 1) Achievement.unlock("rf_send_first");
+
+  ShowStatusAction::show("Replayed +1", 1000);
   render();
 }
 

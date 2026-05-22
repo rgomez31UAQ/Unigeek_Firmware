@@ -2,6 +2,7 @@
 #include "core/Device.h"
 #include "core/ScreenManager.h"
 #include "ui/actions/ShowStatusAction.h"
+#include "utils/rf/KeeloqKeystore.h"
 
 // Pinout is fixed per board at build time. M5 RF433T/R Units plug into the
 // Grove port — default to GROVE_SDA (TX) / GROVE_SCL (RX). A board can override
@@ -51,7 +52,33 @@ void M5RF433Screen::_showMenu() {
   _state = STATE_MENU;
   _chromeDrawn = false;
   strcpy(_titleBuf, "M5 RF433");
+  _updateMfcodesSub();
   setItems(_menuItems, kMenuCount);
+}
+
+void M5RF433Screen::_updateMfcodesSub() {
+  auto& store = KeeloqKeystore::instance();
+  if (store.isLoaded()) {
+    _mfcodesSub = String((unsigned)store.count()) + " keys";
+  } else {
+    _mfcodesSub = "not loaded";
+  }
+  _menuItems[3].sublabel = _mfcodesSub.c_str();
+}
+
+void M5RF433Screen::_reloadMfcodes() {
+  auto& store = KeeloqKeystore::instance();
+  store.reload();
+  char msg[80];
+  if (store.count() > 0) {
+    snprintf(msg, sizeof(msg), "Loaded %u keys from %s",
+             (unsigned)store.count(), KeeloqKeystore::PATH);
+  } else {
+    snprintf(msg, sizeof(msg), "No keys at %s", KeeloqKeystore::PATH);
+  }
+  ShowStatusAction::show(msg, 2500);
+  _updateMfcodesSub();
+  render();
 }
 
 void M5RF433Screen::_onMenuSelected(uint8_t index) {
@@ -83,6 +110,10 @@ void M5RF433Screen::_onMenuSelected(uint8_t index) {
       _radioStartJam();
       _enterJammingMode();
       break;
+    }
+    case 3: { // Mfcodes — reload + status popup
+      _reloadMfcodes();
+      return;
     }
   }
 }

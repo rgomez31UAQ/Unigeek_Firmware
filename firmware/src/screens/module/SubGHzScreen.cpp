@@ -7,6 +7,7 @@
 #include "ui/actions/InputSelectAction.h"
 #include "ui/actions/ShowStatusAction.h"
 #include "ui/views/ProgressView.h"
+#include "utils/rf/KeeloqKeystore.h"
 
 void SubGHzScreen::onInit() {
   _csPin   = PinConfig.get(PIN_CONFIG_CC1101_CS,   PIN_CONFIG_CC1101_CS_DEFAULT).toInt();
@@ -82,6 +83,30 @@ void SubGHzScreen::_updateSublabels() {
   snprintf(buf, sizeof(buf), "%.2f MHz", _rf.getFrequency());
   _freqSub = buf;
   _menuItems[0].sublabel = _freqSub.c_str();
+
+  // Mfcodes status — lazy-loads /unigeek/mfcodes on first access.
+  auto& store = KeeloqKeystore::instance();
+  if (store.isLoaded()) {
+    _mfcodesSub = String((unsigned)store.count()) + " keys";
+  } else {
+    _mfcodesSub = "not loaded";
+  }
+  _menuItems[5].sublabel = _mfcodesSub.c_str();
+}
+
+void SubGHzScreen::_reloadMfcodes() {
+  auto& store = KeeloqKeystore::instance();
+  store.reload();
+  char msg[80];
+  if (store.count() > 0) {
+    snprintf(msg, sizeof(msg), "Loaded %u keys from %s",
+             (unsigned)store.count(), KeeloqKeystore::PATH);
+  } else {
+    snprintf(msg, sizeof(msg), "No keys at %s", KeeloqKeystore::PATH);
+  }
+  ShowStatusAction::show(msg, 2500);
+  _updateSublabels();
+  render();
 }
 
 void SubGHzScreen::_onMenuSelected(uint8_t index) {
@@ -115,6 +140,10 @@ void SubGHzScreen::_onMenuSelected(uint8_t index) {
         return;
       }
       _enterBrowseMode();
+      return;
+    }
+    case 5: { // Mfcodes — reload + status popup
+      _reloadMfcodes();
       return;
     }
     case 4: { // Jammer

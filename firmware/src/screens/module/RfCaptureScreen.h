@@ -108,6 +108,7 @@ protected:
   void   _handleCaptureSelection(uint8_t index);
   void   _rebuildCapturedItems();
   void   _sendCapturedSignal(uint8_t index);
+  void   _replayStepKeeloqSignal(uint8_t index);   // counter+1 + re-encrypt
   void   _saveSignal(uint8_t index, const String& name);
   bool   _isDuplicate(const Signal& sig) const;
   String _generateTimestampName();

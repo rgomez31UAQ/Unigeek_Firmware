@@ -150,6 +150,68 @@ Key: 0xABCDEF
 
 Files from Flipper Zero and Bruce firmware are compatible and can be placed directly in `/unigeek/rf/`.
 
+## KeeLoq auto-decode
+
+When a captured signal decodes as **RCSwitch protocol 23** (KeeLoq), the firmware automatically tries every manufacturer key stored in `/unigeek/mfcodes`. On a successful match, the **Signal Info** view replaces the opaque `Key:` row with structured fields:
+
+- **Manufacturer** — `NICE_Smilo`, `FAAC_RC,XT`, `Centurion`, etc.
+- **Serial** — `0x12345`
+- **Button** — `0`–`15`
+- **Counter** — `0x4D7`
+- **Fix** — top 32 bits of the reversed payload (always shown)
+- **Hop** — decrypted plaintext
+
+If `/unigeek/mfcodes` is absent or no key matches, the Info view still shows `Manufacturer: Unknown` plus the raw `Fix:` and `Encrypted:` fields — the structured fields don't require the keystore.
+
+### Replay with counter+1 (rolling-code bypass)
+
+Captured KeeLoq signals (protocol 23) that decoded successfully against the keystore unlock an extra option in the action popup:
+
+- **Replay** — always available. Transmits the captured value byte-exact. Works on fixed-code remotes; fails on rolling-code receivers because the counter is reused.
+- **Replay +1** — only shown when `Manufacturer` is resolved AND its key still lives in `/unigeek/mfcodes`. Advances `cnt` by 1, rebuilds the hop word with the manufacturer-specific layout, re-encrypts with the stored key, and transmits the new 64-bit value. Each tap advances the counter further — visible live as `Manufacturer cnt=NNNN` in the capture list sublabel.
+
+`Replay +1` works against simple-rolling-code receivers (older garage doors / gates / barriers) that accept any counter within their sync window. **It does not** bypass modern automotive immobilizers, devices with seed-based per-fob keys, or any rolling-code system with challenge-response on top.
+
+### Keystore format
+
+Drop-in compatible with Bruce's `/mfcodes`. One line per key:
+
+```
+mf_name;hex_key;learning_type
+```
+
+- `mf_name` — free-text label shown in the Info view
+- `hex_key` — 64-bit hexadecimal manufacturer key (with or without `0x`)
+- `learning_type` — `1` for simple learning, `2` for normal learning. `type=0` entries load but stay inactive (matches Bruce — they cover proprietary algorithms like Starline/Tomohawk that the cipher pipeline can't handle without per-fob seed data).
+
+Lines starting with `#` are comments. Up to 64 keys are loaded.
+
+### Mfcodes menu item
+
+The last row of the Sub-GHz menu, **Mfcodes**, shows the current keystore state:
+
+- `Mfcodes   18 keys` — loaded
+- `Mfcodes   not loaded` — file missing or empty
+
+Tap to **reload** the keystore from storage (useful after editing the file via Web File Manager). A toast shows the load result.
+
+### .sub fields persisted
+
+Identified KeeLoq captures save the decoded fields alongside the raw key:
+
+```
+Frequency: 433920000
+Preset: 23
+Protocol: RcSwitch
+TE: 400
+Bit: 64
+Key: 0xABCDEF0123456789
+Manufacturer: NICE_Smilo
+Serial: 0x12345
+Button: 1
+Counter: 1234
+```
+
 ## Supported Modulations
 
 The CC1101 is configured for **ASK/OOK** (amplitude-shift keying / on-off keying), which covers the majority of common consumer Sub-GHz remotes including:
