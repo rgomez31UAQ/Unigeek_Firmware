@@ -179,19 +179,16 @@ void WifiEapolBruteForceScreen::onRender() {
 
 void WifiEapolBruteForceScreen::onBack() {
   if (_state == STATE_SELECT_PCAP || _state == STATE_SELECT_WORDLIST) {
-    // At "/" → cancel and back to menu. Otherwise climb. _browseRoot is no
-    // longer a clamp — lets users pick a .pcap / wordlist from anywhere on
-    // storage, not just /unigeek/wifi/.
-    if (_currentDir == "/" || _currentDir.length() == 0) {
+    // Clamp at the screen's root — picker stays inside PCAP_DIR / PASS_DIR
+    // so users can't end up browsing the whole SD card.
+    const char* root = (_state == STATE_SELECT_PCAP) ? PCAP_DIR : PASS_DIR;
+    if (_currentDir == root || _currentDir.length() == 0) {
       _showMenu();
       return;
     }
     int slash = _currentDir.lastIndexOf('/');
-    String parent = (slash > 0) ? _currentDir.substring(0, slash) : "/";
-    const char* ext = (_state == STATE_SELECT_PCAP) ? ".pcap" : nullptr;
-    _currentDir = parent;
-    _listFiles(ext);
-    setItems(_fileItems, (uint8_t)_fileCount);
+    _currentDir = (slash > 0) ? _currentDir.substring(0, slash) : String(root);
+    _reloadPicker();
     return;
   }
   Screen.goBack();
@@ -201,22 +198,19 @@ void WifiEapolBruteForceScreen::onItemSelected(uint8_t index) {
   if (_state == STATE_MENU) {
     if (index == 0) {
       // Select PCAP
-      _browseRoot = PCAP_DIR;
+      _state = STATE_SELECT_PCAP;   // _reloadPicker reads _state for ext + sublabel
       _currentDir = PCAP_DIR;
-      if (!_listFiles(".pcap")) {
+      if (!_reloadPicker()) {
+        _state = STATE_MENU;
+        _showMenu();
         ShowStatusAction::show("No PCAP files found. Capture EAPOL first.");
-        render();
         return;
       }
-      _state = STATE_SELECT_PCAP;
-      setItems(_fileItems, (uint8_t)_fileCount);
     } else if (index == 1) {
       // Select wordlist
-      _browseRoot = PASS_DIR;
-      _currentDir = PASS_DIR;
-      _listFiles(nullptr);  // always has Test Wordlist even if empty
       _state = STATE_SELECT_WORDLIST;
-      setItems(_fileItems, (uint8_t)_fileCount);
+      _currentDir = PASS_DIR;
+      _reloadPicker();              // always has Built In even if dir is empty
     } else if (index == 2) {
       // Start — require both selected
       if (_selectedPcap[0] == '\0') {
@@ -240,15 +234,18 @@ void WifiEapolBruteForceScreen::onItemSelected(uint8_t index) {
     return;
   }
 
-  if (index >= (uint8_t)_fileCount) return;
+  if (index >= _combinedCount) return;
+
+  // Virtual "Built In" entry sits past BrowseFileView's last real index.
+  const bool isBuiltIn = _hasBuiltIn && index == _browser.count();
 
   if (_state == STATE_SELECT_PCAP) {
-    if (_fileIsDir[index]) {
-      _currentDir = _filePaths[index];
-      _listFiles(".pcap");
-      setItems(_fileItems, (uint8_t)_fileCount);
+    const auto& e = _browser.entry(index);
+    if (e.isDir) {
+      _currentDir = e.path;
+      _reloadPicker();
     } else {
-      strncpy(_selectedPcap, _filePaths[index].c_str(), sizeof(_selectedPcap) - 1);
+      strncpy(_selectedPcap, e.path.c_str(), sizeof(_selectedPcap) - 1);
       _selectedPcap[sizeof(_selectedPcap) - 1] = '\0';
       _showMenu();
     }
@@ -256,108 +253,55 @@ void WifiEapolBruteForceScreen::onItemSelected(uint8_t index) {
   }
 
   if (_state == STATE_SELECT_WORDLIST) {
-    if (_fileIsDir[index]) {
-      _currentDir = _filePaths[index];
-      _listFiles(nullptr);
-      setItems(_fileItems, (uint8_t)_fileCount);
+    if (isBuiltIn) {
+      strncpy(_selectedWordlist, "builtin", sizeof(_selectedWordlist) - 1);
+      _selectedWordlist[sizeof(_selectedWordlist) - 1] = '\0';
+      _showMenu();
+      return;
+    }
+    const auto& e = _browser.entry(index);
+    if (e.isDir) {
+      _currentDir = e.path;
+      _reloadPicker();
     } else {
-      strncpy(_selectedWordlist, _filePaths[index].c_str(), sizeof(_selectedWordlist) - 1);
+      strncpy(_selectedWordlist, e.path.c_str(), sizeof(_selectedWordlist) - 1);
+      _selectedWordlist[sizeof(_selectedWordlist) - 1] = '\0';
       _showMenu();
     }
     return;
   }
-
 }
 
 // ── File browser ──────────────────────────────────────────────────────────
 
-bool WifiEapolBruteForceScreen::_listFiles(const char* ext) {
-  _fileCount = 0;
-  const char* dir = _currentDir.c_str();
-  if (!Uni.Storage || !Uni.Storage->isAvailable()) return false;
-  BrowseFileView::showLoading();
+bool WifiEapolBruteForceScreen::_reloadPicker() {
+  // BrowseFileView owns: listDir (via getNextFileName), dirs-first sort,
+  // alphabetical ordering, ext filter, ".." entry, and the root clamp that
+  // keeps ".." from resolving above the screen's root.
+  const bool isPcap = (_state == STATE_SELECT_PCAP);
+  _browser.root = isPcap ? String(PCAP_DIR) : String(PASS_DIR);
 
-  // ".." → parent. Pinned first so it's always visible above sorted entries.
-  if (_currentDir != "/" && _currentDir.length() > 0 && _fileCount < kMaxFiles) {
-    int slash = _currentDir.lastIndexOf('/');
-    String parent = (slash > 0) ? _currentDir.substring(0, slash) : "/";
-    _fileIsDir[_fileCount]  = true;
-    _fileLabels[_fileCount] = "..";
-    _filePaths[_fileCount]  = parent;
-    _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), "Up"};
-    _fileCount++;
+  BrowseFileView::Mode mode = isPcap ? BrowseFileView::Mode(".pcap")
+                                     : BrowseFileView::Mode{};
+  const char* fileSublabel = isPcap ? "PCAP" : nullptr;
+
+  uint8_t n = _browser.load(this, _currentDir, mode, fileSublabel);
+
+  _combinedCount = 0;
+  for (uint8_t i = 0; i < n; i++) _combinedItems[_combinedCount++] = _browser.items()[i];
+
+  // Built-in test wordlist — appended after real entries, only at PASS_DIR
+  // when the wordlist picker is active. Selecting it sets the sentinel
+  // path "builtin" which the cracker checks for downstream.
+  _hasBuiltIn = false;
+  if (!isPcap && _currentDir == PASS_DIR &&
+      _combinedCount < (uint8_t)(BrowseFileView::kCap + 1)) {
+    _combinedItems[_combinedCount++] = { "Built In", _builtInSublabel };
+    _hasBuiltIn = true;
   }
 
-  // Heap-allocate to avoid ~4.8 KB of stack pressure that overflows on
-  // low-headroom boards (StickS3 + WebAuthn leaves very little stack free).
-  struct RawEntry { String base; bool isDir; };
-
-  auto* entries = new IStorage::DirEntry[kMaxFiles];
-  if (!entries) return false;
-  uint8_t count = Uni.Storage->listDir(dir, entries, kMaxFiles);
-
-  auto* raw = new RawEntry[kMaxFiles];
-  if (!raw) { delete[] entries; return false; }
-
-  int rawCount = 0;
-  for (uint8_t i = 0; i < count && rawCount < kMaxFiles; i++) {
-    const String& name = entries[i].name;
-    int slash = name.lastIndexOf('/');
-    raw[rawCount].base  = (slash >= 0) ? name.substring(slash + 1) : name;
-    raw[rawCount].isDir = entries[i].isDir;
-    rawCount++;
-  }
-  delete[] entries;  // done with raw dir listing — free before sort+build
-
-  // Insertion sort: dirs before files, each group alphabetically
-  for (int i = 1; i < rawCount; i++) {
-    RawEntry key = raw[i];
-    int j = i - 1;
-    while (j >= 0) {
-      bool moveUp = false;
-      if (key.isDir && !raw[j].isDir) moveUp = true;
-      else if (key.isDir == raw[j].isDir && key.base < raw[j].base) moveUp = true;
-      if (!moveUp) break;
-      raw[j + 1] = raw[j];
-      j--;
-    }
-    raw[j + 1] = key;
-  }
-
-  // Build file items from sorted list
-  const bool isPcap = (ext && strcmp(ext, ".pcap") == 0);
-  for (int i = 0; i < rawCount && _fileCount < kMaxFiles; i++) {
-    const RawEntry& e = raw[i];
-    // A directory whose name ends with the target extension is a mislabeled file
-    // (FAT32 can set the directory attribute on a regular file)
-    const bool mislabeledFile = e.isDir && ext && e.base.endsWith(ext);
-    if (e.isDir && !mislabeledFile) {
-      _fileIsDir[_fileCount]  = true;
-      _fileLabels[_fileCount] = e.base;
-      _filePaths[_fileCount]  = String(dir) + "/" + e.base;
-      _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), "DIR"};
-      _fileCount++;
-    } else {
-      if (!mislabeledFile && ext && !e.base.endsWith(ext)) continue;
-      _fileIsDir[_fileCount]  = false;
-      _fileLabels[_fileCount] = e.base;
-      _filePaths[_fileCount]  = String(dir) + "/" + e.base;
-      _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), isPcap ? "PCAP" : nullptr};
-      _fileCount++;
-    }
-  }
-  delete[] raw;
-
-  // Built-in test wordlist only at the password root
-  if (ext == nullptr && strcmp(dir, PASS_DIR) == 0 && _fileCount < kMaxFiles) {
-    _fileIsDir[_fileCount]  = false;
-    _fileLabels[_fileCount] = "Built In";
-    _filePaths[_fileCount]  = "builtin";
-    _fileItems[_fileCount]  = {_fileLabels[_fileCount].c_str(), _builtInSublabel};
-    _fileCount++;
-  }
-
-  return _fileCount > 0;
+  setItems(_combinedItems, _combinedCount);
+  return _combinedCount > 0;
 }
 
 // ── PCAP parser ───────────────────────────────────────────────────────────

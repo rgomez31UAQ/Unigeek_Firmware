@@ -4,6 +4,7 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include "ui/templates/ListScreen.h"
+#include "ui/views/BrowseFileView.h"
 
 class WifiEapolBruteForceScreen : public ListScreen {
 public:
@@ -69,19 +70,18 @@ private:
   enum State { STATE_MENU, STATE_SELECT_PCAP, STATE_SELECT_WORDLIST, STATE_CRACKING, STATE_DONE };
   State _state = STATE_MENU;
 
-  // ── File browser ──────────────────────────────────────────────────────────
-  static const char*   PCAP_DIR;
-  static const char*   PASS_DIR;
-  static constexpr int kMaxFiles = 150;
+  // ── File browser (BrowseFileView + virtual "Built In" tail entry) ────────
+  static const char* PCAP_DIR;
+  static const char* PASS_DIR;
 
-  String   _fileLabels[kMaxFiles];
-  String   _filePaths[kMaxFiles];
-  bool     _fileIsDir[kMaxFiles] = {};
-  ListItem _fileItems[kMaxFiles]  = {};
-  int      _fileCount = 0;
+  BrowseFileView _browser;
+  // BrowseFileView's items plus an optional trailing "Built In" virtual entry
+  // (wordlist mode at PASS_DIR only). +1 covers the extra slot.
+  ListItem _combinedItems[BrowseFileView::kCap + 1] = {};
+  uint8_t  _combinedCount = 0;
+  bool     _hasBuiltIn    = false;
 
-  String   _currentDir;   // current browsing directory
-  String   _browseRoot;   // root dir for active browse session (back from here = cancel)
+  String _currentDir;   // current browsing directory
 
   char _selectedPcap[64]     = {};
   char _selectedWordlist[64] = {};
@@ -95,7 +95,9 @@ private:
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   void _showMenu();
-  bool _listFiles(const char* ext);
+  // Reloads the picker for the current state + _currentDir. Returns true if
+  // anything is in the list (BrowseFileView entries + optional Built In).
+  bool _reloadPicker();
   bool _parsePcap(const char* path);
   void _startCrack();
   void _stopCrack();
