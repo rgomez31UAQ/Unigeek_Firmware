@@ -83,8 +83,8 @@ Capture RF signals on the configured frequency.
 1. Set the desired frequency first via **Detect Freq** (reference) and **Frequency** (set)
 2. Select **Receive**
 3. The device listens on the configured frequency. The footer shows the current Receive Filter:
-   - **Filter: RAW** (default) — capture both RCSwitch-decoded protocols **and** raw pulse streams that no protocol matched. Best for unknown remotes and unusual signals.
-   - **Filter: Code** — drop raw captures; only emit signals that decoded as one of the 23 known protocols (Princeton, HT6P20B, CAME, NICE, KeeLoq, …). Cuts noise when hunting a fixed-code remote.
+   - **Filter: Code** (default) — drop raw captures; only emit signals that decoded as one of the 23 known protocols (Princeton, HT6P20B, CAME, NICE, KeeLoq, …). Cuts noise when hunting a fixed-code remote.
+   - **Filter: RAW** — capture both RCSwitch-decoded protocols **and** raw pulse streams that no protocol matched. Best for unknown remotes and unusual signals.
 4. Toggle between RAW / Code live without leaving the screen — the footer label updates immediately. Setting is session-only.
    - **4-way devices** (Cardputer, Cardputer ADV, DIY Smoochie, DIY Marauder, sticks in Encoder mode): press **LEFT** or **RIGHT**.
    - **2-way devices** (M5StickS3, T-Display, T-Lora Pager, T-Embed CC1101, CYD touch, CoreS3, sticks in default mode): **hold OK / PRESS for 500 ms**. The release after the hold is swallowed so it doesn't open a capture popup.
@@ -92,7 +92,7 @@ Capture RF signals on the configured frequency.
    - **RcSwitch**: `0xABCDEF P1 24b` (hex value, protocol number, bit count)
    - **RAW**: `RAW 120 pulses` (raw pulse count)
 6. Duplicate RcSwitch signals are automatically filtered
-7. Select a captured signal to **Replay**, **Save**, or **Delete** it
+7. Select a captured signal to open the popup — **Info / Replay / Save / Delete**. **Info** opens a scrollable key:value detail view (frequency, preset, protocol, key, TE, bit length, RAW pulse count); BACK from Info returns to the popup.
 8. Saved files go to `/unigeek/rf/` in `.sub` format
 9. Up to 15 signals can be captured per session
 10. Press **BACK** to stop receiving and return to the menu

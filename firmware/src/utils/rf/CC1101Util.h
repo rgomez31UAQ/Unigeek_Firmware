@@ -104,7 +104,7 @@ private:
   bool   _initialized = false;
 
   RCSwitchUtil _sw;  // persistent receiver state for non-blocking polling
-  RxFilter     _rxFilter = RX_FILTER_RAW;
+  RxFilter     _rxFilter = RX_FILTER_CODE;
 
   // Scan status (updated during receive/scan)
   bool    _scanning = false;

@@ -69,7 +69,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Beacon Attack** — Flood the area with fake SSIDs; Spam mode (random names, built-in dictionary, or any `.txt` SSID list loaded from SD via the file browser, rate-limited on channels 1/6/11) or Flood mode targeting a specific AP with high-rate cloned beacons
 - **CIW Zeroclick** — Broadcast SSIDs with injection payloads to test how nearby devices handle untrusted network names
 - **ESPNOW Chat** — Peer-to-peer text chat over ESP-NOW (no router needed)
-- **EAPOL Capture** — Capture WPA2 handshakes from nearby networks and save to storage; configurable discovery dwell, attack dwell, channel hopping, and max deauth attempts ([details](knowledge/eapol.md))
+- **EAPOL Capture** — Capture WPA2 handshakes from nearby networks; **Target** mode locks onto a single AP picked from a 10 s scan (no channel hop) or **All** mode sweeps every visible AP across all 13 channels; configurable discovery dwell, attack dwell, and max deauth attempts ([details](knowledge/eapol.md))
 - **EAPOL Brute Force** — Crack WPA2 passwords offline from captured handshakes; folder navigation for PCAP and wordlist selection; includes built-in 110-password test wordlist ([details](knowledge/eapol.md))
 
 ### Bluetooth
@@ -107,8 +107,9 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **BLE HID** — Act as a wireless Bluetooth HID device (keyboard + mouse, all devices)
 - **USB HID** — Act as a wired USB HID device (keyboard + mouse, ESP32-S3 devices only)
 - **Keyboard Relay** — Forward physical keypresses directly to the connected host in real time (keyboard devices only)
-- **Ducky Script** — Run script files from storage to automate keystrokes ([details](knowledge/ducky-script.md))
+- **Ducky Script** — Run `.ds` / `.txt` script files from storage to automate keystrokes; full DuckyScript 1.0 keystroke set plus a DuckyScript 3.0 subset (variables, constants, IF/ELSE, WHILE, FUNCTION, expressions) ([details](knowledge/ducky-script.md))
 - **Mouse Jiggle** — Send periodic small mouse movements over BLE or USB to keep the host awake
+- **Media / Camera** — Send HID Consumer Control keys — camera shutter (Vol+ trick for iOS/Android camera apps), play/pause, next/previous/stop track, volume up/down/mute, brightness up/down, lock screen, eject ([details](knowledge/media-controls.md))
 - **Password Manager** — Deterministic vault protected by a master password; entries store label, type, case, length, and a per-entry **Source**: Local derives via SHA256(master+label+params), WebAuthn derives via HMAC-SHA-256 keyed by the device's WebAuthn `master.bin` (binds the password to both the typed master *and* this physical device); no plaintext is stored. View a generated password on-screen or auto-type it via HID with a single press ([details](knowledge/password-manager.md))
 - **WebAuthn** — Act as a USB FIDO2 / WebAuthn passkey for browser sign-in (CTAP2 + legacy U2F register/authenticate, ESP32-S3 only); resident credentials, ClientPIN proto v1, hmac-secret / PRF, largeBlob, GetNextAssertion, CredentialManagement, AuthenticatorConfig (toggleAlwaysUv / setMinPINLength); PIN auth token with 10-minute idle timeout; BIP-39 seed backup and restore; on-device passkey manager + Windows-friendly stuck-mount watchdog ([details](knowledge/webauthn.md))
 
@@ -203,11 +204,12 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Sub-GHz (CC1101)** — Sub-GHz RF signal capture, replay, and jamming via CC1101 transceiver ([details](knowledge/sub-ghz.md))
   - **Detect Freq** — Spectrum scanner across ~40 known frequencies (300–928 MHz); live bar chart shows RSSI per channel, highlights the strongest signal — does not change the frequency setting
   - **Frequency** — Manually set the operating frequency (presets: 300, 315, 345, 390, 433.92, 434, 868, 915 MHz; custom 280–928 MHz)
-  - **Receive** — Capture RF signals on the configured frequency with RcSwitch decoding (Princeton/fixed code) and RAW fallback; duplicate filtering; replay, save, or delete each capture
-  - **Send** — Browse and send `.sub` signal files from storage (`/unigeek/rf/`), tap to send, hold for actions (send, rename, delete)
+  - **Receive** — Capture RF signals on the configured frequency with RcSwitch decoding (Princeton/fixed code) and RAW fallback; live **Receive Filter** toggle (`RAW` keeps decoded + unmatched pulse streams, `Code` drops raw noise) via LEFT/RIGHT on 4-way devices or hold-PRESS on 2-button devices; duplicate filtering; tap a capture for **Info / Replay / Save / Delete** popup; Info opens a scrollable key:value signal-detail view
+  - **Send** — Browse and send `.sub` signal files from storage (`/unigeek/rf/`); tap a file for the same **Send / Info / Rename / Delete** popup
   - **Jammer** — Transmit continuous noise on the configured frequency to disrupt Sub-GHz receivers
   - Compatible with Flipper Zero and Bruce `.sub` file formats
   - On M5StickC: CC1101 SPI (GPIO 32/33) is shared with GPS UART — the firmware manages the handoff automatically
+- **M5 RF433** — Capture, replay, and jam 433.92 MHz signals via the M5 RF433T (TX) and M5 RF433R (RX) single-pin Grove units; no CC1101 needed, fixed-frequency, two GPIO pins (default `GROVE_SDA` / `GROVE_SCL`); shares the `.sub` file format and the `/unigeek/rf/` folder with Sub-GHz so captures cross-load between the two modules ([details](knowledge/m5-rf433.md))
 - **NRF24L01+** — 2.4 GHz spectrum analysis, jamming, and MouseJack wireless keyboard injection ([details](knowledge/nrf24.md))
   - **Spectrum** — Live 126-channel 2.4 GHz spectrum sweep with peak hold; toggle between peak and bar display modes
   - **Jammer** — Disrupt 2.4 GHz devices using 10 preset channel lists (Full Spectrum, WiFi 2.4GHz, BLE Data, BLE Adv, BT Classic, USB Dongles, Video/FPV, RC Control, Zigbee, Drone FHSS), single-channel jammer, or configurable channel hopper
@@ -381,4 +383,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
-<!-- README last synced at commit: df32e67 (cast-bomb / bonjour-spam / printer-prank, music composer game, lua scripts download, wigle/gps wardrive map view, password manager WebAuthn HMAC source, beacon-spam SD dicts + ch 1/6/11 rate limit, packet monitor line chart, uni.wifi + uni.http) -->
+<!-- README last synced at commit: f71b3f6 (DuckyScript 3.0 subset + AI guidance, HID Media/Camera consumer keys, EAPOL Capture Target mode + 10s scan, M5 RF433 module, Sub-GHz RX filter + Signal Info view, T-Display S3 Touch board variant, on-screen keyboard _ \ | symbols) -->
