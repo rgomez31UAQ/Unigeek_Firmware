@@ -152,6 +152,9 @@ Files from Flipper Zero and Bruce firmware are compatible and can be placed dire
 
 ## KeeLoq auto-decode
 
+> [!danger]
+> KeeLoq decode and rolling-code replay are intended for testing remotes, gates, and barriers **you own or have explicit written permission to test**. Using them against vehicles, garages, or property that isn't yours is illegal in most jurisdictions and may be prosecuted as unauthorized access, burglary tools possession, or vehicle theft regardless of whether the replay succeeds.
+
 When a captured signal decodes as **RCSwitch protocol 23** (KeeLoq), the firmware automatically tries every manufacturer key stored in `/unigeek/mfcodes`. On a successful match, the **Signal Info** view replaces the opaque `Key:` row with structured fields:
 
 - **Manufacturer** — `NICE_Smilo`, `FAAC_RC,XT`, `Centurion`, etc.
@@ -165,12 +168,18 @@ If `/unigeek/mfcodes` is absent or no key matches, the Info view still shows `Ma
 
 ### Replay with counter+1 (rolling-code bypass)
 
+> [!danger]
+> `Replay +1` actively bypasses a rolling-code authentication mechanism — qualitatively different from passive capture or fixed-code replay. Only run it against your own hardware. In most jurisdictions, unauthorized use against third-party gates, garages, or vehicles is a separate criminal offense from simple eavesdropping (often felony-tier).
+
 Captured KeeLoq signals (protocol 23) that decoded successfully against the keystore unlock an extra option in the action popup:
 
 - **Replay** — always available. Transmits the captured value byte-exact. Works on fixed-code remotes; fails on rolling-code receivers because the counter is reused.
 - **Replay +1** — only shown when `Manufacturer` is resolved AND its key still lives in `/unigeek/mfcodes`. Advances `cnt` by 1, rebuilds the hop word with the manufacturer-specific layout, re-encrypts with the stored key, and transmits the new 64-bit value. Each tap advances the counter further — visible live as `Manufacturer cnt=NNNN` in the capture list sublabel.
 
 `Replay +1` works against simple-rolling-code receivers (older garage doors / gates / barriers) that accept any counter within their sync window. **It does not** bypass modern automotive immobilizers, devices with seed-based per-fob keys, or any rolling-code system with challenge-response on top.
+
+> [!warning]
+> **`Replay +1` will likely desync your original remote.** After a successful step-replay, the receiver's accepted counter has advanced past where your real fob still is — the fob will stop opening the gate until its counter catches back up. Most receivers have a resync window (press the real fob 2–8 times in a row to walk it forward) but some require a full re-pair procedure with the receiver. Don't run `Replay +1` against a gate you actually need to use unless you're prepared to resync the fob afterwards.
 
 ### Keystore format
 
