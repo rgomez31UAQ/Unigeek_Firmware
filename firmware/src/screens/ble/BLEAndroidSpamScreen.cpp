@@ -21,8 +21,16 @@ void BLEAndroidSpamScreen::onInit()
   _spam1minFired  = false;
 
   NimBLEDevice::init("");
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_ADV);
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM);
+
   _pAdv = NimBLEDevice::getAdvertising();
+  _pAdv->setAdvertisementType(BLE_GAP_CONN_MODE_UND);
+  _pAdv->setMinInterval(0x20); // 20 ms
+  _pAdv->setMaxInterval(0x30); // 30 ms
+  _pAdv->setScanResponse(false);
+
   _spam();
 }
 
@@ -43,7 +51,7 @@ void BLEAndroidSpamScreen::onUpdate()
     int m = Achievement.inc("ble_android_spam_1min");
     if (m == 1) Achievement.unlock("ble_android_spam_1min");
   }
-  if (now - _lastSpamMs >= 100) {
+  if (now - _lastSpamMs >= 250) {
     _lastSpamMs = now;
     _spam();
   }
