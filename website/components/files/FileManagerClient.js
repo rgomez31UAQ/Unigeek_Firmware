@@ -40,7 +40,17 @@ const C_MV        = 0x31;
 const C_MKDIR     = 0x32;
 const C_TOUCH     = 0x33;
 
-const PUT_CHUNK_SIZE = 1024; // small enough to keep firmware buffer comfortable
+// Nordic UART Service UUIDs (must match firmware/utils/uart/BleFileManager.cpp).
+const NUS_SVC_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_RX_UUID  = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const NUS_TX_UUID  = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+// USB serial can handle big frames thanks to the 4 KB firmware RX buffer.
+// BLE notifications are MTU-limited (≈180 bytes safe), so big chunks fragment
+// across many ATT writes — shrink the per-chunk size to keep latency sane.
+const PUT_CHUNK_SIZE_SERIAL = 1024;
+const PUT_CHUNK_SIZE_BLE    = 256;
+const BLE_WRITE_MAX         = 180; // ATT_MTU - 3, conservative across browsers
 
 function crc32(bytes) {
   let crc = 0xffffffff;
@@ -171,14 +181,22 @@ function makeFrameParser(onFrame) {
 // For GET, the caller passes onChunk; the transport yields each T_GET_CHUNK
 // payload until it sees a zero-length GET_CHUNK (end-of-stream marker).
 function createTransport({ onLog }) {
-  let port = null;
-  let reader = null;
-  let writer = null;
-  let readLoopP = null;
+  let kind = null;                    // 'serial' | 'bluetooth'
+  let writeBytes = null;              // (Uint8Array) => Promise<void>
+  let closeFn   = null;               // () => Promise<void>
+  let chunkSize = PUT_CHUNK_SIZE_SERIAL;
   let seqCounter = 0;
-  const pending = new Map(); // seq -> { resolve, reject, onChunk, gotAny, timer }
+  const pending = new Map(); // seq -> { ctx, resolve, reject, onChunk, timer }
 
   const log = (msg) => onLog && onLog(msg);
+
+  const rejectAllPending = (err) => {
+    for (const [, entry] of pending) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.reject(err);
+    }
+    pending.clear();
+  };
 
   const dispatchFrame = (ctx, type, seq, payload) => {
     const entry = pending.get(seq);
@@ -220,55 +238,111 @@ function createTransport({ onLog }) {
     }
   };
 
-  const startReadLoop = async () => {
-    const feed = makeFrameParser(dispatchFrame);
-    try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) feed(value);
-      }
-    } catch (err) {
-      log(`read loop ended: ${err?.message || err}`);
-    }
-  };
-
-  const connect = async () => {
-    if (port) return;
+  const connectSerial = async () => {
+    if (kind) return;
     if (typeof navigator === 'undefined' || !('serial' in navigator)) {
       throw new Error('Web Serial is not supported in this browser. Use Chrome or Edge on desktop.');
     }
-    const chosen = await navigator.serial.requestPort({ filters: USB_FILTERS });
+    const port = await navigator.serial.requestPort({ filters: USB_FILTERS });
     try {
-      await chosen.open({ baudRate: 115200, bufferSize: 16 * 1024 });
+      await port.open({ baudRate: 115200, bufferSize: 16 * 1024 });
     } catch (err) {
-      // Most common cause: another process (pio device monitor, Arduino IDE,
-      // VS Code serial monitor, another tab) already owns the port. Surface a
-      // helpful message instead of the raw "Failed to open" string.
       const raw = err?.message || String(err);
       throw new Error(
         `${raw} — close any other program using this port (pio device monitor, Arduino IDE, other browser tabs) and try again.`
       );
     }
-    port = chosen;
-    reader = port.readable.getReader();
-    writer = port.writable.getWriter();
-    readLoopP = startReadLoop();
+    const reader = port.readable.getReader();
+    const writer = port.writable.getWriter();
+    const feed   = makeFrameParser(dispatchFrame);
+
+    // Read loop runs detached; it ends when the reader closes/cancels.
+    (async () => {
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) feed(value);
+        }
+      } catch (err) {
+        log(`read loop ended: ${err?.message || err}`);
+      }
+    })();
+
+    writeBytes = (data) => writer.write(data);
+    closeFn = async () => {
+      try { await reader.cancel(); } catch (_) {}
+      try { await writer.close(); } catch (_) {}
+      try { await port.close();   } catch (_) {}
+    };
+    chunkSize = PUT_CHUNK_SIZE_SERIAL;
+    kind = 'serial';
+  };
+
+  const connectBluetooth = async () => {
+    if (kind) return;
+    if (typeof navigator === 'undefined' || !navigator.bluetooth) {
+      throw new Error('Web Bluetooth is not supported in this browser. Use Chrome / Edge on desktop or Chrome on Android.');
+    }
+    const device = await navigator.bluetooth.requestDevice({
+      filters:        [{ services: [NUS_SVC_UUID] }],
+      optionalServices: [NUS_SVC_UUID],
+    });
+    log(`bluetooth device: ${device.name || '(unnamed)'}`);
+    const server  = await device.gatt.connect();
+    const service = await server.getPrimaryService(NUS_SVC_UUID);
+    const rxChar  = await service.getCharacteristic(NUS_RX_UUID); // host -> device
+    const txChar  = await service.getCharacteristic(NUS_TX_UUID); // device -> host
+    const feed    = makeFrameParser(dispatchFrame);
+
+    const onValueChanged = (ev) => {
+      const dv = ev.target.value;
+      // DataView → Uint8Array on the same buffer slice.
+      const u8 = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+      feed(u8);
+    };
+    txChar.addEventListener('characteristicvaluechanged', onValueChanged);
+    await txChar.startNotifications();
+
+    const onDisconnected = () => {
+      log('bluetooth: gatt disconnected');
+      rejectAllPending(new Error('disconnected'));
+      writeBytes = null;
+      closeFn = null;
+      kind = null;
+    };
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    // writeValueWithoutResponse is faster but capped at ATT_MTU-3. Chunk the
+    // outbound frame manually; the firmware's stream parser stitches it back.
+    const useWithoutResponse = typeof rxChar.writeValueWithoutResponse === 'function';
+    writeBytes = async (data) => {
+      for (let off = 0; off < data.length; off += BLE_WRITE_MAX) {
+        const slice = data.subarray(off, Math.min(off + BLE_WRITE_MAX, data.length));
+        if (useWithoutResponse) {
+          await rxChar.writeValueWithoutResponse(slice);
+        } else {
+          await rxChar.writeValue(slice);
+        }
+      }
+    };
+    closeFn = async () => {
+      device.removeEventListener('gattserverdisconnected', onDisconnected);
+      txChar.removeEventListener('characteristicvaluechanged', onValueChanged);
+      try { await txChar.stopNotifications(); } catch (_) {}
+      try { device.gatt.disconnect(); } catch (_) {}
+    };
+    chunkSize = PUT_CHUNK_SIZE_BLE;
+    kind = 'bluetooth';
   };
 
   const disconnect = async () => {
-    try { if (reader) await reader.cancel(); } catch (_) {}
-    try { if (writer) await writer.close(); } catch (_) {}
-    try { if (port) await port.close(); } catch (_) {}
-    for (const [, entry] of pending) {
-      if (entry.timer) clearTimeout(entry.timer);
-      entry.reject(new Error('disconnected'));
-    }
-    pending.clear();
-    reader = null;
-    writer = null;
-    port = null;
+    if (closeFn) { try { await closeFn(); } catch (_) {} }
+    rejectAllPending(new Error('disconnected'));
+    writeBytes = null;
+    closeFn = null;
+    kind = null;
   };
 
   const nextSeq = () => {
@@ -279,7 +353,7 @@ function createTransport({ onLog }) {
   };
 
   const send = async (ctx, type, payload, { onChunk, timeoutMs = 8000 } = {}) => {
-    if (!writer) throw new Error('not connected');
+    if (!writeBytes) throw new Error('not connected');
     const seq = nextSeq();
     const frame = buildFrame(ctx, type, seq, payload);
     return new Promise((resolve, reject) => {
@@ -296,7 +370,7 @@ function createTransport({ onLog }) {
         }, timeoutMs),
       };
       pending.set(seq, entry);
-      writer.write(frame).catch((err) => {
+      Promise.resolve(writeBytes(frame)).catch((err) => {
         pending.delete(seq);
         if (entry.timer) clearTimeout(entry.timer);
         reject(err);
@@ -304,7 +378,15 @@ function createTransport({ onLog }) {
     });
   };
 
-  return { connect, disconnect, send, isConnected: () => !!port };
+  return {
+    connectSerial,
+    connectBluetooth,
+    disconnect,
+    send,
+    isConnected: () => !!writeBytes,
+    getKind:     () => kind,
+    getChunkSize: () => chunkSize,
+  };
 }
 
 // ── Icons (Lucide-style, stroked, inherit currentColor) ──────────────────────
@@ -435,7 +517,9 @@ export default function FileManagerClient({ expectedVersion }) {
   // avoid a server/client tree mismatch.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const supported = mounted && typeof navigator !== 'undefined' && 'serial' in navigator;
+  const hasSerial    = mounted && typeof navigator !== 'undefined' && 'serial'    in navigator;
+  const hasBluetooth = mounted && typeof navigator !== 'undefined' && 'bluetooth' in navigator;
+  const supported    = hasSerial || hasBluetooth;
 
   const pushLog = useCallback((msg) => {
     setLogLines((prev) => [...prev.slice(-99), msg]);
@@ -492,14 +576,18 @@ export default function FileManagerClient({ expectedVersion }) {
     return parsed;
   }, [getTransport, expectedVersion, pushLog]);
 
-  const onConnect = useCallback(async () => {
-    if (!supported) return;
+  const _connectVia = useCallback(async (mode) => {
     setErrorMsg('');
     setStatus(STATUS.CONNECTING);
     try {
       const t = getTransport();
-      await t.connect();
-      pushLog('serial port opened @ 115200');
+      if (mode === 'bluetooth') {
+        await t.connectBluetooth();
+        pushLog('bluetooth gatt connected');
+      } else {
+        await t.connectSerial();
+        pushLog('serial port opened @ 115200');
+      }
       await fetchInfo();
       await refreshDir('/');
       setStatus(STATUS.CONNECTED);
@@ -508,7 +596,10 @@ export default function FileManagerClient({ expectedVersion }) {
       setErrorMsg(err.message || String(err));
       setStatus(STATUS.ERROR);
     }
-  }, [supported, getTransport, fetchInfo, refreshDir, pushLog]);
+  }, [getTransport, fetchInfo, refreshDir, pushLog]);
+
+  const onConnectSerial    = useCallback(() => _connectVia('serial'),    [_connectVia]);
+  const onConnectBluetooth = useCallback(() => _connectVia('bluetooth'), [_connectVia]);
 
   const onDisconnect = useCallback(async () => {
     try {
@@ -708,8 +799,9 @@ export default function FileManagerClient({ expectedVersion }) {
         await t.send(CTX_FM, C_PUT_BEGIN, begin);
         setProgress({ label: `save ${viewer.name}`, value: 0, total });
         let sent = 0;
+        const chunkSize = t.getChunkSize();
         while (sent < bytes.length) {
-          const end = Math.min(sent + PUT_CHUNK_SIZE, bytes.length);
+          const end = Math.min(sent + chunkSize, bytes.length);
           await t.send(CTX_FM, C_PUT_CHUNK, bytes.subarray(sent, end));
           sent = end;
           setProgress({ label: `save ${viewer.name}`, value: sent, total });
@@ -725,10 +817,23 @@ export default function FileManagerClient({ expectedVersion }) {
     }
   }, [viewer, textContent, cwd, getTransport, pushLog, refreshDir, withWork]);
 
-  // ESC closes viewer, lock body scroll while open
+  // ESC closes viewer · Ctrl/Cmd+S saves in text mode · lock body scroll
   useEffect(() => {
     if (!viewer) return;
-    const onKey = (e) => { if (e.key === 'Escape') closeViewer(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        closeViewer();
+        return;
+      }
+      // Save shortcut — only meaningful when editing text, and only if there
+      // are unsaved edits to flush. Stop the browser from intercepting Cmd+S
+      // as "save page".
+      const isSave = (e.key === 's' || e.key === 'S') && (e.metaKey || e.ctrlKey);
+      if (isSave && viewMode === 'text') {
+        e.preventDefault();
+        if (textDirty && !savingFile) onSaveText();
+      }
+    };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -736,7 +841,7 @@ export default function FileManagerClient({ expectedVersion }) {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [viewer, closeViewer]);
+  }, [viewer, viewMode, textDirty, savingFile, onSaveText, closeViewer]);
 
   const onUploadClick = useCallback(() => {
     if (uploadInputRef.current) uploadInputRef.current.click();
@@ -763,10 +868,11 @@ export default function FileManagerClient({ expectedVersion }) {
           await t.send(CTX_FM, C_PUT_BEGIN, begin);
           setProgress({ label: `upload ${tag}`, value: 0, total });
           let sent = 0;
+          const chunkSize = t.getChunkSize();
           const buffer = await file.arrayBuffer();
           const view = new Uint8Array(buffer);
           while (sent < view.length) {
-            const end = Math.min(sent + PUT_CHUNK_SIZE, view.length);
+            const end = Math.min(sent + chunkSize, view.length);
             const chunk = view.subarray(sent, end);
             await t.send(CTX_FM, C_PUT_CHUNK, chunk);
             sent = end;
@@ -830,9 +936,26 @@ export default function FileManagerClient({ expectedVersion }) {
       <div className="fm-toolbar">
         <div className="fm-toolbar-left">
           {!isConnected ? (
-            <button type="button" className="fm-btn fm-btn-primary" onClick={onConnect} disabled={!supported || status === STATUS.CONNECTING}>
-              {status === STATUS.CONNECTING ? 'Connecting…' : 'Connect device'}
-            </button>
+            <>
+              <button
+                type="button"
+                className="fm-btn fm-btn-primary"
+                onClick={onConnectSerial}
+                disabled={!hasSerial || status === STATUS.CONNECTING}
+                title={hasSerial ? 'Connect over USB serial' : 'Web Serial not supported in this browser'}
+              >
+                {status === STATUS.CONNECTING ? 'Connecting…' : 'Connect USB'}
+              </button>
+              <button
+                type="button"
+                className="fm-btn"
+                onClick={onConnectBluetooth}
+                disabled={!hasBluetooth || status === STATUS.CONNECTING}
+                title={hasBluetooth ? 'Connect over Bluetooth (NUS)' : 'Web Bluetooth not supported in this browser'}
+              >
+                Connect Bluetooth
+              </button>
+            </>
           ) : (
             <>
               <button type="button" className="fm-btn" onClick={onRefresh} disabled={status === STATUS.WORKING}>Refresh</button>
@@ -858,7 +981,8 @@ export default function FileManagerClient({ expectedVersion }) {
 
       {!supported && (
         <div className="fm-banner fm-banner-warn">
-          Web Serial is not supported in this browser. Use Chrome or Edge on desktop.
+          Neither Web Serial nor Web Bluetooth is supported in this browser.
+          Use Chrome / Edge on desktop, or Chrome on Android (Bluetooth only).
         </div>
       )}
 
@@ -1002,7 +1126,15 @@ export default function FileManagerClient({ expectedVersion }) {
       </div>
 
       <div className="fm-console-chrome">
-        <span>console · UART · 115200</span>
+        <span>
+          console
+          {' · '}
+          {transportRef.current?.getKind?.() === 'bluetooth'
+            ? 'BLE NUS'
+            : transportRef.current?.getKind?.() === 'serial'
+              ? 'USB · 115200'
+              : 'idle'}
+        </span>
       </div>
       <div className="fm-console" ref={logEndRef}>
         {logLines.length === 0
@@ -1067,7 +1199,7 @@ export default function FileManagerClient({ expectedVersion }) {
                 {viewMode === 'image'
                   ? `image · ${viewer.mime}`
                   : viewMode === 'text'
-                    ? 'UTF-8 decoded · edits are saved as UTF-8'
+                    ? 'UTF-8 · ⌘/Ctrl+S to save'
                     : 'read-only · 16 bytes / line · first 64 KB shown'}
               </span>
               <div className="fm-modal-actions">

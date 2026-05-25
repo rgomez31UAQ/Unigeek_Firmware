@@ -9,6 +9,7 @@
 #include "screens/ble/WhisperPairScreen.h"
 #include "screens/ble/chameleon/ChameleonMenuScreen.h"
 #include "screens/ble/ClaudeBuddyScreen.h"
+#include "screens/ble/BleFileManagerScreen.h"
 
 void BLEMenuScreen::onInit()
 {
@@ -25,6 +26,7 @@ void BLEMenuScreen::onItemSelected(uint8_t index)
     case 4: Screen.push(new WhisperPairScreen());       break;
     case 5: Screen.push(new ChameleonMenuScreen());     break;
     case 6: Screen.push(new ClaudeBuddyScreen());      break;
+    case 7: Screen.push(new BleFileManagerScreen());   break;
   }
 }
 
