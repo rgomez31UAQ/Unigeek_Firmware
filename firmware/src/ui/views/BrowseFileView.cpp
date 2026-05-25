@@ -7,7 +7,7 @@ void BrowseFileView::showLoading()
   ShowStatusAction::show("Loading...", 0);
 }
 
-uint8_t BrowseFileView::load(BaseScreen* host, const String& dir,
+uint8_t BrowseFileView::load(BaseScreen* host, String dir,
                               Mode mode, const char* fileSublabel)
 {
   _count = 0;

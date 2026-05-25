@@ -69,7 +69,11 @@ struct BrowseFileView {
   //   fileSublabel   - sublabel on file rows; nullptr = none
   //                    Directory rows always get "DIR".
   // Returns populated count. Returns 0 if storage unavailable.
-  uint8_t load(BaseScreen* host, const String& dir,
+  // `dir` is taken by value on purpose: callers commonly pass entry(i).path,
+  // which aliases _entries[]. load() overwrites _entries[] as it builds the
+  // list, so a reference would be mutated mid-call (the ".." row would clobber
+  // the selected dir's path). The copy keeps the input stable.
+  uint8_t load(BaseScreen* host, String dir,
                Mode        mode         = {},
                const char* fileSublabel = nullptr);
 
