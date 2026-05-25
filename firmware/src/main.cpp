@@ -117,9 +117,8 @@ static void _mbedtlsPsramFree(void* p) {
 }
 
 void setup() {
-  // UartFileManager streams up to ~1 KB per frame. The default 256-byte RX
-  // FIFO would overflow before loop() can drain it, breaking upload CRCs.
-  Serial.setRxBufferSize(4096);
+  // Default 256-byte RX FIFO for now — only grown below if the Serial File
+  // Manager is enabled, since that's the only consumer that needs it.
   Serial.begin(115200);
 
   if (psramFound()) {
@@ -128,7 +127,21 @@ void setup() {
 
   Uni.begin();
   Uni.initStorage();
-  UartFM.begin();
+  Config.load(Uni.Storage);   // load early so optional services can be gated
+
+  // Serial File Manager — optional always-on USB service. When disabled it's
+  // skipped entirely, reclaiming ~12 KB internal SRAM (8 KB FileManagerCore
+  // frame buffer + 4 KB Serial RX FIFO) — meaningful on no-PSRAM boards.
+  // UartFileManager streams up to ~1 KB per frame, so the 256-byte default RX
+  // FIFO would overflow before loop() can drain it (breaking upload CRCs);
+  // grow it to 4 KB only when the service is on. Resizing needs a Serial
+  // restart because setRxBufferSize() is ignored once the driver is installed.
+  if (Config.get(APP_CONFIG_SERIAL_FM, APP_CONFIG_SERIAL_FM_DEFAULT).toInt()) {
+    Serial.end();
+    Serial.setRxBufferSize(4096);
+    Serial.begin(115200);
+    UartFM.begin();
+  }
 #ifdef DEVICE_HAS_RTC
   RtcManager::syncSystemFromRtc();
 #endif

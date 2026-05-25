@@ -49,6 +49,7 @@ private:
     SETT_TOUCH_CAL,
 #endif
     SETT_WEB_PASSWORD,
+    SETT_SERIAL_FM,
     SETT_PIN_SETTING,
     SETT_DEVICE_STATUS,
     SETT_ABOUT,
@@ -80,6 +81,7 @@ private:
   String _overlaySub;
 #endif
   String _webPwdSub;
+  String _serialFmSub;
 
   ListItem _items[SETT_COUNT] = {
     {"Name",             ""},
@@ -112,6 +114,7 @@ private:
     {"Touch Calibration"},
 #endif
     {"Web Password",     ""},
+    {"Serial File Manager", ""},
     {"Pin Setting"},
     {"Device Status"},
     {"About"},

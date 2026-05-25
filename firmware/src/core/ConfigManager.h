@@ -46,6 +46,8 @@
 #define APP_CONFIG_TOUCH_SWAP_XY_DEFAULT        "0"
 #define APP_CONFIG_TOUCH_CALIBRATED             "cyd_touch_calibrated"
 #define APP_CONFIG_TOUCH_CALIBRATED_DEFAULT     "0"
+#define APP_CONFIG_SERIAL_FM                    "serial_fm"
+#define APP_CONFIG_SERIAL_FM_DEFAULT            "1"
 
 class ConfigManager
 {
