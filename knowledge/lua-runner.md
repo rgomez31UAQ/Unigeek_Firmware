@@ -92,6 +92,7 @@ local time   = require("uni.time")    -- RTC clock
 local config = require("uni.config")  -- read device settings
 local wifi   = require("uni.wifi")    -- connect / status / ip
 local http   = require("uni.http")    -- blocking GET / POST
+local subghz = require("uni.subghz")  -- Sub-GHz RF (CC1101 / M5 RF433)
 ```
 
 The `uni` table (core functions: `debug`, `delay`, `millis`, `heap`, `beep`) is always available as a global — no require needed.
@@ -758,6 +759,86 @@ lcd.print(16, 14, name)
 
 ---
 
+## `uni.subghz` — Sub-GHz RF
+
+Load with `local subghz = require("uni.subghz")`. A single facade over the two RF backends in the firmware — your script runs the same code regardless of which chip is on the bus:
+
+- **CC1101** — SPI module, tunable ~280–928 MHz, supports frequency scan.
+- **M5 RF433** — Grove two-pin bit-bang, fixed **433.92 MHz**, no tune, no scan.
+
+The backend is **picked lazily** the first time an operation needs the radio: CC1101 is tried first (SPI chip-ID probe via the board's `CC1101_CS` / `CC1101_GDO0` pins), M5 RF433 is the fallback. Call `subghz.info()` to learn which one you got.
+
+> [!warn]
+> Sub-GHz transmit and jamming are **regulated**. Only transmit on frequencies and at duty cycles you are licensed/authorised to use. Receiving and replaying signals you don't own may be illegal in your jurisdiction.
+
+> [!note]
+> The runner tears the radio down automatically when the script exits (RX ISR disarmed, TX stopped, SPI released). You don't have to call `subghz.close()`, but doing so frees the chip mid-script if you're done with it.
+
+### Signal table
+
+`pollReceive`, `parseSub`, `send`, and `formatSub` all marshal the same signal table (identical for both backends). Fields are optional going in — set only what your protocol needs:
+
+| Field | Type | Notes |
+|---|---|---|
+| `frequency` | number | MHz. On `send`, retunes the CC1101 if it differs from the current freq |
+| `preset` | string | modulation preset name (e.g. `"AM650"`) |
+| `protocol` | string | decoder name (e.g. `"Princeton"`, `"KeeLoq"`) |
+| `rawData` | string | space-separated µs timings for RAW signals |
+| `key` | number | decoded code value (fits 32-bit; >2^53 loses precision) |
+| `te`, `bit` | number | timing element (µs) and bit length |
+| `mf_name` | string | manufacturer name (KeeLoq) |
+| `serial`, `btn`, `cnt`, `fix`, `encrypted`, `hop` | number | rolling-code fields (KeeLoq) |
+
+### Functions
+
+| Function | Returns | Notes |
+|---|---|---|
+| `subghz.info()` | table | `{backend="cc1101"\|"rf433"\|nil, canTune=bool, canScan=bool, freq=MHz}`. Opens the radio. |
+| `subghz.setFrequency(mhz)` | bool | CC1101 only. On RF433 returns `false, "unsupported on rf433"` |
+| `subghz.getFrequency()` | number | Current MHz (RF433 always 433.92) |
+| `subghz.setRxFilter(mode)` | bool | `mode` = `"raw"` or `"code"` |
+| `subghz.beginReceive()` | bool | Arm the RX ISR |
+| `subghz.pollReceive()` | signal\|nil | Non-blocking — `nil` when nothing decoded this poll |
+| `subghz.endReceive()` | — | Disarm RX |
+| `subghz.send(signal)` | bool | Detaches RX during TX, re-arms after if you were receiving |
+| `subghz.beginScan()` | bool | CC1101 only — `false, "unsupported on rf433"` otherwise |
+| `subghz.stepScan()` | bool | Advance the scan one step |
+| `subghz.endScan()` | — | Stop scanning |
+| `subghz.getScanFreq()` | number | MHz of the last scan step |
+| `subghz.getScanRssi()` | number | dBm of the last scan step (`-120` when idle) |
+| `subghz.startJam()` | bool | Park the chip in TX / carrier mode |
+| `subghz.jamBurst()` | bool | Emit one burst — must `startJam()` first |
+| `subghz.stopJam()` | — | Stop jamming **and fully tear down** the radio |
+| `subghz.parseSub(content)` | signal\|nil | Parse Flipper `.sub` file text into a signal |
+| `subghz.formatSub(signal)` | string | Serialise a signal back to `.sub` text |
+| `subghz.close()` | — | Release the radio immediately |
+
+```lua
+local subghz = require("uni.subghz")
+local sd     = require("uni.sd")
+
+local info = subghz.info()
+uni.debug("radio: " .. tostring(info.backend))   -- "cc1101" or "rf433"
+
+-- capture the first signal we see, save it as a .sub file, then replay it
+subghz.setRxFilter("code")
+subghz.beginReceive()
+local sig
+while true do
+  if nav.btn() == "back" then break end
+  sig = subghz.pollReceive()
+  if sig then
+    sd.write("/unigeek/subghz/capture.sub", subghz.formatSub(sig))
+    subghz.endReceive()
+    subghz.send(sig)          -- RX is torn down for the TX, then re-armed
+    break
+  end
+  uni.delay(20)
+end
+```
+
+---
+
 ## Writing Scripts with AI
 
 Paste the context block below into any AI chat **before** describing what you want.
@@ -799,6 +880,7 @@ Modules are lazy-loaded — call require() once before the while loop:
   local config = require("uni.config")  -- read device settings
   local wifi   = require("uni.wifi")    -- station-mode connect/status
   local http   = require("uni.http")    -- blocking GET/POST (TLS via setInsecure)
+  local subghz = require("uni.subghz")  -- Sub-GHz RF (CC1101 / M5 RF433 auto-detect)
 The uni table (debug, delay, millis, heap, beep) is always a global — no require needed.
 There is NO file-backed loader — require("mymodule") does NOT load .lua files.
 
@@ -930,6 +1012,24 @@ wifi.disconnect()                   -- drop connection
 http.get(url)                       -- body | nil, code (≥100=http status, -2=bad url, -3=too big, other negative=transport error)
 http.post(url, [body])              -- same shape; body is any Lua string
 -- Response bodies are capped at 256 KB; over-cap returns nil, -3.
+
+### Sub-GHz RF  (require "uni.subghz")
+-- Auto-detects backend on first use: CC1101 (SPI, tunable, scan) else M5 RF433 (fixed 433.92 MHz, no tune/scan).
+-- Runner tears the radio down automatically on script exit.
+subghz.info()                       -- {backend="cc1101"|"rf433"|nil, canTune, canScan, freq}
+subghz.setFrequency(mhz)            -- bool; CC1101 only (returns false,"unsupported on rf433" on RF433)
+subghz.getFrequency()               -- number MHz (RF433 = 433.92)
+subghz.setRxFilter("raw"|"code")    -- bool
+subghz.beginReceive()               -- bool — arm RX
+subghz.pollReceive()                -- signal table | nil (non-blocking)
+subghz.endReceive()                 -- disarm RX
+subghz.send(signal)                 -- bool — detaches RX during TX, re-arms after
+subghz.beginScan() / stepScan() / endScan()          -- CC1101 only
+subghz.getScanFreq() / getScanRssi()                 -- last scan step MHz / dBm
+subghz.startJam() / jamBurst() / stopJam()           -- stopJam() also tears the radio down
+subghz.parseSub(text) / formatSub(signal)            -- Flipper .sub <-> signal table
+subghz.close()                      -- release radio immediately
+-- signal table fields: frequency, preset, protocol, rawData, key, te, bit, mf_name, serial, btn, cnt, fix, encrypted, hop
 
 ## Rules you must follow
 1. Use the while-loop pattern: while true do … end — runner exits automatically when script returns.

@@ -134,6 +134,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Storage (`uni.sd`)** — read / write / append / list / exists / remove / rename / mkdir / size
   - **Device (`uni.time` / `uni.config`)** — RTC clock (`time.now()` → year/month/day/hour/min/sec/wday/epoch); read theme color, device name, brightness, volume from ConfigManager
   - **Network (`uni.wifi` / `uni.http`)** — station-mode connect/status/ip/ssid plus blocking GET/POST (TLS via `setInsecure`); runner auto-disconnects on exit if the script brought WiFi up; response bodies capped at 256 KB
+  - **Radio (`uni.subghz`)** — Sub-GHz RF facade that auto-detects CC1101 (SPI, tunable, scan) or M5 RF433 (Grove, fixed 433.92 MHz) at first use; receive/poll, send, scan, jam, and Flipper `.sub` parse/format over a shared signal table; runner tears the radio down on exit
   - **System (`uni`)** — `debug` (serial), `delay`, `millis`, `heap`, `beep`
 
 ### Games
@@ -386,4 +387,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
-<!-- README last synced at commit: 9669925 (BLE File Manager over NUS + USB-serial /app/files page, KeeLoq auto-decode + Replay +1 rolling-code replay & Mfcodes keystore on Sub-GHz / M5 RF433, default mfcodes keystore shipped, BLE iOS/Android/Samsung spam tuning, faster listDir + ".." parent nav, Lua VM on PSRAM) -->
+<!-- README last synced at commit: dfaab75 (uni.subghz Lua binding — auto-detect CC1101 / M5 RF433 facade with receive/send/scan/jam + Flipper .sub parse/format; Serial File Manager Settings toggle saves ~12KB SRAM; BLE-FM full URL display; website GA4 + install/download event tracking) -->
