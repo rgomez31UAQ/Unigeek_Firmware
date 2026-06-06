@@ -1,27 +1,25 @@
 #pragma once
 
-// Streams the screen to a host by mirroring every draw into a RAM canvas, then
-// flushing only the changed (dirty) region — so it works even on write-only
-// panels with no MISO readback (Cardputer, sticks3; see memory
-// "panel readback impossible").
+// Streams what's drawn to the panel out to a host as it renders — so the screen
+// mirrors even on write-only panels with no MISO readback (Cardputer, sticks3;
+// see memory "panel readback impossible").
 //
-// Two modes, chosen at start() by whether the board has PSRAM:
+// Lightweight per-region streaming on every board, no framebuffer: each draw is
+// forwarded immediately as a small frame — pushed sprites are read back via
+// readPixel → T_FRAME, direct fills → T_FILL. The only RAM cost while streaming
+// is one ~8 KB band staging buffer, allocated on START and freed on STOP (a
+// disabled mirror costs zero RAM). It is cheap enough not to stall even big
+// PSRAM screens; the trade-off is that direct-to-panel non-rect ops (lines,
+// circles, scaled text drawn straight to the LCD) aren't captured — but those
+// almost always render into a sprite, which the sprite readback captures whole.
 //
-//  • PSRAM boards — full-screen TFT_eSprite canvas (W·H·2 bytes, in PSRAM).
-//    Every draw is replicated onto it, so capture is COMPLETE (scaled/
-//    transparent text, circles, sprites). pump() flushes the dirty rectangle
-//    once per main-loop iteration; nothing changed ⇒ no-op.
+// A full-screen PSRAM canvas (replicate every op for COMPLETE capture) was
+// tried but the per-frame replicate-then-read-back cost stalled big PSRAM
+// boards, so start() leaves _canvas null. The canvas paths stay dormant in the
+// .cpp for a possible future opt-in; markDirty()/pump() are no-ops without it.
 //
-//  • No-PSRAM boards (e.g. sticks3) — lightweight per-region streaming, no
-//    framebuffer. Each draw forwards immediately as a small frame (sprite rects
-//    read back via readPixel → T_FRAME; direct fills → T_FILL). Only RAM cost
-//    is one ~8 KB band staging buffer. Less complete (direct-to-panel non-rect
-//    ops aren't captured) but cheap — this is the original pre-canvas path.
-//
-// Either way the canvas/band is allocated on START and freed on STOP, so a
-// disabled mirror costs zero RAM. Emission happens on the main task only (the
-// draw taps never touch serial except the immediate region emits, which take
-// the FrameCodec TX lock), so the Lua interpreter task can draw without racing.
+// Emission is on whatever task drew, guarded by the FrameCodec TX lock, so the
+// Lua interpreter task can draw without racing the wire.
 
 #include <Arduino.h>
 

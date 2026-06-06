@@ -4,11 +4,11 @@ ScreenMirror Mirror;
 
 #ifndef DISPLAY_BACKEND_M5GFX
 // ─────────────────────────────────────────────────────────────────────────────
-// TFT_eSPI backend. Two modes picked in start() by psramFound():
-//   canvas mode  (PSRAM)    — replicate every draw onto a full-screen sprite,
-//                             flush the dirty rect in pump().
-//   region mode  (no PSRAM) — no framebuffer; forward each draw immediately as
-//                             a T_FILL / T_FRAME using the band staging buffer.
+// TFT_eSPI backend. Region mode on every board: no framebuffer — each draw is
+// forwarded immediately as a T_FILL / T_FRAME via the band staging buffer.
+// (A full-screen PSRAM canvas was tried for complete capture, but the per-frame
+// replicate-then-read-back cost stalled big PSRAM screens, so it's disabled in
+// start(); the canvas code paths below stay dormant for a possible opt-in.)
 #include "core/IDisplay.h"
 #include "core/Device.h"
 #include "utils/uart/FrameCodec.h" // shared TX lock (Lua draws on its own task)
@@ -31,18 +31,12 @@ bool ScreenMirror::start(uint16_t w, uint16_t h, uint32_t maxPayload, Sink sink,
   _band = (uint8_t*)malloc(8 + (size_t)w * rows * 2);
   if (!_band) return false;
 
-  // Full-screen canvas only when PSRAM is present (W·H·2 would blow internal
-  // SRAM otherwise). No PSRAM ⇒ stay in lightweight region mode (_canvas null).
-  if (psramFound()) {
-    auto* cv = new TFT_eSprite(&Uni.Lcd);
-    cv->setColorDepth(16);
-    if (cv->createSprite(w, h)) {
-      cv->fillSprite(TFT_BLACK);
-      _canvas = cv;
-    } else {
-      delete cv; // OOM in PSRAM ⇒ fall back to region mode rather than fail
-    }
-  }
+  // Region mode on every board: no full-screen canvas. Maintaining a PSRAM
+  // canvas (replicate every draw + read the dirty rect back each frame) costs
+  // too much per-frame work and stalls big PSRAM screens (T-Lora Pager), so we
+  // forward each draw immediately instead — _canvas stays null. (The canvas
+  // code paths below are kept dormant for a future opt-in.)
+  _canvas = nullptr;
 
   _w = w; _h = h; _bandRows = rows;
   _sink = sink; _ctx = ctx;
