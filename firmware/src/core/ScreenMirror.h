@@ -5,18 +5,23 @@
 // panels with no MISO readback (Cardputer, sticks3; see memory
 // "panel readback impossible").
 //
-// The canvas is a full-screen TFT_eSprite allocated on START (PSRAM-preferred —
-// TFT_eSprite uses PSRAM automatically when present, else internal SRAM) and
-// freed on STOP, so a disabled mirror costs zero RAM. Because the canvas is a
-// real GFX surface, replicating each draw onto it captures EVERYTHING exactly —
-// scaled/transparent text, circles, sprites — closing the gaps the old
-// per-op tap-streaming had.
+// Two modes, chosen at start() by whether the board has PSRAM:
 //
-// Streaming is event-driven, not timed: draw taps accumulate a dirty rectangle;
-// pump() (called once per main-loop iteration) flushes that region and clears
-// it. When nothing changed, pump() is a no-op. Emission happens on the main
-// task only (the draw taps never touch serial), so the Lua interpreter task
-// can draw freely without racing the wire.
+//  • PSRAM boards — full-screen TFT_eSprite canvas (W·H·2 bytes, in PSRAM).
+//    Every draw is replicated onto it, so capture is COMPLETE (scaled/
+//    transparent text, circles, sprites). pump() flushes the dirty rectangle
+//    once per main-loop iteration; nothing changed ⇒ no-op.
+//
+//  • No-PSRAM boards (e.g. sticks3) — lightweight per-region streaming, no
+//    framebuffer. Each draw forwards immediately as a small frame (sprite rects
+//    read back via readPixel → T_FRAME; direct fills → T_FILL). Only RAM cost
+//    is one ~8 KB band staging buffer. Less complete (direct-to-panel non-rect
+//    ops aren't captured) but cheap — this is the original pre-canvas path.
+//
+// Either way the canvas/band is allocated on START and freed on STOP, so a
+// disabled mirror costs zero RAM. Emission happens on the main task only (the
+// draw taps never touch serial except the immediate region emits, which take
+// the FrameCodec TX lock), so the Lua interpreter task can draw without racing.
 
 #include <Arduino.h>
 
@@ -32,6 +37,7 @@ namespace ScreenProto {
   static constexpr uint8_t CAP_TOUCH    = 0x01;
   static constexpr uint8_t CAP_KEYBOARD = 0x02;
   static constexpr uint8_t T_FRAME = 0xA1; // [x:2][y:2][w:2][h:2][rgb565…]
+  static constexpr uint8_t T_FILL  = 0xA2; // [x:2][y:2][w:2][h:2][color:2] (no-PSRAM region mode)
 }
 
 class ScreenMirror {
@@ -42,10 +48,10 @@ public:
   // tap exits on this bool — no canvas, no work.
   void setEnabled(bool e) { _enabled = e; }
   bool enabled() const { return _enabled; }
-  bool active()  const { return _canvas != nullptr; }
-  // True when a draw has dirtied the canvas since the last pump() — i.e. a
-  // render actually happened. Lets blocking loops pump only on render instead
-  // of polling every iteration.
+  bool active()  const { return _sink != nullptr; } // started (canvas OR region mode)
+  // True when a draw dirtied the canvas since the last pump() — canvas mode
+  // only; region mode emits immediately so it never needs a pump. Lets blocking
+  // loops pump only on render instead of polling every iteration.
   bool dirty()   const { return _canvas != nullptr && _dx0 <= _dx1; }
 
   bool start(uint16_t w, uint16_t h, uint32_t maxPayload, Sink sink, void* ctx);
@@ -54,7 +60,13 @@ public:
 
   uint16_t width()  const { return _w; }
   uint16_t height() const { return _h; }
-  void*    canvasRaw() const { return _canvas; } // TFT_eSprite* — for CaptureSprite
+  void*    canvasRaw() const { return _canvas; } // TFT_eSprite* (null in region mode)
+
+  // Region-mode plumbing for CaptureSprite (no-PSRAM path): stage sprite rows in
+  // the band, then emit() them as T_FRAMEs.
+  uint8_t* band()           { return _band; }
+  uint16_t bandRows() const { return _bandRows; }
+  void     emit(uint8_t type, const uint8_t* data, uint32_t len) { _emit(type, data, len); }
 
   // ── Draw taps (called by IDisplay after the real panel draw) ──────────────
   void solidFill(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
@@ -92,6 +104,10 @@ private:
 
   // Dirty bounding box (inclusive). Empty when _dx0 > _dx1.
   int16_t _dx0 = 0, _dy0 = 0, _dx1 = -1, _dy1 = -1;
+
+  // Region-mode (no-PSRAM) immediate emits — defined only in the TFT backend.
+  void _fillRegion(int16_t x, int16_t y, int16_t w, int16_t h, uint16_t color);
+  void _imageRegion(int16_t x, int16_t y, int16_t w, int16_t h, const uint16_t* src);
 
   void _emit(uint8_t type, const uint8_t* data, uint32_t len) {
     if (_sink) _sink(_ctx, type, data, len);
