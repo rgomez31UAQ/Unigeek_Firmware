@@ -14,7 +14,8 @@ These rows show on every board.
 | Brightness | Backlight level | `70`% |
 | Primary Color | Accent/theme color — Blue, Red, Green, Cyan, Purple, Brown, Orange, Violet, Navy | Blue |
 | Web Password | Login password for the WiFi **Web File Manager** (text input) | `admin` |
-| Serial File Manager | Enable/disable the USB-serial file manager — see below | On |
+| Serial File Manager | Enable/disable the USB-serial file manager — see below | Off |
+| Screen Mirror | Enable/disable the USB-serial screen mirror + remote control — see below | Off |
 | Pin Setting | Opens GPIO pin configuration for external modules — see [Pin Settings](setting-pin.md) | — |
 | Device Status | Read-only hardware view: CPU frequency, free RAM, PSRAM, storage | — |
 | About | Firmware version, build date, credits | — |
@@ -41,17 +42,28 @@ These rows appear only on boards with the matching hardware.
 
 ## Serial File Manager
 
-Enables or disables the always-on **USB-serial** file manager that powers the `https://unigeek.xid.run/app/files` page (connect over USB, no WiFi). It's **On** by default.
+Enables or disables the **USB-serial** file manager that powers the `https://unigeek.xid.run/app/files` page (connect over USB, no WiFi). It's **Off** by default.
 
-- Turn it **Off** to reclaim about **12 KB of internal SRAM** (the 8 KB protocol frame buffer plus the 4 KB serial RX FIFO). This is worth doing on no-PSRAM boards (M5StickC Plus, Cardputer, T-Display, …) where internal SRAM is scarce.
+- Turn it **On** to manage files over USB. While on it costs about **12 KB of internal SRAM** (the 8 KB protocol frame buffer plus the 4 KB serial RX FIFO) — kept off by default so no-PSRAM boards (M5StickC Plus, Cardputer, T-Display, …) don't lose that memory unless you need the feature.
 - The toggle is **applied on the next restart** — flipping it resizes the serial RX buffer and frees/allocates the protocol core, which can't be done safely on a live serial link.
 - This only affects the **USB-serial** transport. The **BLE** file manager is independent and started on demand from **Bluetooth → File Manager** — see [BLE File Manager](ble-file-manager.md).
 
 > [!warn]
 > If `https://unigeek.xid.run/app/files` won't connect over USB, check that **Settings → Serial File Manager** is **On** and that the device has been restarted since the last change.
 
+## Screen Mirror
+
+Enables or disables the **USB-serial screen mirror** that powers the `https://unigeek.xid.run/app/remote` page — see [Remote Access](remote-access.md). It's **Off** by default.
+
+- Turn it **On** to mirror the device screen in a browser and drive it from your keyboard (and tap, on touch boards) over USB.
+- Like Serial File Manager, it's **applied on the next restart** and only when on does it consume memory, so it stays off until you need it.
+
+> [!warn]
+> If `https://unigeek.xid.run/app/remote` shows nothing, check that **Settings → Screen Mirror** is **On** and that the device has been restarted since the last change.
+
 ## Related
 
+- [Remote Access](remote-access.md) — mirror and control the device screen in a browser over USB serial
 - [Pin Settings](setting-pin.md) — per-module GPIO pin configuration (also reachable from the Modules menu)
 - [BLE File Manager](ble-file-manager.md) — the browser file manager over BLE and USB serial
 - [Web File Manager](web-file-manager.md) — the WiFi-based file manager that uses the **Web Password** above

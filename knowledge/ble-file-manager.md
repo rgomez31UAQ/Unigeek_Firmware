@@ -23,7 +23,7 @@ The **same web page** (`https://unigeek.xid.run/app/files/`) also connects over 
 For a wired connection instead, plug the board in over USB and the same page connects over Web Serial — no on-device screen needed, but the **Serial File Manager** must be enabled (see below).
 
 > [!warn]
-> The USB-serial transport is gated by **Settings → Serial File Manager**. It's **On** by default, but if it has been turned off (to free memory on no-PSRAM boards) the device won't respond over USB until you switch it back on **and restart** — the toggle is applied at boot. The BLE transport is unaffected: it's started on demand from **Bluetooth → File Manager**.
+> The USB-serial transport is gated by **Settings → Serial File Manager**. It's **Off** by default (to save memory on no-PSRAM boards), so the device won't respond over USB until you switch it on **and restart** — the toggle is applied at boot. The BLE transport is unaffected: it's started on demand from **Bluetooth → File Manager**.
 
 ## What you can do
 
