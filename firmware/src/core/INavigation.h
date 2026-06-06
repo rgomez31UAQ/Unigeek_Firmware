@@ -49,8 +49,8 @@ public:
     if (!_suppressKeys) _doDrawOverlay();
   }
 
-  bool isPressed()          const { return _pressed; }
-  Direction currentDirection() const { return _currDirection; }
+  bool isPressed()          const { return _pressed || _injHeld; }
+  Direction currentDirection() const { return _injHeld ? _injDir : _currDirection; }
 
   bool wasPressed() {
     if (_wasPressed) {
@@ -67,7 +67,10 @@ public:
   }
 
   uint32_t pressDuration() const { return _pressDuration; }
-  uint32_t heldDuration()  const { return _pressed ? (millis() - _pressStart) : 0; }
+  uint32_t heldDuration()  const {
+    if (_injHeld) return millis() - _injStart;
+    return _pressed ? (millis() - _pressStart) : 0;
+  }
 
   void setSuppressKeys(bool s) { _suppressKeys = s; }
   bool suppressKeys() const    { return _suppressKeys; }
@@ -81,6 +84,29 @@ public:
     if (dir == DIR_NONE) return;
     _wasPressed = true;
     _releasedDirection = dir;
+  }
+
+  // One-shot remote long-press (web "m"). A single call holds `dir` for
+  // kInjectHoldMs so isPressed()/heldDuration() report a long hold — long-press
+  // handlers (FileManager / ListScreen "hold to open menu") fire — then
+  // serviceInject() auto-releases it, emitting the completed press. Tracked
+  // separately from hardware so the board's per-tick updateState never cancels
+  // it; no host key-up needed.
+  static constexpr uint32_t kInjectHoldMs = 1000;
+  void injectHold(Direction dir) {
+    if (dir == DIR_NONE) return;
+    _injHeld = true; _injDir = dir; _injStart = millis();
+  }
+
+  // Auto-release an expired injected hold. Called once per loop by
+  // Device::update() (cheap: one bool + time check).
+  void serviceInject() {
+    if (_injHeld && (millis() - _injStart) >= kInjectHoldMs) {
+      _injHeld = false;
+      _pressDuration = millis() - _injStart;
+      _wasPressed = true;
+      _releasedDirection = _injDir;
+    }
   }
 
   int16_t lastTouchX() const { return _lastTouchX; }
@@ -144,6 +170,12 @@ private:
 
   bool     _pressed         = false;
   bool     _wasPressed      = false;
+
+  // Injected held-press state (web remote long-press), separate from hardware.
+  bool      _injHeld  = false;
+  Direction _injDir   = DIR_NONE;
+  uint32_t  _injStart = 0;
+
   bool     _suppressKeys    = false;
   bool     _suppressRelease = false;
   bool     _rightHand       = false;

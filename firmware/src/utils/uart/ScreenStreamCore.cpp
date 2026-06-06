@@ -9,11 +9,14 @@ void ScreenStreamCore::onFrame(uint8_t ctx, uint8_t type, uint8_t seq, uint8_t* 
     case ScreenProto::C_START: _start(seq); break;
     case ScreenProto::C_STOP:  Mirror.stop(); sendOk(ScreenProto::CTX, seq); break;
     case ScreenProto::C_INPUT: {
-      // payload[0] = INavigation::Direction (1=UP..6=BACK). Inject as a tap and
-      // count it as activity so a remote session doesn't dim into power-save.
-      uint8_t d = (len > 0) ? payload[0] : 0;
+      // payload[0] = INavigation::Direction (1=UP..6=BACK).
+      // payload[1] = event: 0/absent = tap, 1 = one-shot long-press (hold).
+      // Counts as activity so a remote session doesn't dim into power-save.
+      uint8_t d  = (len > 0) ? payload[0] : 0;
+      uint8_t ev = (len > 1) ? payload[1] : 0;
       if (Uni.Nav && d >= INavigation::DIR_UP && d <= INavigation::DIR_BACK) {
-        Uni.Nav->inject((INavigation::Direction)d);
+        if (ev) Uni.Nav->injectHold((INavigation::Direction)d);
+        else    Uni.Nav->inject((INavigation::Direction)d);
         Uni.lastActiveMs = millis();
       }
       break;
@@ -51,4 +54,8 @@ void ScreenStreamCore::_sink(void* ctx, uint8_t type, const uint8_t* data, uint3
 
 void ScreenStreamCore::stop() {
   Mirror.stop();
+}
+
+void ScreenStreamCore::pump() {
+  Mirror.pump(); // emits the dirty region (if any) on the main task
 }

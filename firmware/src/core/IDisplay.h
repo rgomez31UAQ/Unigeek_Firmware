@@ -24,49 +24,95 @@
     virtual void powerOff() { setBrightness(0); }
 
     // ── Screen-mirror capture taps for *direct* panel draws ──────────────────
-    // Sprites mirror via CaptureSprite; these shadow the fast-path draws so
-    // direct Uni.Lcd.* calls also reach the host. Each draws to the panel as
-    // usual, then records the same geometry into Mirror (a no-op when not
-    // streaming). Reached because screens call through the IDisplay static
-    // type; base-internal sub-draws (drawString glyphs, drawLine, drawCircle)
-    // funnel through the virtual drawPixel below, so they're captured too.
-    // `using` keeps the base's other overloads visible (avoids name-hiding).
+    // Sprites mirror via CaptureSprite; these shadow the draw + text-state calls
+    // so direct Uni.Lcd.* draws replicate onto the RAM canvas (a no-op when not
+    // streaming). Reached because screens call through the IDisplay static type.
+    // Replicating onto the canvas — a real GFX surface — captures everything
+    // exactly, including scaled/transparent text and filled shapes that bypass
+    // the virtual funnels. `using` keeps base overloads visible (no name-hiding).
     using TFT_eSPI::pushImage;
+    using TFT_eSPI::drawString;
+    using TFT_eSPI::setTextColor;
 
     void drawPixel(int32_t x, int32_t y, uint32_t color) override {
       TFT_eSPI::drawPixel(x, y, color);
-      Mirror.fill((int16_t)x, (int16_t)y, 1, 1, (uint16_t)color);
+      Mirror.dot((int16_t)x, (int16_t)y, (uint16_t)color);
     }
     void fillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
       TFT_eSPI::fillRect(x, y, w, h, color);
-      Mirror.fill((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, (uint16_t)color);
+      Mirror.solidFill((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, (uint16_t)color);
     }
     void fillScreen(uint32_t color) {
       TFT_eSPI::fillScreen(color);
-      Mirror.fill(0, 0, (int16_t)width(), (int16_t)height(), (uint16_t)color);
+      Mirror.clearScreen((uint16_t)color);
     }
     void drawRect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color) {
       TFT_eSPI::drawRect(x, y, w, h, color);
-      Mirror.fill((int16_t)x, (int16_t)y,           (int16_t)w, 1,          (uint16_t)color);
-      Mirror.fill((int16_t)x, (int16_t)(y + h - 1), (int16_t)w, 1,          (uint16_t)color);
-      Mirror.fill((int16_t)x,           (int16_t)y, 1,          (int16_t)h, (uint16_t)color);
-      Mirror.fill((int16_t)(x + w - 1), (int16_t)y, 1,          (int16_t)h, (uint16_t)color);
+      Mirror.box((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, (uint16_t)color);
     }
     void drawFastHLine(int32_t x, int32_t y, int32_t w, uint32_t color) {
       TFT_eSPI::drawFastHLine(x, y, w, color);
-      Mirror.fill((int16_t)x, (int16_t)y, (int16_t)w, 1, (uint16_t)color);
+      Mirror.hLine((int16_t)x, (int16_t)y, (int16_t)w, (uint16_t)color);
     }
     void drawFastVLine(int32_t x, int32_t y, int32_t h, uint32_t color) {
       TFT_eSPI::drawFastVLine(x, y, h, color);
-      Mirror.fill((int16_t)x, (int16_t)y, 1, (int16_t)h, (uint16_t)color);
+      Mirror.vLine((int16_t)x, (int16_t)y, (int16_t)h, (uint16_t)color);
+    }
+    // drawLine / drawCircle aren't shadowed: they funnel through the virtual
+    // drawPixel above, so they're already replicated onto the canvas. fillCircle
+    // / round-rects use the non-virtual drawFastHLine fast path, so they need
+    // explicit replication.
+    void fillCircle(int32_t x, int32_t y, int32_t r, uint32_t color) {
+      TFT_eSPI::fillCircle(x, y, r, color);
+      Mirror.fillCirc((int16_t)x, (int16_t)y, (int16_t)r, (uint16_t)color);
+    }
+    void drawRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
+      TFT_eSPI::drawRoundRect(x, y, w, h, r, color);
+      Mirror.rRect((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, (int16_t)r, (uint16_t)color);
+    }
+    void fillRoundRect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint32_t color) {
+      TFT_eSPI::fillRoundRect(x, y, w, h, r, color);
+      Mirror.fillRRect((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, (int16_t)r, (uint16_t)color);
     }
     void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t* data) {
       TFT_eSPI::pushImage(x, y, w, h, data);
-      Mirror.image((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, data);
+      Mirror.bitmap((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, data);
     }
     void pushImage(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* data) {
       TFT_eSPI::pushImage(x, y, w, h, data);
-      Mirror.image((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, data);
+      Mirror.bitmap((int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h, data);
+    }
+    // Text: replicate state + the string onto the canvas (renders any size /
+    // transparency correctly). drawString returns the advance width.
+    int16_t drawString(const char* s, int32_t x, int32_t y) {
+      int16_t r = TFT_eSPI::drawString(s, x, y);
+      Mirror.text(s, (int16_t)x, (int16_t)y);
+      return r;
+    }
+    int16_t drawString(const String& s, int32_t x, int32_t y) {
+      int16_t r = TFT_eSPI::drawString(s, x, y);
+      Mirror.text(s.c_str(), (int16_t)x, (int16_t)y);
+      return r;
+    }
+    void setTextColor(uint16_t c) {
+      TFT_eSPI::setTextColor(c);
+      Mirror.tColor(c);
+    }
+    void setTextColor(uint16_t c, uint16_t bg, bool bgfill = false) {
+      TFT_eSPI::setTextColor(c, bg, bgfill);
+      Mirror.tColor(c, bg);
+    }
+    void setTextSize(uint8_t s) {
+      TFT_eSPI::setTextSize(s);
+      Mirror.tSize(s);
+    }
+    void setTextDatum(uint8_t d) {
+      TFT_eSPI::setTextDatum(d);
+      Mirror.tDatum(d);
+    }
+    void setTextFont(uint8_t f) {
+      TFT_eSPI::setTextFont(f);
+      Mirror.tFont(f);
     }
   };
 

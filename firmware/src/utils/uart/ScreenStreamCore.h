@@ -12,6 +12,7 @@ class ScreenStreamCore : public FrameCodec {
 public:
   ScreenStreamCore() : FrameCodec(_rxBuf, kRxCap) {}
   void stop(); // tear down streaming (e.g. on transport disconnect)
+  void pump(); // flush the mirror's dirty region — call once per main-loop iter
 
 protected:
   void onFrame(uint8_t ctx, uint8_t type, uint8_t seq, uint8_t* payload, uint32_t len) override;

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/Device.h"
+#include "utils/uart/UartFileManager.h"
 #include "core/ConfigManager.h"
 
 class InputNumberAction
@@ -143,6 +144,8 @@ private:
 
     while (!_done && !_cancelled) {
       Uni.update();
+      UartFM.poll(); // read remote input so nav works in this dialog
+      if (Mirror.dirty()) Mirror.pump(); // flush only when this overlay redrew
 
       if (millis() - _lastBlinkTime >= BLINK_MS) {
         _cursorVisible = !_cursorVisible; _lastBlinkTime = millis();
@@ -340,6 +343,8 @@ private:
 
     while (!_done && !_cancelled) {
       Uni.update();
+      UartFM.poll(); // read remote input so nav works in this dialog
+      if (Mirror.dirty()) Mirror.pump(); // flush only when this overlay redrew
 
       if (millis() - lastBlink >= BLINK_MS) {
         cursorOn  = !cursorOn;

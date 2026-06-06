@@ -223,11 +223,12 @@ $('connect').onclick = async () => {
 $('start').onclick = () => { send(buildFrame(CTX_REMOTE, C_SCR_START, 1, new Uint8Array([10]))); log('→ START fps=10'); };
 $('stop').onclick  = () => { send(buildFrame(CTX_REMOTE, C_SCR_STOP, 2, null)); log('→ STOP'); };
 
-// ── Remote control: keyboard / canvas-click → C_SCR_INPUT (6-way nav) ─────────
+// ── Remote control: keyboard / canvas-click → C_SCR_INPUT ────────────────────
+// payload = [dir, event]; event 0=tap, 1=hold-down, 2=hold-up.
 let inputSeq = 10;
-function sendDir(dir, label) {
+function sendDir(dir, label, ev = 0) {
   if (!writer) return;
-  send(buildFrame(CTX_REMOTE, C_SCR_INPUT, (inputSeq = (inputSeq + 1) & 0xff), new Uint8Array([dir])));
+  send(buildFrame(CTX_REMOTE, C_SCR_INPUT, (inputSeq = (inputSeq + 1) & 0xff), new Uint8Array([dir, ev])));
   log('→ ' + label);
 }
 const KEYMAP = {
@@ -237,8 +238,15 @@ const KEYMAP = {
   Escape: [DIR_BACK, 'BACK'], Backspace: [DIR_BACK, 'BACK'],
 };
 window.addEventListener('keydown', (e) => {
+  if (!writer) return;
+  // "m" = one-shot long-press of select (opens FileManager-style hold menus).
+  if (e.key === 'm' || e.key === 'M') {
+    e.preventDefault();
+    if (!e.repeat) sendDir(DIR_PRESS, 'HOLD', 1); // single press, ignore key-repeat
+    return;
+  }
   const m = KEYMAP[e.key];
-  if (!m || !writer) return;
+  if (!m) return;
   e.preventDefault();
   sendDir(m[0], m[1]);
 });

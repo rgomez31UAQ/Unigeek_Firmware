@@ -19,7 +19,9 @@ public:
   // SRAM is reclaimed (FM core ~8 KB, screen codec tiny + ~8 KB band only while
   // actively streaming).
   void begin(bool fmEnabled, bool mirrorEnabled);
-  void update();             // no-op until begin() has run
+  void update();             // poll incoming + pump outgoing (main loop)
+  void poll();               // poll incoming only — for use inside blocking
+                             // loops (input dialogs) so remote control still works
   bool isActive() const { return _fm != nullptr || _scr != nullptr; }
 
 private:

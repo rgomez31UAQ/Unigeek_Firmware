@@ -20,12 +20,17 @@ void UartFileManager::begin(bool fmEnabled, bool mirrorEnabled) {
   }
 }
 
-void UartFileManager::update() {
+void UartFileManager::poll() {
   if (!_fm && !_scr) return;
   while (Serial.available() > 0) {
     uint8_t b = (uint8_t)Serial.read();
     if (_fm)  _fm->onByte(b);   // ctx 'F'
     if (_scr) _scr->onByte(b);  // ctx 'S' (each ignores the other's frames)
   }
-  if (_fm) _fm->pump();
+}
+
+void UartFileManager::update() {
+  poll();
+  if (_fm)  _fm->pump();
+  if (_scr) _scr->pump();       // flush mirror dirty region (no-op when clean)
 }
