@@ -130,6 +130,8 @@ export default function RemoteAccessClient() {
   const seqRef    = useRef(10);
   const capsRef   = useRef({ touch: false, keyboard: false });
   const swapRef   = useRef(false);
+  const helloTimerRef = useRef(null); // detects a device with Screen Mirror off
+  const gotHelloRef   = useRef(false);
   const streamingRef = useRef(false);
 
   const log = useCallback((msg) => {
@@ -149,6 +151,8 @@ export default function RemoteAccessClient() {
     const ctx2d = ctx2dRef.current;
 
     if (type === T_HELLO) {
+      gotHelloRef.current = true;
+      if (helloTimerRef.current) { clearTimeout(helloTimerRef.current); helloTimerRef.current = null; }
       const w = rd16(p, 0), h = rd16(p, 2);
       const cbyte = p[5] || 0;
       const touch = !!(cbyte & CAP_TOUCH);
@@ -205,6 +209,7 @@ export default function RemoteAccessClient() {
 
   // ── Connection lifecycle ──────────────────────────────────────────────────────
   const disconnect = useCallback(async () => {
+    if (helloTimerRef.current) { clearTimeout(helloTimerRef.current); helloTimerRef.current = null; }
     streamingRef.current = false;
     setStreaming(false);
     try { if (writerRef.current) writeFrame(C_STOP, null); } catch (_) {}
@@ -262,11 +267,22 @@ export default function RemoteAccessClient() {
     })();
 
     // Begin mirroring immediately — the device replies with HELLO then frames.
+    gotHelloRef.current = false;
     writeFrame(C_START, null);
     streamingRef.current = true;
     setStreaming(true);
     log('stream started');
     canvasRef.current?.focus();
+
+    // No HELLO ⇒ the device has Screen Mirror (and likely Serial File Manager)
+    // turned off, so nothing is consuming the stream. Tell the user and bail.
+    helloTimerRef.current = setTimeout(() => {
+      helloTimerRef.current = null;
+      if (!gotHelloRef.current) {
+        setErrorMsg('No response from the device. Turn on “Screen Mirror” in the device Settings (Settings → Screen Mirror), then reconnect.');
+        disconnect();
+      }
+    }, 3000);
   }, [onFrame, log, disconnect, writeFrame]);
 
   const startStream = useCallback(() => {

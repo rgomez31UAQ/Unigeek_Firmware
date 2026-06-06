@@ -592,9 +592,18 @@ export default function FileManagerClient({ expectedVersion }) {
       await refreshDir('/');
       setStatus(STATUS.CONNECTED);
     } catch (err) {
-      pushLog(`error: ${err.message || err}`);
-      setErrorMsg(err.message || String(err));
+      const raw = err?.message || String(err);
+      pushLog(`error: ${raw}`);
+      // A timeout right after the port opened means nothing is answering FM
+      // commands — almost always the device setting is off.
+      const msg = /timed out|timeout/i.test(raw)
+        ? 'No response from the device. Turn on “Serial File Manager” in the device Settings (Settings → Serial File Manager), then reconnect.'
+        : raw;
+      setErrorMsg(msg);
       setStatus(STATUS.ERROR);
+      // Release the opened port so the next Connect starts clean.
+      try { if (transportRef.current) await transportRef.current.disconnect(); } catch (_) {}
+      transportRef.current = null;
     }
   }, [getTransport, fetchInfo, refreshDir, pushLog]);
 
