@@ -23,6 +23,8 @@
 class WikipediaScreen : public ListScreen
 {
 public:
+  explicit WikipediaScreen(bool readOnly = false) : _readOnly(readOnly) {}
+
   const char* title() override { return _titleBuf; }
 
   void onInit() override;
@@ -105,6 +107,7 @@ private:
 
   uint32_t _navReadyAt = 0;   // drain ghost-presses after blocking HTTP/input
   bool     _holdFired  = false;
+  bool     _readOnly   = false;
 
   // States / actions
   void _showMenu();

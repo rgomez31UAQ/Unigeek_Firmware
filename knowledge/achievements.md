@@ -21,7 +21,7 @@ Unlocking an achievement shows a toast notification at the bottom of the screen 
 
 ## Ranks
 
-Total possible EXP across all achievements: **99 100** (238 entries).
+Total possible EXP across all achievements: **100 300** (246 entries).
 
 | Rank | EXP Required | % of Total |
 |------|-------------|-----------|
@@ -72,7 +72,7 @@ If no title has been set, it shows `[RANK] No Title` by default.
 
 | # | Domain | Achievements |
 |---|--------|-------------:|
-| 0 | WiFi Network | 20 |
+| 0 | WiFi Network | 28 |
 | 1 | WiFi Attacks | 54 |
 | 2 | Bluetooth | 16 |
 | 3 | HID | 12 |
@@ -85,7 +85,7 @@ If no title has been set, it shows `[RANK] No Title` by default.
 | 10 | Games | 31 |
 | 11 | Settings | 4 |
 | 12 | Chameleon | 34 |
-| | **Total** | **238** |
+| | **Total** | **246** |
 
 ---
 
@@ -113,6 +113,14 @@ If no title has been set, it shows `[RANK] No Title` by default.
 | Payload Collector | WiFi Network | Silver | 300 |
 | Time Lord | WiFi Network | Bronze | 100 |
 | WiGLE Curious | WiFi Network | Bronze | 100 |
+| Encyclopedist | WiFi Network | Bronze | 100 |
+| First Read | WiFi Network | Bronze | 100 |
+| Bookworm | WiFi Network | Silver | 300 |
+| Lucky Dip | WiFi Network | Bronze | 100 |
+| History Buff | WiFi Network | Bronze | 100 |
+| Bookmarked | WiFi Network | Bronze | 100 |
+| Pass It On | WiFi Network | Bronze | 100 |
+| Polyglot | WiFi Network | Silver | 300 |
 | Fake Hotspot | WiFi Attacks | Bronze | 100 |
 | First Guest | WiFi Attacks | Silver | 300 |
 | Disconnector | WiFi Attacks | Bronze | 100 |

@@ -136,6 +136,15 @@ void WikipediaScreen::onBack() {
 
 void WikipediaScreen::onItemSelected(uint8_t index) {
   if (_state == STATE_MENU) {
+    if (_readOnly) {
+      switch (index) {
+        case 0: _showFavorites();  break;
+        case 1: _showAllCached();  break;
+        case 2: _searchCached();   break;
+        case 3: _chooseLanguage(); break;
+      }
+      return;
+    }
     switch (index) {
       case 0: _doSearch();       break;
       case 1: _showRandom();     break;
@@ -216,6 +225,16 @@ void WikipediaScreen::_showMenu() {
   _state = STATE_MENU;
   strcpy(_titleBuf, "Wikipedia");
   _langSub = _langName(_langCode());
+
+  if (_readOnly) {
+    _menuItems[0] = { "Favorite",      nullptr };
+    _menuItems[1] = { "All Cached",    nullptr };
+    _menuItems[2] = { "Search Cached", nullptr };
+    _menuItems[3] = { "Language",      _langSub.c_str() };
+    setItems(_menuItems, 4);
+    return;
+  }
+
   _menuItems[6] = { "Language", _langSub.c_str() };
   setItems(_menuItems, 7);
 }

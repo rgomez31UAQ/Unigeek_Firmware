@@ -10,6 +10,7 @@
 #include "screens/utility/UartTerminalScreen.h"
 #include "screens/utility/PomodoroScreen.h"
 #include "screens/utility/RandomLinePickerScreen.h"
+#include "screens/wifi/network/WikipediaScreen.h"
 #ifdef DEVICE_HAS_WEBAUTHN
 #include "screens/utility/webauthn/WebAuthnManageScreen.h"
 #endif
@@ -37,6 +38,7 @@ void UtilityMenuScreen::onItemSelected(uint8_t index) {
     case 7: Screen.push(new UartTerminalScreen());     break;
     case 8: Screen.push(new PomodoroScreen());         break;
     case 9: Screen.push(new RandomLinePickerScreen()); break;
+    case 10: Screen.push(new WikipediaScreen(true));   break;
   }
 #else
   switch (index) {
@@ -49,6 +51,7 @@ void UtilityMenuScreen::onItemSelected(uint8_t index) {
     case 6: Screen.push(new UartTerminalScreen());     break;
     case 7: Screen.push(new PomodoroScreen());         break;
     case 8: Screen.push(new RandomLinePickerScreen()); break;
+    case 9: Screen.push(new WikipediaScreen(true));    break;
   }
 #endif
 }

@@ -40,6 +40,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
   - **Information** — View connection details (IP, gateway, DNS, MAC, signal strength)
   - **WiFi QRCode** — Generate a QR code for the connected network to share credentials
   - **World Clock** — Display current time synced via NTP across multiple time zones
+  - **Wikipedia** — Browse Wikipedia over WiFi: search (paged 50/page), Random Article, On This Day (events for the RTC date), Search/All Cached, and Favorites; long-press a result for Open / Favorite / Share QR; articles cache per language under `/unigeek/wikipedia/<lang>/` and open in the file viewer; 21 Latin-script editions (picker persisted via `wiki_lang`), UTF-8 transliterated to ASCII for the TFT ([details](knowledge/wikipedia.md))
   - **IP Scanner** — Scan the local network for active devices
   - **Port Scanner** — Scan open ports on a target IP address
   - **Web File Manager** — Manage device files from a browser over WiFi; verify and save WPA passwords against captured handshakes (`saveCrack`); browse and stream wordlists from device storage; browser-side PBKDF2 crack engine via embedded `crack.wasm` ([details](knowledge/web-file-manager.md))
@@ -122,6 +123,11 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; directories sorted first then alphabetical; tap a file to view its contents; hold 1s to open context menu
 - **File Hex Viewer** — View any file as a scrollable hex dump with offset, hex byte columns, and ASCII representation
 - **Remote Access** — Mirror the device screen in a browser and control it over USB serial from `https://unigeek.xid.run/app/remote` — navigate, type into inputs, and tap touch screens; works on write-only panels via lightweight region streaming; requires the **Screen Mirror** setting on ([details](knowledge/remote-access.md))
+- **Wikipedia** — Read-only access to articles already cached on storage; no WiFi and no downloading here — fetch new articles from **WiFi → Network → Wikipedia** ([details](knowledge/wikipedia.md))
+  - **Favorite** — Pinned articles across all languages (`favorites.txt`)
+  - **All Cached** — Every cached article in the current language
+  - **Search Cached** — Text-filter cached articles in the current language
+  - **Language** — Pick the Wikipedia edition; 21 Latin-script editions, persisted via `wiki_lang`
 - **Achievements** — View all achievements grouped by domain (13 domains, 244 entries, ≈ 99 100 EXP pool); shows tier (Bronze/Silver/Gold/Platinum), description, and unlock status; long-press an unlocked achievement to set it as your Agent Title ([details](knowledge/achievements.md))
 - **TOTP Auth** — Time-based one-time password authenticator; add accounts by name and Base32 secret, view live 6- or 8-digit codes with a countdown progress bar, hold an account row to view or delete it; keeps display on while viewing a code ([details](knowledge/totp-auth.md))
 - **UART Terminal** — Serial terminal over configurable GPIO pins; set baud rate, RX and TX GPIOs, switch between string and hex send mode (UP/DOWN toggle), send commands via dialog, receive data in real time, and pick a Log Mode: Off / File (`/unigeek/utility/uart/<name>.log`) / Stream AP / Stream Network (Telnet on TCP 23, up to 4 clients) ([details](knowledge/uart-terminal.md))
@@ -390,4 +396,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
-<!-- README last synced at commit: bb19800 (Remote Access — browser screen mirror + control over USB serial via the new Screen Mirror setting, lightweight region streaming on all boards; serial services now default off; web /app/remote page + setting-off guidance; USB Mass Storage documented at its own commit) -->
+<!-- README last synced at commit: d0c096d (Wikipedia browser under Network menu — paged search, Random Article, On This Day, cached articles, cross-language favorites, long-press context menu Open/Favorite/Share QR; 21 Latin-script editions transliterated to ASCII; per-language cache under /unigeek/wikipedia/<lang>/; FileViewerScreen now word-wraps .txt up to 110 KB / 3000 lines; 8 achievements idx 253–260) -->
