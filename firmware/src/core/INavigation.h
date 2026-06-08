@@ -49,8 +49,8 @@ public:
     if (!_suppressKeys) _doDrawOverlay();
   }
 
-  bool isPressed()          const { return _pressed; }
-  Direction currentDirection() const { return _currDirection; }
+  bool isPressed()          const { return _pressed || _injHeld; }
+  Direction currentDirection() const { return _injHeld ? _injDir : _currDirection; }
 
   bool wasPressed() {
     if (_wasPressed) {
@@ -67,10 +67,60 @@ public:
   }
 
   uint32_t pressDuration() const { return _pressDuration; }
-  uint32_t heldDuration()  const { return _pressed ? (millis() - _pressStart) : 0; }
+  uint32_t heldDuration()  const {
+    if (_injHeld) return millis() - _injStart;
+    return _pressed ? (millis() - _pressStart) : 0;
+  }
 
   void setSuppressKeys(bool s) { _suppressKeys = s; }
   bool suppressKeys() const    { return _suppressKeys; }
+
+  // Inject a synthetic tap of `dir` (e.g. from the web remote). Because the
+  // press/release state lives here in the base, this works on whatever board
+  // nav is active with no decorator: the next wasPressed()/readDirection()
+  // report a completed press of `dir`. Same-task as the screen poll, so no
+  // race. Taps only (no hold) — enough for 6-way menu navigation.
+  void inject(Direction dir) {
+    if (dir == DIR_NONE) return;
+    _wasPressed = true;
+    _releasedDirection = dir;
+  }
+
+  // Remote touch tap at a panel coordinate (web canvas click). Sets the last
+  // touch coords AND injects `dir` — the nav direction the touched zone maps to
+  // on touch boards (computed by the caller from the panel layout), or PRESS —
+  // so it behaves like a real panel touch: coordinate-reading screens (touch
+  // calibration, on-screen keyboards, Lua touch) use the coords, while zone-nav
+  // screens get the right direction. Same-task as the screen poll, so no race.
+  void injectTouch(int16_t x, int16_t y, Direction dir) {
+    _lastTouchX = x;
+    _lastTouchY = y;
+    _wasPressed = true;
+    _releasedDirection = (dir != DIR_NONE) ? dir : DIR_PRESS;
+  }
+
+  // One-shot remote long-press (web "m"). A single call holds `dir` for
+  // kInjectHoldMs so isPressed()/heldDuration() report a long hold — long-press
+  // handlers (FileManager / ListScreen "hold to open menu") fire — then
+  // serviceInject() auto-releases it, emitting the completed press. Tracked
+  // separately from hardware so the board's per-tick updateState never cancels
+  // it; no host key-up needed.
+  static constexpr uint32_t kInjectHoldMs = 1000;
+  void injectHold(Direction dir) {
+    if (dir == DIR_NONE) return;
+    _injHeld = true; _injDir = dir; _injStart = millis();
+  }
+
+  // Auto-release an expired injected hold. Called once per loop by
+  // Device::update() (cheap: one bool + time check).
+  void serviceInject() {
+    if (_injHeld && (millis() - _injStart) >= kInjectHoldMs) {
+      _injHeld = false;
+      _pressDuration = millis() - _injStart;
+      _wasPressed = true;
+      _releasedDirection = _injDir;
+    }
+  }
 
   int16_t lastTouchX() const { return _lastTouchX; }
   int16_t lastTouchY() const { return _lastTouchY; }
@@ -133,6 +183,12 @@ private:
 
   bool     _pressed         = false;
   bool     _wasPressed      = false;
+
+  // Injected held-press state (web remote long-press), separate from hardware.
+  bool      _injHeld  = false;
+  Direction _injDir   = DIR_NONE;
+  uint32_t  _injStart = 0;
+
   bool     _suppressKeys    = false;
   bool     _suppressRelease = false;
   bool     _rightHand       = false;

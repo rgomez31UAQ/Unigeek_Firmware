@@ -57,6 +57,7 @@ void SettingScreen::_refresh() {
 #endif
   _webPwdSub   = Config.get(APP_CONFIG_WEB_PASSWORD, APP_CONFIG_WEB_PASSWORD_DEFAULT);
   _serialFmSub = Config.get(APP_CONFIG_SERIAL_FM, APP_CONFIG_SERIAL_FM_DEFAULT).toInt() ? "On" : "Off";
+  _screenMirrorSub = Config.get(APP_CONFIG_SCREEN_MIRROR, APP_CONFIG_SCREEN_MIRROR_DEFAULT).toInt() ? "On" : "Off";
 
   _items[SETT_NAME].sublabel         = _nameSub.c_str();
   _items[SETT_DISP_OFF_EN].sublabel  = _dispOffEnSub.c_str();
@@ -84,6 +85,7 @@ void SettingScreen::_refresh() {
 #endif
   _items[SETT_WEB_PASSWORD].sublabel = _webPwdSub.c_str();
   _items[SETT_SERIAL_FM].sublabel    = _serialFmSub.c_str();
+  _items[SETT_SCREEN_MIRROR].sublabel = _screenMirrorSub.c_str();
 
   render();
 }
@@ -250,8 +252,20 @@ void SettingScreen::onItemSelected(uint8_t index) {
       Config.save(Uni.Storage);
       // Toggling the RX FIFO size + freeing the core needs a clean Serial
       // restart, so it's applied on next boot rather than live.
-      ShowStatusAction::show(cur ? "Serial FM off\nRestart to apply"
-                                 : "Serial FM on\nRestart to apply", 1500);
+      ShowStatusAction::show(cur ? "Serial FM off, restart to apply"
+                                 : "Serial FM on, restart to apply", 1500);
+      _refresh();
+      break;
+    }
+
+    case SETT_SCREEN_MIRROR: {
+      bool cur = Config.get(APP_CONFIG_SCREEN_MIRROR, APP_CONFIG_SCREEN_MIRROR_DEFAULT).toInt();
+      Config.set(APP_CONFIG_SCREEN_MIRROR, cur ? "0" : "1");
+      Config.save(Uni.Storage);
+      // The screen-stream codec is allocated at boot, so toggling applies on
+      // next restart (off = its RAM is never claimed).
+      ShowStatusAction::show(cur ? "Screen Mirror off, restart to apply"
+                                 : "Screen Mirror on, restart to apply", 1500);
       _refresh();
       break;
     }

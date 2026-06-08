@@ -128,8 +128,8 @@ public:
     _available = true;
   }
 
-  bool available() override { return _available; }
-  char peekKey()   override { return _key; }
+  bool available() override { return _injAvail() || _available; }
+  char peekKey()   override { return _injAvail() ? _injPeek() : _key; }
 
   uint8_t modifiers() override {
     uint8_t m = MOD_NONE;
@@ -140,6 +140,7 @@ public:
   }
 
   char getKey() override {
+    if (_injAvail()) return _injTake();
     char k     = _key;
     _key       = 0;
     _available = false;

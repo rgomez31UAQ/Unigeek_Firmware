@@ -22,6 +22,7 @@
 #pragma once
 
 #include "core/Device.h"
+#include "utils/uart/UartFileManager.h"
 #include "core/ConfigManager.h"
 #include "utils/crypto/Bip39.h"
 #include "utils/crypto/Bip39Wordlist.h"
@@ -424,6 +425,8 @@ private:
 
     while (!_done && !_cancelled) {
       Uni.update();
+      UartFM.poll(); // read remote input so nav works in this dialog
+      if (Mirror.dirty()) Mirror.pump(); // flush only when this overlay redrew
 
       auto tryCommit = [&]() {
         // Exact word match always commits, even when the prefix matches
@@ -509,6 +512,8 @@ private:
 
     while (!_done && !_cancelled) {
       Uni.update();
+      UartFM.poll(); // read remote input so nav works in this dialog
+      if (Mirror.dirty()) Mirror.pump(); // flush only when this overlay redrew
 
 #ifdef DEVICE_HAS_TOUCH_NAV
       // Hover-highlight: while a finger is currently on the grid, snap the

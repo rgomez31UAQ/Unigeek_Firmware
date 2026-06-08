@@ -47,7 +47,9 @@
 #define APP_CONFIG_TOUCH_CALIBRATED             "cyd_touch_calibrated"
 #define APP_CONFIG_TOUCH_CALIBRATED_DEFAULT     "0"
 #define APP_CONFIG_SERIAL_FM                    "serial_fm"
-#define APP_CONFIG_SERIAL_FM_DEFAULT            "1"
+#define APP_CONFIG_SERIAL_FM_DEFAULT            "0"
+#define APP_CONFIG_SCREEN_MIRROR                "screen_mirror"
+#define APP_CONFIG_SCREEN_MIRROR_DEFAULT        "0"
 #define APP_CONFIG_WIKI_LANG                    "wiki_lang"
 #define APP_CONFIG_WIKI_LANG_DEFAULT            "en"
 

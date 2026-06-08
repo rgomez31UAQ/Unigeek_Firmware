@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/Device.h"
+#include "utils/uart/UartFileManager.h"
 #include "core/ConfigManager.h"
 
 class InputSelectAction
@@ -107,6 +108,8 @@ private:
 
     while (!_done) {
       Uni.update();
+      UartFM.poll(); // read remote input so nav works in this dialog
+      if (Mirror.dirty()) Mirror.pump(); // flush only when this overlay redrew
 
       if (Uni.Nav->wasPressed()) {
         switch (Uni.Nav->readDirection()) {

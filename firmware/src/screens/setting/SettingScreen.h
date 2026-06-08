@@ -50,6 +50,7 @@ private:
 #endif
     SETT_WEB_PASSWORD,
     SETT_SERIAL_FM,
+    SETT_SCREEN_MIRROR,
     SETT_PIN_SETTING,
     SETT_DEVICE_STATUS,
     SETT_ABOUT,
@@ -82,6 +83,7 @@ private:
 #endif
   String _webPwdSub;
   String _serialFmSub;
+  String _screenMirrorSub;
 
   ListItem _items[SETT_COUNT] = {
     {"Name",             ""},
@@ -115,6 +117,7 @@ private:
 #endif
     {"Web Password",     ""},
     {"Serial File Manager", ""},
+    {"Screen Mirror",    ""},
     {"Pin Setting"},
     {"Device Status"},
     {"About"},

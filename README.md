@@ -121,6 +121,7 @@ Multi-tool firmware for ESP32-based handheld devices. Built with PlatformIO + Ar
 - **Barcode** — Generate and display a Code 128 barcode from typed or file-loaded text
 - **File Manager** — Browse, rename, copy, cut, paste, and delete files and folders on storage; directories sorted first then alphabetical; tap a file to view its contents; hold 1s to open context menu
 - **File Hex Viewer** — View any file as a scrollable hex dump with offset, hex byte columns, and ASCII representation
+- **Remote Access** — Mirror the device screen in a browser and control it over USB serial from `https://unigeek.xid.run/app/remote` — navigate, type into inputs, and tap touch screens; works on write-only panels via lightweight region streaming; requires the **Screen Mirror** setting on ([details](knowledge/remote-access.md))
 - **Achievements** — View all achievements grouped by domain (13 domains, 244 entries, ≈ 99 100 EXP pool); shows tier (Bronze/Silver/Gold/Platinum), description, and unlock status; long-press an unlocked achievement to set it as your Agent Title ([details](knowledge/achievements.md))
 - **TOTP Auth** — Time-based one-time password authenticator; add accounts by name and Base32 secret, view live 6- or 8-digit codes with a countdown progress bar, hold an account row to view or delete it; keeps display on while viewing a code ([details](knowledge/totp-auth.md))
 - **UART Terminal** — Serial terminal over configurable GPIO pins; set baud rate, RX and TX GPIOs, switch between string and hex send mode (UP/DOWN toggle), send commands via dialog, receive data in real time, and pick a Log Mode: Off / File (`/unigeek/utility/uart/<name>.log`) / Stream AP / Stream Network (Telnet on TCP 23, up to 4 clients) ([details](knowledge/uart-terminal.md))
@@ -239,7 +240,8 @@ Full-screen profile accessible from the main menu. Displays:
 - Navigation sound toggle
 - Theme color
 - Web file manager password
-- Serial File Manager — enable/disable the always-on USB-serial file manager (used by `https://unigeek.xid.run/app/files`); on by default, turn off to reclaim ~12 KB of internal SRAM on no-PSRAM boards (applied on restart)
+- Serial File Manager — enable/disable the USB-serial file manager (used by `https://unigeek.xid.run/app/files`); **off by default** to save ~12 KB of internal SRAM on no-PSRAM boards, turn on to manage files over USB (applied on restart)
+- Screen Mirror — enable/disable the USB-serial screen mirror + remote control (used by `https://unigeek.xid.run/app/remote`); off by default, turn on to mirror and drive the device from a browser (applied on restart)
 - Pin configuration (GPS TX/RX/baud, external I2C SDA/SCL, CC1101 CS/GDO0, NRF24 CE/CSN) — also accessible from Modules menu
 - Navigation mode — Default or Encoder (M5StickC Plus only)
 - Hand orientation — Left/Right toggle that rotates the display and swaps UP/DOWN (M5StickC Plus 1.1, Plus 2, StickC S3)
@@ -388,4 +390,4 @@ This project was built with inspiration and reference from:
 - [LilyGoLib](https://github.com/Xinyuan-LilyGO/LilyGoLib) — Hardware reference for LilyGO T-Lora Pager
 - [M5Unified](https://github.com/m5stack/M5Unified) — Hardware reference for M5Stack devices (speaker, display, power)
 
-<!-- README last synced at commit: dfaab75 (uni.subghz Lua binding — auto-detect CC1101 / M5 RF433 facade with receive/send/scan/jam + Flipper .sub parse/format; Serial File Manager Settings toggle saves ~12KB SRAM; BLE-FM full URL display; website GA4 + install/download event tracking) -->
+<!-- README last synced at commit: bb19800 (Remote Access — browser screen mirror + control over USB serial via the new Screen Mirror setting, lightweight region streaming on all boards; serial services now default off; web /app/remote page + setting-off guidance; USB Mass Storage documented at its own commit) -->

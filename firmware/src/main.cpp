@@ -211,18 +211,24 @@ void setup() {
   Uni.initStorage();
   Config.load(Uni.Storage);   // load early so optional services can be gated
 
-  // Serial File Manager — optional always-on USB service. When disabled it's
-  // skipped entirely, reclaiming ~12 KB internal SRAM (8 KB FileManagerCore
-  // frame buffer + 4 KB Serial RX FIFO) — meaningful on no-PSRAM boards.
-  // UartFileManager streams up to ~1 KB per frame, so the 256-byte default RX
-  // FIFO would overflow before loop() can drain it (breaking upload CRCs);
-  // grow it to 4 KB only when the service is on. Resizing needs a Serial
-  // restart because setRxBufferSize() is ignored once the driver is installed.
-  if (Config.get(APP_CONFIG_SERIAL_FM, APP_CONFIG_SERIAL_FM_DEFAULT).toInt()) {
+  // Optional always-on USB serial services, each disabled by default-aware
+  // config so its SRAM is only claimed when on (meaningful on no-PSRAM boards):
+  //   Serial File Manager (ctx 'F') — ~8 KB core + needs a 4 KB RX FIFO because
+  //     it streams up to ~1 KB per frame; the 256-byte default would overflow
+  //     before loop() drains it. Resizing needs a Serial restart (setRxBufferSize
+  //     is ignored once the driver is installed).
+  //   Screen Mirror (ctx 'S') — off by default; tiny RX, +~8 KB band only while
+  //     actively streaming. Only receives short commands, so no RX growth needed.
+  bool fmOn     = Config.get(APP_CONFIG_SERIAL_FM, APP_CONFIG_SERIAL_FM_DEFAULT).toInt();
+  bool mirrorOn = Config.get(APP_CONFIG_SCREEN_MIRROR, APP_CONFIG_SCREEN_MIRROR_DEFAULT).toInt();
+  Mirror.setEnabled(mirrorOn); // master gate: off ⇒ no codec, no buffer, taps all no-op
+  if (fmOn) {
     Serial.end();
     Serial.setRxBufferSize(4096);
     Serial.begin(115200);
-    UartFM.begin();
+  }
+  if (fmOn || mirrorOn) {
+    UartFM.begin(fmOn, mirrorOn);
   }
 #ifdef DEVICE_HAS_RTC
   RtcManager::syncSystemFromRtc();

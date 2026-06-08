@@ -47,6 +47,7 @@ public:
     boardHook();
     if (Keyboard) Keyboard->update();
     Nav->update();
+    Nav->serviceInject(); // auto-release an expired remote long-press (cheap)
 
     // Track activity for power saving — works inside blocking actions too
     bool active = Nav->isPressed();
