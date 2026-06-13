@@ -16,7 +16,7 @@ public:
 
 private:
   static constexpr unsigned long BTN_DEBOUNCE_MS = 150;
-  static constexpr int           SCROLL_THRESH   = 1;
+  static constexpr int           SCROLL_THRESH   = 0;
 
   RotaryEncoder* _encoder     = nullptr;
   int            _lastPos     = 0;
