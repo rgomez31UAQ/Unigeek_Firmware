@@ -15,7 +15,10 @@ void NavigationImpl::begin() {
   pinMode(ENCODER_BTN, INPUT_PULLUP);
   pinMode(ENCODER_BK,  INPUT_PULLUP);
 
-  _encoder    = new RotaryEncoder(ENCODER_A, ENCODER_B, RotaryEncoder::LatchMode::FOUR3);
+  // TWO03 (2 latch points per cycle) is more tolerant of a dropped quadrature
+  // edge than FOUR3 (single latch on state 3): a bounced final edge delays the
+  // step by half a detent instead of losing the whole click.
+  _encoder    = new RotaryEncoder(ENCODER_A, ENCODER_B, RotaryEncoder::LatchMode::TWO03);
   _encoderPtr = _encoder;
 
   attachInterrupt(digitalPinToInterrupt(ENCODER_A), checkPosition, CHANGE);
@@ -50,18 +53,18 @@ void NavigationImpl::update() {
     updateState(DIR_BACK);
   } else if (_selStable) {
     updateState(DIR_PRESS);
-  } else if (_posDiff < -SCROLL_THRESH) {
+  } else if (_posDiff <= -DETENT_COUNTS) {
     updateState(DIR_DOWN);
 #ifdef DEVICE_T_EMBED_CC1101
     LedRing::addEncoderDelta(-1);
 #endif
-    _posDiff = 0;
-  } else if (_posDiff > SCROLL_THRESH) {
+    _posDiff += DETENT_COUNTS;   // carry remainder, don't discard
+  } else if (_posDiff >= DETENT_COUNTS) {
     updateState(DIR_UP);
 #ifdef DEVICE_T_EMBED_CC1101
     LedRing::addEncoderDelta(+1);
 #endif
-    _posDiff = 0;
+    _posDiff -= DETENT_COUNTS;   // carry remainder, don't discard
   } else {
     updateState(DIR_NONE);
   }
