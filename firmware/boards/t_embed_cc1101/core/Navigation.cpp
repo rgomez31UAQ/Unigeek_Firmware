@@ -55,15 +55,11 @@ void NavigationImpl::update() {
     updateState(DIR_PRESS);
   } else if (_posDiff <= -DETENT_COUNTS) {
     updateState(DIR_DOWN);
-#ifdef DEVICE_T_EMBED_CC1101
     LedRing::addEncoderDelta(-1);
-#endif
     _posDiff += DETENT_COUNTS;   // carry remainder, don't discard
   } else if (_posDiff >= DETENT_COUNTS) {
     updateState(DIR_UP);
-#ifdef DEVICE_T_EMBED_CC1101
     LedRing::addEncoderDelta(+1);
-#endif
     _posDiff -= DETENT_COUNTS;   // carry remainder, don't discard
   } else {
     updateState(DIR_NONE);

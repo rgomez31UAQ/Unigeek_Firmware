@@ -2,8 +2,6 @@
 // LilyGO T-Embed CC1101 — WS2812B encoder LED ring
 //
 
-#ifdef DEVICE_T_EMBED_CC1101
-
 #define FASTLED_INTERNAL   // silence the version banner pragma at compile time
 #include <FastLED.h>
 
@@ -83,5 +81,3 @@ void LedRing::update() {
     if (modeChanged) FastLED.clear(true);
   }
 }
-
-#endif // DEVICE_T_EMBED_CC1101

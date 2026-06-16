@@ -7,8 +7,6 @@
 
 #pragma once
 
-#ifdef DEVICE_T_EMBED_CC1101
-
 class LedRing {
 public:
   void begin();                        // idempotent FastLED init
@@ -22,5 +20,3 @@ private:
 };
 
 extern LedRing ledRing;
-
-#endif // DEVICE_T_EMBED_CC1101
