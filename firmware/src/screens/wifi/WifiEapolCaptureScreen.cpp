@@ -276,9 +276,13 @@ void WifiEapolCaptureScreen::_selectWifi() {
 
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
-  // 770 ms per channel × 13 channels ≈ 10 s — long sweep so weaker / less
-  // chatty APs have time to broadcast at least one beacon per channel.
-  const int total = WiFi.scanNetworks(false, false, false, 770, 0);
+  // Long-ish sweep so weaker / less chatty APs get airtime, but the per-channel
+  // dwell MUST stay under the framework's hard 10 s sync-scan timeout
+  // (WiFiScan.cpp waits WIFI_SCAN_DONE_BIT for 10000 ms, else WIFI_SCAN_FAILED).
+  // 600 ms × up to 14 channels = 8.4 s — comfortably below 10 s. The previous
+  // 770 ms × 13 channels = 10.01 s tipped over the timeout in 13-channel
+  // regulatory domains (EU/BR), so every scan returned "No networks found".
+  const int total = WiFi.scanNetworks(false, false, false, 600, 0);
 
   if (total <= 0) {
     ShowStatusAction::show("No networks found");
