@@ -64,6 +64,15 @@ void PinSettingScreen::onInit() {
   _map[_itemCount] = PIN_PN532_BAUD;
   _itemCount++;
 
+  // IR Remote pins (moved here from the IR Remote screen)
+  _items[_itemCount] = {"IR TX Pin", ""};
+  _map[_itemCount] = PIN_IR_TX;
+  _itemCount++;
+
+  _items[_itemCount] = {"IR RX Pin", ""};
+  _map[_itemCount] = PIN_IR_RX;
+  _itemCount++;
+
 #ifdef GROVE_5V_OUTPUT
   _items[_itemCount] = {"Grove 5V", ""};
   _map[_itemCount] = PIN_GROVE_5V;
@@ -87,6 +96,8 @@ void PinSettingScreen::_refresh() {
   _pn532TxSub = PinConfig.get(PIN_CONFIG_PN532_TX, PIN_CONFIG_PN532_TX_DEFAULT);
   _pn532RxSub = PinConfig.get(PIN_CONFIG_PN532_RX, PIN_CONFIG_PN532_RX_DEFAULT);
   _pn532BaudSub = PinConfig.get(PIN_CONFIG_PN532_BAUD, PIN_CONFIG_PN532_BAUD_DEFAULT);
+  _irTxSub = PinConfig.get(PIN_CONFIG_IR_TX, PIN_CONFIG_IR_TX_DEFAULT);
+  _irRxSub = PinConfig.get(PIN_CONFIG_IR_RX, PIN_CONFIG_IR_RX_DEFAULT);
   _grove5VSub = PinConfig.get(PIN_CONFIG_GROVE_5V, PIN_CONFIG_GROVE_5V_DEFAULT);
 
   for (uint8_t i = 0; i < _itemCount; i++) {
@@ -103,6 +114,8 @@ void PinSettingScreen::_refresh() {
       case PIN_PN532_TX:    _items[i].sublabel = _pn532TxSub.c_str(); break;
       case PIN_PN532_RX:    _items[i].sublabel = _pn532RxSub.c_str(); break;
       case PIN_PN532_BAUD:  _items[i].sublabel = _pn532BaudSub.c_str(); break;
+      case PIN_IR_TX:       _items[i].sublabel = _irTxSub.c_str(); break;
+      case PIN_IR_RX:       _items[i].sublabel = _irRxSub.c_str(); break;
       case PIN_GROVE_5V: _items[i].sublabel = _grove5VSub.c_str(); break;
     }
   }
@@ -218,6 +231,24 @@ void PinSettingScreen::onItemSelected(uint8_t index) {
       int val = InputNumberAction::popup("PN532 Baud Rate", 9600, 921600, cur);
       if (!InputNumberAction::wasCancelled()) {
         PinConfig.set(PIN_CONFIG_PN532_BAUD, String(val));
+        PinConfig.save(Uni.Storage);
+      }
+      break;
+    }
+    case PIN_IR_TX: {
+      int cur = PinConfig.getInt(PIN_CONFIG_IR_TX, PIN_CONFIG_IR_TX_DEFAULT);
+      int val = InputNumberAction::popup("IR TX Pin", -1, 48, cur);
+      if (!InputNumberAction::wasCancelled()) {
+        PinConfig.set(PIN_CONFIG_IR_TX, String(val));
+        PinConfig.save(Uni.Storage);
+      }
+      break;
+    }
+    case PIN_IR_RX: {
+      int cur = PinConfig.getInt(PIN_CONFIG_IR_RX, PIN_CONFIG_IR_RX_DEFAULT);
+      int val = InputNumberAction::popup("IR RX Pin", -1, 48, cur);
+      if (!InputNumberAction::wasCancelled()) {
+        PinConfig.set(PIN_CONFIG_IR_RX, String(val));
         PinConfig.save(Uni.Storage);
       }
       break;

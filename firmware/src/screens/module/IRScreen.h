@@ -33,19 +33,14 @@ private:
   int8_t _rxPin = -1;
   char _titleBuf[32] = "IR Remote";
 
-  // Menu
-  ListItem _menuItems[5] = {
-    {"TX Pin"},
-    {"RX Pin"},
+  // Menu — IR TX/RX pins are configured under Settings > Pin Setting.
+  ListItem _menuItems[3] = {
     {"Receive"},
     {"Send"},
     {"TV-B-Gone"},
   };
-  String _txPinSub;
-  String _rxPinSub;
 
   void _showMenu();
-  void _updatePinSublabels();
 
   // Receive state
   IRUtil::Signal _captured[IRUtil::MAX_SIGNALS];

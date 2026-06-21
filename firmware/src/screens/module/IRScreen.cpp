@@ -36,13 +36,6 @@ void IRScreen::onInit() {
   _showMenu();
 }
 
-void IRScreen::_updatePinSublabels() {
-  _txPinSub = (_txPin >= 0) ? String("GPIO ") + String(_txPin) : "Not set";
-  _rxPinSub = (_rxPin >= 0) ? String("GPIO ") + String(_rxPin) : "Not set";
-  _menuItems[0] = {"TX Pin", _txPinSub.c_str()};
-  _menuItems[1] = {"RX Pin", _rxPinSub.c_str()};
-}
-
 void IRScreen::_showMenu() {
   _state = STATE_MENU;
   _ir.end();
@@ -51,7 +44,9 @@ void IRScreen::_showMenu() {
   _irAmpEnable(true);
   #endif
   strncpy(_titleBuf, "IR Remote", sizeof(_titleBuf));
-  _updatePinSublabels();
+  // Re-read pins in case they were changed under Settings > Pin Setting.
+  _txPin = (int8_t)PinConfig.getInt(PIN_CONFIG_IR_TX, PIN_CONFIG_IR_TX_DEFAULT);
+  _rxPin = (int8_t)PinConfig.getInt(PIN_CONFIG_IR_RX, PIN_CONFIG_IR_RX_DEFAULT);
   setItems(_menuItems);
 }
 
@@ -139,29 +134,7 @@ void IRScreen::onBack() {
 void IRScreen::onItemSelected(uint8_t index) {
   if (_state == STATE_MENU) {
     switch (index) {
-      case 0: { // TX Pin
-        int pin = InputNumberAction::popup("TX Pin", -1, 48, _txPin);
-        if (!InputNumberAction::wasCancelled()) {
-          _txPin = (int8_t)pin;
-          PinConfig.set(PIN_CONFIG_IR_TX, String(_txPin));
-          PinConfig.save(Uni.Storage);
-        }
-        _updatePinSublabels();
-        render();
-        break;
-      }
-      case 1: { // RX Pin
-        int pin = InputNumberAction::popup("RX Pin", -1, 48, _rxPin);
-        if (!InputNumberAction::wasCancelled()) {
-          _rxPin = (int8_t)pin;
-          PinConfig.set(PIN_CONFIG_IR_RX, String(_rxPin));
-          PinConfig.save(Uni.Storage);
-        }
-        _updatePinSublabels();
-        render();
-        break;
-      }
-      case 2: { // Receive
+      case 0: { // Receive
         if (_rxPin < 0) {
           ShowStatusAction::show("Set RX pin first");
           render();
@@ -183,7 +156,7 @@ void IRScreen::onItemSelected(uint8_t index) {
         setItems(_recvItems, 0);  // prime pointer once; _showReceiveList uses setCount after this
         break;
       }
-      case 3: { // Send
+      case 1: { // Send
         if (_txPin < 0) {
           ShowStatusAction::show("Set TX pin first");
           render();
@@ -197,7 +170,7 @@ void IRScreen::onItemSelected(uint8_t index) {
         _loadBrowseDir(kRootPath);
         break;
       }
-      case 4: { // TV-B-Gone
+      case 2: { // TV-B-Gone
         if (_txPin < 0) {
           ShowStatusAction::show("Set TX pin first");
           render();

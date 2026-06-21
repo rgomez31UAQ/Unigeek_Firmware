@@ -22,7 +22,7 @@ private:
 
   BackFactory _backFn = nullptr;
 
-  static const uint8_t MAX_ITEMS = 14;
+  static const uint8_t MAX_ITEMS = 16;
   ListItem _items[MAX_ITEMS];
   uint8_t _itemCount = 0;
 
@@ -31,6 +31,7 @@ private:
                  PIN_CC1101_CS, PIN_CC1101_GDO0,
                  PIN_NRF24_CE, PIN_NRF24_CSN,
                  PIN_PN532_TX, PIN_PN532_RX, PIN_PN532_BAUD,
+                 PIN_IR_TX, PIN_IR_RX,
                  PIN_GROVE_5V };
   PinType _map[MAX_ITEMS];
 
@@ -46,5 +47,7 @@ private:
   String _pn532TxSub;
   String _pn532RxSub;
   String _pn532BaudSub;
+  String _irTxSub;
+  String _irRxSub;
   String _grove5VSub;
 };
