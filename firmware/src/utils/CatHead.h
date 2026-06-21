@@ -8,37 +8,37 @@
 // as HackerHead.h — so it stays crisp at any scale. Templated on the draw target
 // so it works with the LCD and a Sprite alike.
 //
-// The eyes are NOT baked into the base art: they are drawn on top so they can
-// blink (angry slant when open, a flat line when closed).
+// The cat is a single-colour silhouette, so the body colour is passed in by the
+// caller (Mascot.h feeds it the theme colour). The eyes are NOT baked into the
+// base art: they are drawn on top so they can blink (angry slant when open, a
+// flat line when closed).
 
 static constexpr int CAT_W = 19;
 static constexpr int CAT_H = 17;
 
-// '.' transparent · 'K' black outline · 'R' red body. Mouth is a black smile.
+// '.' transparent · 'K' black outline · 'B' body (theme-coloured, passed in).
 static const char* const CAT_ART[CAT_H] = {
   "....K.........K....",
-  "...KRK.......KRK...",
-  "...KRRK.....KRRK...",
-  "..KRRRK.....KRRRK..",
-  "..KRRRRKKKKKRRRRK..",
-  ".KRRRRRRRRRRRRRRRK.",
-  ".KRRRRRRRRRRRRRRRK.",
-  "KRRRRRRRRRRRRRRRRRK",
-  "KRRRRRRRRRRRRRRRRRK",
-  "KRRRRRRRRRRRRRRRRRK",
-  "KRRRRRRRRRRRRRRRRRK",
-  "KRRRRKRRRRRRRKRRRRK",   // smile corners (curl up)
-  "KRRRRRKKKKKKKRRRRRK",   // smile bottom
-  "KRRRRRRRRRRRRRRRRRK",
-  "..KRRRRRRRRRRRRRK..",
-  "...KKRRRRRRRRRKK...",
+  "...KBK.......KBK...",
+  "...KBBK.....KBBK...",
+  "..KBBBK.....KBBBK..",
+  "..KBBBBKKKKKBBBBK..",
+  ".KBBBBBBBBBBBBBBBK.",
+  ".KBBBBBBBBBBBBBBBK.",
+  "KBBBBBBBBBBBBBBBBBK",
+  "KBBBBBBBBBBBBBBBBBK",
+  "KBBBBBBBBBBBBBBBBBK",
+  "KBBBBBBBBBBBBBBBBBK",
+  "KBBBBKBBBBBBBKBBBBK",   // smile corners (curl up)
+  "KBBBBBKKKKKKKBBBBBK",   // smile bottom
+  "KBBBBBBBBBBBBBBBBBK",
+  "..KBBBBBBBBBBBBBK..",
+  "...KKBBBBBBBBBKK...",
   ".....KKKKKKKKK.....",
 };
 
-// Cat palette
-static constexpr uint16_t CAT_K = 0x0000;   // black
-static constexpr uint16_t CAT_R = 0xF800;   // red
-static constexpr uint16_t CAT_W_= 0xFFFF;   // white teeth
+// Cat palette (body colour is supplied at draw time)
+static constexpr uint16_t CAT_K = 0x0000;   // black outline / smile
 
 // angry-slant eyes (open) and the flat closed-eye line, as {col,row} cells
 static const int8_t CAT_EYE_OPEN[][2]   = {{3,8},{4,8},{5,8},{5,9},{6,9},
@@ -46,11 +46,11 @@ static const int8_t CAT_EYE_OPEN[][2]   = {{3,8},{4,8},{5,8},{5,9},{6,9},
 static const int8_t CAT_EYE_CLOSED[][2] = {{4,9},{5,9},{6,9},{12,9},{13,9},{14,9}};
 
 template<typename T>
-void catDrawEyes(T& dc, int ox, int oy, int ps, bool blink) {
+void catDrawEyes(T& dc, int ox, int oy, int ps, bool blink, uint16_t body) {
   auto cell = [&](int cx, int cy, uint16_t c) { dc.fillRect(ox + cx * ps, oy + cy * ps, ps, ps, c); };
-  // clear both eye rows back to red first (so a partial redraw can toggle blink)
+  // clear both eye rows back to the body colour first (so blink can toggle)
   for (int y = 8; y <= 9; y++)
-    for (int x = 3; x <= 15; x++) cell(x, y, CAT_R);
+    for (int x = 3; x <= 15; x++) cell(x, y, body);
   if (blink)
     for (auto& e : CAT_EYE_CLOSED) cell(e[0], e[1], CAT_K);
   else
@@ -58,18 +58,17 @@ void catDrawEyes(T& dc, int ox, int oy, int ps, bool blink) {
 }
 
 template<typename T>
-void catDrawHead(T& dc, int ox, int oy, int ps, bool blink) {
+void catDrawHead(T& dc, int ox, int oy, int ps, bool blink, uint16_t body) {
   auto cell = [&](int cx, int cy, uint16_t c) { dc.fillRect(ox + cx * ps, oy + cy * ps, ps, ps, c); };
   for (int y = 0; y < CAT_H; y++) {
     const char* row = CAT_ART[y];
     for (int x = 0; x < CAT_W; x++) {
       switch (row[x]) {
-        case 'K': cell(x, y, CAT_K);  break;
-        case 'R': cell(x, y, CAT_R);  break;
-        case 'W': cell(x, y, CAT_W_); break;
+        case 'K': cell(x, y, CAT_K); break;
+        case 'B': cell(x, y, body);  break;
         default: break;   // '.' transparent
       }
     }
   }
-  catDrawEyes(dc, ox, oy, ps, blink);
+  catDrawEyes(dc, ox, oy, ps, blink, body);
 }
