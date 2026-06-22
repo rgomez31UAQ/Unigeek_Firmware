@@ -65,4 +65,15 @@ private:
   void _selectFrequency();
   void _startScan();
   void _reloadMfcodes();
+
+  // ── Detect Freq history (last 5 detections, most-recent first) ──────────
+  // The live RSSI bar chart only reflects the current sweep, so a detected
+  // frequency vanishes the instant the signal stops. This keeps the last 5
+  // hits on screen, coloured by strength, until the next scan session.
+  struct DetectHit { float freq; int rssi; uint32_t when; };
+  static constexpr uint8_t kHistMax = 5;
+  DetectHit _hist[kHistMax]{};
+  uint8_t   _histCount = 0;
+  void _recordHit(float freq, int rssi);
+  void _clearHistory() { _histCount = 0; }
 };
