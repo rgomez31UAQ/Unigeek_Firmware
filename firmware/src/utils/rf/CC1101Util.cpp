@@ -234,6 +234,25 @@ void CC1101Util::_initRx() {
   pinMode(_gdo0Pin, INPUT);
 }
 
+// ── Fast RSSI sweep (Waterfall) ──────────────────────────────────────────────
+
+void CC1101Util::beginRssiSweep() {
+  if (!_initialized) return;
+  ELECHOUSE_cc1101.setRxBW(200);
+  ELECHOUSE_cc1101.SetRx();
+}
+
+int CC1101Util::rssiAt(float mhz) {
+  if (!_initialized) return -120;
+  ELECHOUSE_cc1101.setMHZ(mhz);
+  delayMicroseconds(250);  // PLL relock + AGC settle; too short smears signals
+  return ELECHOUSE_cc1101.getRssi();
+}
+
+void CC1101Util::endRssiSweep() {
+  if (_initialized) ELECHOUSE_cc1101.setSidle();
+}
+
 // ── Jammer TX ─────────────────────────────────────────────────────────────
 
 void CC1101Util::startTx() {

@@ -91,7 +91,7 @@ void SubGHzScreen::_updateSublabels() {
   } else {
     _mfcodesSub = "not loaded";
   }
-  _menuItems[5].sublabel = _mfcodesSub.c_str();
+  _menuItems[6].sublabel = _mfcodesSub.c_str();
 }
 
 void SubGHzScreen::_reloadMfcodes() {
@@ -119,7 +119,11 @@ void SubGHzScreen::_onMenuSelected(uint8_t index) {
       _startScan();
       return;
     }
-    case 2: { // Receive
+    case 2: { // Waterfall
+      _startWaterfall();
+      return;
+    }
+    case 3: { // Receive
       if (_csPin < 0 || _gdo0Pin < 0) {
         ShowStatusAction::show("Set CS and GDO0 pins first");
         render();
@@ -133,7 +137,7 @@ void SubGHzScreen::_onMenuSelected(uint8_t index) {
       _enterReceiveMode();
       return;
     }
-    case 3: { // Send
+    case 4: { // Send
       if (_csPin < 0) {
         ShowStatusAction::show("Set CS pin first");
         render();
@@ -142,11 +146,11 @@ void SubGHzScreen::_onMenuSelected(uint8_t index) {
       _enterBrowseMode();
       return;
     }
-    case 5: { // Mfcodes — reload + status popup
+    case 6: { // Mfcodes — reload + status popup
       _reloadMfcodes();
       return;
     }
-    case 4: { // Jammer
+    case 5: { // Jammer
       if (_csPin < 0 || _gdo0Pin < 0) {
         ShowStatusAction::show("Set CS and GDO0 pins first");
         render();
@@ -220,6 +224,7 @@ void SubGHzScreen::_startScan() {
 }
 
 bool SubGHzScreen::_onUpdateExtra() {
+  if (_state == STATE_WATERFALL) return _onUpdateWaterfall();
   if (_state != STATE_SCANNING) return false;
   if (Uni.Nav->wasPressed()) {
     auto dir = Uni.Nav->readDirection();
@@ -241,6 +246,7 @@ bool SubGHzScreen::_onUpdateExtra() {
 }
 
 bool SubGHzScreen::_onRenderExtra() {
+  if (_state == STATE_WATERFALL) return _onRenderWaterfall();
   if (_state != STATE_SCANNING) return false;
   auto& lcd = Uni.Lcd;
 
@@ -337,9 +343,175 @@ bool SubGHzScreen::_onRenderExtra() {
 }
 
 bool SubGHzScreen::_onBackExtra() {
+  if (_state == STATE_WATERFALL) {
+    _rf.endRssiSweep();
+    _rf.end();
+    _showMenu();
+    return true;
+  }
   if (_state != STATE_SCANNING) return false;
   _rf.endScan();
   _rf.end();
   _showMenu();
   return true;
 }
+
+// ── Waterfall: RSSI spectrogram ─────────────────────────────────────────────
+
+// Dark-floor heat ramp: weak/no-signal ≈ black, ramping blue → green → red as
+// the signal gets stronger, so real activity stands out against a dark
+// background (an inverted map would paint the noise floor solid green).
+uint16_t SubGHzScreen::_waterfallColor(int rssi) {
+  int level = map(constrain(rssi, -100, -35), -100, -35, 0, 255);  // 0 weak .. 255 strong
+  uint8_t r, g, b;
+  if (level < 64) {            // black → blue
+    r = 0;   g = 0;                    b = level * 4;
+  } else if (level < 128) {    // blue → green
+    r = 0;   g = (level - 64) * 4;     b = 255 - (level - 64) * 4;
+  } else if (level < 192) {    // green → yellow
+    r = (level - 128) * 4; g = 255;    b = 0;
+  } else {                     // yellow → red
+    r = 255; g = 255 - (level - 192) * 4; b = 0;
+  }
+  return Uni.Lcd.color565(r, g, b);
+}
+
+void SubGHzScreen::_pickWaterfallFreq(float& boundary) {
+  static constexpr InputSelectAction::Option freqOpts[] = {
+    {"300.00 MHz", "300"},    {"315.00 MHz", "315"},    {"345.00 MHz", "345"},
+    {"390.00 MHz", "390"},    {"433.00 MHz", "433"},    {"433.92 MHz", "433.92"},
+    {"434.00 MHz", "434"},    {"435.00 MHz", "435"},    {"438.00 MHz", "438"},
+    {"868.00 MHz", "868"},    {"868.35 MHz", "868.35"}, {"915.00 MHz", "915"},
+  };
+  char cur[12];
+  snprintf(cur, sizeof(cur), "%.2f", boundary);
+  const char* c = InputSelectAction::popup("Frequency", freqOpts, 12, cur);
+  if (c) boundary = atof(c);
+}
+
+void SubGHzScreen::_startWaterfall() {
+  if (_csPin < 0 || _gdo0Pin < 0) {
+    ShowStatusAction::show("Set CS and GDO0 pins first");
+    render();
+    return;
+  }
+
+  // Band-select loop: Start Waterfall / Start Freq / End Freq / Back.
+  while (true) {
+    char startLbl[24], endLbl[24];
+    snprintf(startLbl, sizeof(startLbl), "Start: %.2f MHz", _wfStart);
+    snprintf(endLbl,   sizeof(endLbl),   "End:   %.2f MHz", _wfEnd);
+    InputSelectAction::Option opts[4] = {
+      {"Start Waterfall", "run"},
+      {startLbl,          "start"},
+      {endLbl,            "end"},
+      {"Back",            "back"},
+    };
+    const char* c = InputSelectAction::popup("Waterfall", opts, 4);
+    if (!c || strcmp(c, "back") == 0) { render(); return; }
+    if (strcmp(c, "start") == 0)      { _pickWaterfallFreq(_wfStart); continue; }
+    if (strcmp(c, "end") == 0)        { _pickWaterfallFreq(_wfEnd);   continue; }
+    if (strcmp(c, "run") == 0)        { _runWaterfall(); return; }
+  }
+}
+
+void SubGHzScreen::_runWaterfall() {
+  if (_wfEnd < _wfStart) { float t = _wfStart; _wfStart = _wfEnd; _wfEnd = t; }
+  if (_wfEnd - _wfStart < 0.01f) _wfEnd = _wfStart + 0.01f;
+
+  if (!_rf.begin(Uni.Spi, _csPin, _gdo0Pin)) {
+    ShowStatusAction::show("CC1101 not found");
+    render();
+    return;
+  }
+  _rf.beginRssiSweep();
+
+  _wfLine      = 0;
+  _wfMaxRssi   = -120;
+  _wfMaxFreq   = _wfStart;
+  _wfLastMax   = millis();
+  _state       = STATE_WATERFALL;
+  _chromeDrawn = false;
+  strcpy(_titleBuf, "Waterfall");
+  render();
+}
+
+// Layout: header band (labels + max readout) on top, scrolling heat-map below.
+static constexpr int kWfHeaderH = 22;
+
+bool SubGHzScreen::_onUpdateWaterfall() {
+  if (Uni.Nav->wasPressed()) {
+    auto dir = Uni.Nav->readDirection();
+    if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
+      _rf.endRssiSweep();
+      _rf.end();
+      _showMenu();
+      return true;
+    }
+  }
+  render();  // each frame sweeps one fresh line (done in _onRenderWaterfall)
+  return true;
+}
+
+bool SubGHzScreen::_onRenderWaterfall() {
+  auto& lcd = Uni.Lcd;
+  const int w        = bodyW();
+  const int wfTop    = kWfHeaderH;            // body-relative y where heat-map starts
+  const int wfBottom = bodyH();
+  const int wfH      = wfBottom - wfTop;
+  if (wfH < 2) return true;
+
+  if (!_chromeDrawn) {
+    lcd.fillRect(bodyX(), bodyY(), bodyW(), bodyH(), TFT_BLACK);
+    _chromeDrawn = true;
+    _wfLine      = 0;
+  }
+
+  // Header: 4 frequency ticks across the band + control hint.
+  lcd.setTextSize(1);
+  lcd.setTextDatum(TL_DATUM);
+  for (int i = 0; i < 4; i++) {
+    int   x = i * (w / 4);
+    float f = _wfStart + (_wfEnd - _wfStart) * i / 4.0f;
+    lcd.drawFastVLine(bodyX() + x, bodyY() + wfTop, wfH, TFT_DARKGREY);
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    char fb[10];
+    snprintf(fb, sizeof(fb), "%.2f", f);
+    lcd.drawString(fb, bodyX() + x + 1, bodyY() + 1);
+  }
+
+  // Sweep one line across the band into a 1px-tall sprite.
+  const float step = (_wfEnd - _wfStart) / (float)w;
+  int   lineMaxRssi = -120;
+  float lineMaxFreq = _wfStart;
+
+  Sprite line(&lcd);
+  line.createSprite(w, 1);
+  for (int x = 0; x < w; x++) {
+    float f    = _wfStart + x * step;
+    int   rssi = _rf.rssiAt(f);
+    if (rssi > lineMaxRssi) { lineMaxRssi = rssi; lineMaxFreq = f; }
+    line.drawPixel(x, 0, _waterfallColor(rssi));
+  }
+  line.pushSprite(bodyX(), bodyY() + wfTop + _wfLine);
+  line.deleteSprite();
+
+  if (lineMaxRssi > _wfMaxRssi) { _wfMaxRssi = lineMaxRssi; _wfMaxFreq = lineMaxFreq; }
+
+  // Peak readout (refreshed periodically).
+  if (millis() - _wfLastMax >= 1500) {
+    lcd.fillRect(bodyX(), bodyY() + 10, w, 10, TFT_BLACK);
+    lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
+    char mb[28];
+    snprintf(mb, sizeof(mb), "%d dBm @ %.3f", _wfMaxRssi, _wfMaxFreq);
+    lcd.drawString(mb, bodyX() + 2, bodyY() + 10);
+    _wfMaxRssi = -120;
+    _wfLastMax = millis();
+  }
+
+  // Advance + wrap the waterfall cursor.
+  _wfLine++;
+  if (_wfLine >= wfH) _wfLine = 0;
+  return true;
+}
+
