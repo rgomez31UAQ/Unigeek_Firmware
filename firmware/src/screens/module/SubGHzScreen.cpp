@@ -227,8 +227,7 @@ void SubGHzScreen::_startScan() {
     return;
   }
   _rfDetectFired = false;
-  _clearHistory();
-  _rf.beginScan();
+  _rf.beginAnalyze();
   _state = STATE_SCANNING;
   _chromeDrawn = false;
   strcpy(_titleBuf, "Detect Freq");
@@ -241,19 +240,18 @@ bool SubGHzScreen::_onUpdateExtra() {
   if (Uni.Nav->wasPressed()) {
     auto dir = Uni.Nav->readDirection();
     if (dir == INavigation::DIR_BACK || dir == INavigation::DIR_PRESS) {
-      _rf.endScan();
+      _rf.endAnalyze();
       _rf.end();
       _showMenu();
       return true;
     }
   }
-  if (_rf.stepScan()) {  // signal above RSSI_THRESHOLD at the current frequency
+  if (_rf.analyzeStep() && _rf.isPeakLive()) {  // a live peak above the trigger
     if (!_rfDetectFired) {
       _rfDetectFired = true;
       int n = Achievement.inc("rf_detect_freq");
       if (n == 1) Achievement.unlock("rf_detect_freq");
     }
-    _recordHit(_rf.getScanFreq(), _rf.getScanRssi());
   }
   render();
   return true;
@@ -268,15 +266,8 @@ bool SubGHzScreen::_onRenderExtra() {
   static constexpr int kRssiCeiling = -30;
   static constexpr int kRssiRange   = kRssiCeiling - kRssiFloor; // 80
 
-  const int footerH   = 16;
-  const int infoH     = 14;                     // live freq/rssi row
-  const int histLineH = 9;
-  const int histH     = histLineH * (kHistMax + 1); // "Recent:" header + 5 rows
-  const int contentH  = bodyH() - footerH;
-  const int chartY    = infoH;
-  int chartBottom     = contentH - histH;
-  if (chartBottom < chartY + 8) chartBottom = chartY + 8; // keep a chart sliver
-  const int chartH    = chartBottom - chartY;
+  const int footerH  = 16;
+  const int contentH = bodyH() - footerH;
 
   if (!_chromeDrawn) {
     lcd.fillRect(bodyX(), bodyY(), bodyW(), bodyH(), TFT_BLACK);
@@ -292,103 +283,58 @@ bool SubGHzScreen::_onRenderExtra() {
     _chromeDrawn = true;
   }
 
-  uint8_t n = _rf.getScanCount();
-  int barW  = bodyW() / (n ? n : 1);
-  if (barW < 1) barW = 1;
+  const int  W    = bodyW();
+  const bool held = _rf.getPeakFreq() > 0;
+  const bool live = _rf.isPeakLive();
+  const int  rssi = _rf.getPeakRssi();
+
+  // Peak frequency colour: dim grey while searching, strength-coloured when a
+  // live carrier is locked, muted while sample-holding the last peak.
+  uint16_t peakColor = !held ? 0x4208 : (live ? detectStrengthColor(rssi) : 0x5AEB);
 
   Sprite sp(&lcd);
-  sp.createSprite(bodyW(), contentH);
+  sp.createSprite(W, contentH);
   sp.fillSprite(TFT_BLACK);
+
+  // ── Big peak frequency (Flipper "peaky" readout) ────────────────────────
+  const int fSize = (W >= 200) ? 3 : 2;
+  const int freqY = contentH * 34 / 100;
+  char fb[16];
+  if (held) snprintf(fb, sizeof(fb), "%.3f", _rf.getPeakFreq());
+  else      snprintf(fb, sizeof(fb), "---.---");
+  sp.setTextDatum(MC_DATUM);
+  sp.setTextSize(fSize);
+  sp.setTextColor(peakColor, TFT_BLACK);
+  sp.drawString(fb, W / 2, freqY);
+
   sp.setTextSize(1);
-
-  // Live RSSI bar chart across all scanned channels.
-  for (uint8_t i = 0; i < n; i++) {
-    int rssi    = _rf.getScanRssiAt(i);
-    int clamped = constrain(rssi, kRssiFloor, kRssiCeiling);
-    int barH    = (clamped - kRssiFloor) * chartH / kRssiRange;
-    int x       = i * barW;
-    int y       = chartY + chartH - barH;
-
-    uint16_t color;
-    if (rssi > CC1101Util::RSSI_THRESHOLD)        color = detectStrengthColor(rssi);
-    else if (rssi > kRssiFloor + 10)              color = 0x2945;
-    else                                          color = TFT_DARKGREY;
-
-    if (barH > 0) sp.fillRect(x, y, barW - 1, barH, color);
-  }
-
-  // Marker on the channel currently being sampled.
-  for (uint8_t i = 0; i < n; i++) {
-    if (fabsf(_rf.getScanFreqAt(i) - _rf.getScanFreq()) < 0.01f) {
-      sp.drawFastVLine(i * barW + barW / 2, chartY, chartH, TFT_WHITE);
-      break;
-    }
-  }
-
-  // Live readout: current scan frequency (left) + current RSSI (right).
-  sp.setTextDatum(ML_DATUM);
-  sp.setTextColor(TFT_WHITE, TFT_BLACK);
-  char freqBuf[20];
-  snprintf(freqBuf, sizeof(freqBuf), "%.3f MHz", _rf.getScanFreq());
-  sp.drawString(freqBuf, 2, infoH / 2);
-
-  sp.setTextDatum(MR_DATUM);
-  char rssiBuf[16];
-  snprintf(rssiBuf, sizeof(rssiBuf), "%d dBm", _rf.getScanRssi());
-  uint16_t rssiColor = (_rf.getScanRssi() > CC1101Util::RSSI_THRESHOLD) ? TFT_GREEN : TFT_CYAN;
-  sp.setTextColor(rssiColor, TFT_BLACK);
-  sp.drawString(rssiBuf, bodyW() - 2, infoH / 2);
-
-  // History panel: last 5 detections, most-recent first (persists after the
-  // signal disappears, unlike the live chart).
-  const int histTop = contentH - histH;
-  sp.setTextDatum(ML_DATUM);
   sp.setTextColor(TFT_DARKGREY, TFT_BLACK);
-  sp.drawString("Recent:", 2, histTop + histLineH / 2 + 1);
+  sp.drawString("MHz", W / 2, freqY + fSize * 4 + 7);
 
-  for (uint8_t i = 0; i < kHistMax; i++) {
-    int ry = histTop + histLineH * (i + 1) + histLineH / 2 + 1;
-    if (i < _histCount) {
-      sp.setTextColor(detectStrengthColor(_hist[i].rssi), TFT_BLACK);
-      char fb[16];
-      snprintf(fb, sizeof(fb), "%.3f MHz", _hist[i].freq);
-      sp.setTextDatum(ML_DATUM);
-      sp.drawString(fb, 2, ry);
-      char rb[12];
-      snprintf(rb, sizeof(rb), "%d dBm", _hist[i].rssi);
-      sp.setTextDatum(MR_DATUM);
-      sp.drawString(rb, bodyW() - 2, ry);
-    } else {
-      sp.setTextColor(0x2945, TFT_BLACK);
-      sp.setTextDatum(ML_DATUM);
-      sp.drawString("--", 2, ry);
-    }
+  // ── Status + RSSI value ─────────────────────────────────────────────────
+  char line[24];
+  uint16_t statCol;
+  if (!held)      { strcpy(line, "scanning...");                         statCol = TFT_DARKGREY; }
+  else if (live)  { snprintf(line, sizeof(line), "LIVE  %d dBm", rssi);  statCol = TFT_GREEN;     }
+  else            { snprintf(line, sizeof(line), "hold  %d dBm", rssi);  statCol = TFT_ORANGE;    }
+  sp.setTextColor(statCol, TFT_BLACK);
+  sp.drawString(line, W / 2, contentH * 64 / 100);
+
+  // ── RSSI bar ────────────────────────────────────────────────────────────
+  const int barMargin = 8;
+  const int barW = W - barMargin * 2;
+  const int barH = 7;
+  const int barY = contentH * 80 / 100;
+  sp.drawRect(barMargin, barY, barW, barH, TFT_DARKGREY);
+  if (held) {
+    int clamped = constrain(rssi, kRssiFloor, kRssiCeiling);
+    int fillW   = (clamped - kRssiFloor) * (barW - 2) / kRssiRange;
+    if (fillW > 0) sp.fillRect(barMargin + 1, barY + 1, fillW, barH - 2, peakColor);
   }
 
   sp.pushSprite(bodyX(), bodyY());
   sp.deleteSprite();
   return true;
-}
-
-void SubGHzScreen::_recordHit(float freq, int rssi) {
-  uint32_t now = millis();
-  // Dedup across ALL slots, not just the top: the sweep visits every channel,
-  // so two simultaneous strong signals (e.g. 433.92 + 868.35) alternate as the
-  // newest hit. Checking only slot 0 let them flood the list with duplicate
-  // rows. Refreshing the existing slot in place (keeping its peak RSSI, no
-  // reordering) keeps the list stable — it only grows with genuinely new
-  // frequencies.
-  for (uint8_t i = 0; i < _histCount; i++) {
-    if (fabsf(_hist[i].freq - freq) < 0.01f) {
-      if (rssi > _hist[i].rssi) _hist[i].rssi = rssi;
-      _hist[i].when = now;
-      return;
-    }
-  }
-  for (int i = (_histCount < kHistMax ? _histCount : kHistMax - 1); i > 0; i--)
-    _hist[i] = _hist[i - 1];
-  _hist[0] = { freq, rssi, now };
-  if (_histCount < kHistMax) _histCount++;
 }
 
 bool SubGHzScreen::_onBackExtra() {
@@ -399,7 +345,7 @@ bool SubGHzScreen::_onBackExtra() {
     return true;
   }
   if (_state != STATE_SCANNING) return false;
-  _rf.endScan();
+  _rf.endAnalyze();
   _rf.end();
   _showMenu();
   return true;

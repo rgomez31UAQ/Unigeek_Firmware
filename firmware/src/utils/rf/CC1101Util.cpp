@@ -227,6 +227,85 @@ void CC1101Util::endScan() {
   if (_initialized) ELECHOUSE_cc1101.setSidle();
 }
 
+// ── Frequency analyzer (Flipper-style peak detect) ──────────────────────────
+
+static inline bool cc1101_freq_valid(float mhz) {
+  return (mhz >= 280 && mhz <= 350) ||
+         (mhz >= 387 && mhz <= 468) ||
+         (mhz >= 779 && mhz <= 928);
+}
+
+void CC1101Util::beginAnalyze() {
+  if (!_initialized) return;
+  _scanning = true;
+  _peakFreq = 0;
+  _peakRssi = -120;
+  _peakLive = false;
+  _holdCtr  = 0;
+  for (uint8_t i = 0; i < kFreqCount; i++) _scanRssiMap[i] = -120;
+  // Enter RX once and STAY in RX for the whole session (RxBW inherited from
+  // begin() = 256 kHz — the same proven path as beginScan/stepScan). Re-issuing
+  // SetRx() per frame would SIDLE→SRX and reset the AGC, pinning RSSI at the
+  // noise floor so nothing is ever detected.
+  ELECHOUSE_cc1101.SetRx();
+}
+
+bool CC1101Util::analyzeStep() {
+  if (!_initialized || !_scanning) return false;
+
+  // ── Stage 1: coarse sweep — whole band, find the strongest channel. Stay in
+  // RX and only retune (setMHZ); this is the exact RF path stepScan uses. Also
+  // fills _scanRssiMap so the (optional) bar chart keeps updating.
+  int   coarseRssi = -127;
+  float coarseFreq = 0;
+  for (uint8_t i = 0; i < kFreqCount; i++) {
+    float f = kFreqList[i];
+    ELECHOUSE_cc1101.setMHZ(f);
+    delay(2);
+    int rssi = ELECHOUSE_cc1101.getRssi();
+    _scanRssiMap[i] = rssi;
+    _scanFreq = f;
+    _scanRssi = rssi;
+    if (rssi > coarseRssi) { coarseRssi = rssi; coarseFreq = f; }
+  }
+
+  // ── Stage 2: fine refine — ±0.3 MHz around the coarse peak in 20 kHz steps to
+  // pin the exact carrier (a signal at e.g. 433.66, not on the coarse list, is
+  // located here). Same RX/BW path — just a denser retune sweep.
+  if (coarseRssi > kAnalyzerTrigger) {
+    int   fineRssi = -127;
+    float fineFreq = coarseFreq;
+    for (float f = coarseFreq - 0.30f; f <= coarseFreq + 0.3001f; f += 0.02f) {
+      if (!cc1101_freq_valid(f)) continue;
+      ELECHOUSE_cc1101.setMHZ(f);
+      delay(2);
+      int rssi = ELECHOUSE_cc1101.getRssi();
+      if (rssi > fineRssi) { fineRssi = rssi; fineFreq = f; }
+    }
+    _peakFreq = fineFreq;
+    _peakRssi = fineRssi;
+    _peakLive = true;
+    _holdCtr  = kAnalyzerHold;
+    return true;
+  }
+
+  // ── No live signal: hold the last peak for a while (sample-hold), then clear.
+  if (_holdCtr > 0) {
+    _holdCtr--;
+    _peakLive = false;
+    return true;
+  }
+  _peakFreq = 0;
+  _peakRssi = -120;
+  _peakLive = false;
+  return false;
+}
+
+void CC1101Util::endAnalyze() {
+  _scanning = false;
+  if (_initialized) ELECHOUSE_cc1101.setSidle();
+}
+
 void CC1101Util::_initRx() {
   ELECHOUSE_cc1101.setModulation(2);
   ELECHOUSE_cc1101.setPktFormat(3);
