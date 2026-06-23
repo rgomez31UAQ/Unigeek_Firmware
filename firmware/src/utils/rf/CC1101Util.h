@@ -81,6 +81,12 @@ public:
   bool stepScan();
   void endScan();
 
+  // Fast RSSI sweep (Waterfall): put the chip in RX once, then read RSSI at an
+  // arbitrary frequency per pixel. rssiAt() retunes + settles + reads.
+  void beginRssiSweep();
+  int  rssiAt(float mhz);
+  void endRssiSweep();
+
   // Scan status (still readable — updated during receive/scan)
   bool  isScanning()   const { return _scanning; }
   float getScanFreq()  const { return _scanFreq; }

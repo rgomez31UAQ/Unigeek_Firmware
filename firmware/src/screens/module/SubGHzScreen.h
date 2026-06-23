@@ -14,8 +14,9 @@ public:
   void onInit() override;
 
 protected:
-  // Extra state: frequency-sweep view.
-  static constexpr int STATE_SCANNING = STATE_USER_BASE + 0;
+  // Extra states: frequency-sweep view, RSSI waterfall.
+  static constexpr int STATE_SCANNING  = STATE_USER_BASE + 0;
+  static constexpr int STATE_WATERFALL = STATE_USER_BASE + 1;
 
   // ── Radio adapter ──────────────────────────────────────────────────────
   bool        _radioBeginReceive()                override { return _rf.beginReceive(); }
@@ -41,7 +42,9 @@ protected:
   bool _onUpdateExtra()             override;
   bool _onRenderExtra()             override;
   bool _onBackExtra()               override;
-  bool _inhibitExtra() const        override { return _state == STATE_SCANNING; }
+  bool _inhibitExtra() const        override {
+    return _state == STATE_SCANNING || _state == STATE_WATERFALL;
+  }
 
 private:
   CC1101Util _rf;
@@ -49,11 +52,13 @@ private:
   int8_t _gdo0Pin = -1;
   bool   _rfDetectFired = false;  // achievement guard, resets each scan session
 
-  // Menu (6 items: Frequency | Detect Freq | Receive | Send | Jammer | Mfcodes)
-  static constexpr uint8_t kMenuCount = 6;
+  // Menu (7 items: Frequency | Detect Freq | Waterfall | Receive | Send |
+  //                Jammer | Mfcodes)
+  static constexpr uint8_t kMenuCount = 7;
   ListItem _menuItems[kMenuCount] = {
     {"Frequency"},
     {"Detect Freq"},
+    {"Waterfall"},
     {"Receive"},
     {"Send"},
     {"Jammer"},
@@ -65,4 +70,21 @@ private:
   void _selectFrequency();
   void _startScan();
   void _reloadMfcodes();
+
+  // ── Waterfall (RSSI spectrogram) ───────────────────────────────────────
+  // A scrolling RSSI heat-map across a [start,end] MHz window, swept per pixel
+  // over SPI. The pre-run popup picks the band; the run scrolls one freshly
+  // swept line per frame.
+  float    _wfStart   = 433.42f;  // 1 MHz window centred on 433.92 (common SubGHz)
+  float    _wfEnd     = 434.42f;
+  int      _wfLine    = 0;        // current waterfall row (body-relative y)
+  int      _wfMaxRssi = -120;
+  float    _wfMaxFreq = 0;
+  uint32_t _wfLastMax = 0;
+  void _startWaterfall();         // band-select popup loop, then run
+  void _runWaterfall();           // enter STATE_WATERFALL
+  void _pickWaterfallFreq(float& boundary);
+  bool _onUpdateWaterfall();
+  bool _onRenderWaterfall();
+  static uint16_t _waterfallColor(int rssi);
 };
