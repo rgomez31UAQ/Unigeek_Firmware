@@ -1,6 +1,7 @@
 #include "utils/uart/BleFileManager.h"
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <esp_heap_caps.h>
 
 BleFileManager BleFM;
 
@@ -30,19 +31,25 @@ static volatile int       _txPending     = 0;
 static constexpr int      TX_MAX_PENDING = 4;
 
 // Outbound TX ring. _sendBytes() enqueues without blocking (it runs on the main
-// loop AND on whatever task drew a mirrored region); _drainTx() flushes notifies
-// from update() as mbufs free. This replaces the old per-chunk delay()s that
-// stalled the device's main loop — the _txPending cap (4 < ~12 mbufs) is the flow
-// control. Allocated on begin(), freed on end() (zero RAM when BLE is off).
-static constexpr size_t   TX_RING  = 8192;
+// loop AND on whatever task drew a mirrored region); a dedicated task (_txTaskFn)
+// notifies them out off the main loop. This replaces the old per-chunk delay()s
+// that stalled the device's main loop — the _txPending cap (4 < ~12 mbufs) plus the
+// task's light pacing is the flow control. Sized big (in PSRAM where available) so
+// a full-screen render burst
+// fits and drains over time instead of overflowing and dropping frames — the BLE
+// link is far slower than the render. TX_RING is the actual allocated size, set in
+// begin(); freed on end() (zero RAM when BLE is off).
+static size_t             TX_RING  = 0;
 static uint8_t*           _txBuf   = nullptr;
 static volatile size_t    _txHeadW = 0;     // producer (enqueue, under TX lock)
 static volatile size_t    _txTailW = 0;     // consumer (drain, main loop)
 static uint32_t           _fbRemain = 0;    // bytes left in the current frame
 static bool               _fbDrop   = false; // whole current frame is being dropped
+static TaskHandle_t       _txTask    = nullptr; // dedicated BLE-notify drain task
+static volatile bool      _txTaskRun = false;
 
-static inline size_t _txUsed() { return (_txHeadW - _txTailW + TX_RING) % TX_RING; }
-static inline size_t _txFree() { return TX_RING - 1 - _txUsed(); }
+static inline size_t _txUsed() { return TX_RING ? (_txHeadW - _txTailW + TX_RING) % TX_RING : 0; }
+static inline size_t _txFree() { return TX_RING ? (TX_RING - 1 - _txUsed()) : 0; }
 
 static inline void _ringPut(const uint8_t* d, size_t n) {
   size_t head = _txHeadW;
@@ -120,13 +127,30 @@ void BleFileManager::_sendBytes(const uint8_t* data, size_t len) {
   if (!_fbDrop) _ringPut(data, len);
 }
 
-// Flush queued bytes to the radio from the main loop. Sends up to TX_MAX_PENDING
-// notifications per call; the rest go out on later update()s as onStatus() frees
-// mbufs. Flow control is the mbuf counter, not a busy-wait, so the loop never blocks.
-static void _drainTx() {
-  if (!_connected || !_txChar || !_txBuf) return;
+// Dedicated task that drains the TX ring to the radio. Runs OFF the main loop, so
+// the device stays responsive while the (much slower) BLE link catches up — the
+// producers (_sendBytes) only enqueue. notify() returns void in NimBLE 1.4, so we
+// can't detect a failed send; instead we pace one notification per few ms with the
+// _txPending mbuf backpressure, so the controller's TX buffer never overflows. (An
+// overflow silently dropped notifications mid-frame — that was the partial render.)
+static void _txTaskFn(void*) {
   uint8_t tmp[240];
-  while (_txPending < TX_MAX_PENDING && _txHeadW != _txTailW) {
+  uint32_t stalled = 0;
+  while (_txTaskRun) {
+    if (!_connected || !_txChar || !_txBuf || _txHeadW == _txTailW) {
+      stalled = 0;
+      vTaskDelay(pdMS_TO_TICKS(3));
+      continue;
+    }
+    if (_txPending >= TX_MAX_PENDING) {
+      // Waiting for onStatus() to free an mbuf. If the counter ever wedges (a
+      // missed/raced decrement) while bytes still wait, reset it so the drain
+      // can't stall forever — the old blocking code had the same safety valve.
+      vTaskDelay(pdMS_TO_TICKS(3));
+      if ((stalled += 3) > 500) { _txPending = 0; stalled = 0; }
+      continue;
+    }
+    stalled = 0;
     size_t n = 0, tail = _txTailW;
     while (n < sizeof(tmp) && tail != _txHeadW) {
       tmp[n++] = _txBuf[tail];
@@ -136,7 +160,10 @@ static void _drainTx() {
     _txChar->setValue(tmp, n);
     _txPending++;
     _txChar->notify();
+    vTaskDelay(pdMS_TO_TICKS(5)); // ~radio-rate pacing; own task ⇒ no UI stall
   }
+  _txTask = nullptr;
+  vTaskDelete(nullptr);
 }
 
 void BleFileManager::begin(const char* deviceName) {
@@ -171,10 +198,21 @@ void BleFileManager::begin(const char* deviceName) {
   adv->start();
 
   _rxHead = _rxTail = 0;
-  if (!_txBuf) _txBuf = (uint8_t*)malloc(TX_RING);
+  if (!_txBuf) {
+    // A full-screen render bursts tens of KB of region frames at once; hold it in
+    // PSRAM so nothing drops, then drain over the much slower BLE link. Falls back
+    // to a small internal-RAM ring on boards without PSRAM (some drops on big
+    // screens, but far better than an 8 KB ring that dropped the central sprite).
+    TX_RING = 192 * 1024;
+    _txBuf  = (uint8_t*)heap_caps_malloc(TX_RING, MALLOC_CAP_SPIRAM);
+    if (!_txBuf) { TX_RING = 16 * 1024; _txBuf = (uint8_t*)malloc(TX_RING); }
+    if (!_txBuf) TX_RING = 0;
+  }
   _txHeadW = _txTailW = 0;
   _fbRemain = 0; _fbDrop = false;
   _txPending = 0;
+  _txTaskRun = true;
+  if (!_txTask) xTaskCreatePinnedToCore(_txTaskFn, "bleTx", 4096, nullptr, 1, &_txTask, 0);
   _connected = false;
   _inited = true;
   _active = true;
@@ -196,6 +234,10 @@ void BleFileManager::begin(const char* deviceName) {
 
 void BleFileManager::end() {
   if (!_inited) return;
+  // Stop the drain task and wait for it to exit before tearing down NimBLE / freeing
+  // the ring, so it can never touch a freed _txChar / _txBuf.
+  _txTaskRun = false;
+  while (_txTask) vTaskDelay(pdMS_TO_TICKS(2));
   if (_server) _server->getAdvertising()->stop();
   NimBLEDevice::deinit(false);
   _server    = nullptr;
@@ -203,6 +245,7 @@ void BleFileManager::end() {
   _connected = false;
   _rxHead = _rxTail = 0;
   if (_txBuf) { free(_txBuf); _txBuf = nullptr; }
+  TX_RING = 0;
   _txHeadW = _txTailW = 0;
   _fbRemain = 0; _fbDrop = false;
   _inited = false;
@@ -239,5 +282,5 @@ void BleFileManager::update() {
     _core.pump();
     _scr.pump(); // flush mirror dirty region (no-op in region mode / when idle)
   }
-  _drainTx(); // push whatever's queued to the radio — non-blocking
+  // TX draining runs on its own task (_txTaskFn), so nothing to flush here.
 }
