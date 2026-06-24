@@ -38,25 +38,21 @@ This prevents entering the Sub-GHz menu with missing or misconfigured hardware.
 
 ## Detect Freq
 
-Scan all known Sub-GHz frequencies to find active signals before manually selecting a frequency.
+Find the strongest active carrier near you and read its exact frequency before manually selecting one. This is a **peak detector**, not a per-channel bar chart — it locks one signal and shows it big.
 
-1. Select **Detect Freq** from the menu
-2. The screen shows a **spectrum bar chart** — one bar per known frequency, bar height = RSSI signal strength
-   - **Dark grey** — no signal (below noise floor)
-   - **Dim green** — low-level activity
-   - **Bright green** — signal above threshold (> -65 dBm)
-   - **Yellow** — strongest channel found
-   - **White cursor line** — current frequency being probed
-3. Top left shows the current probe frequency; top right shows its live RSSI in dBm
-4. When a signal is detected, the second line shows the best frequency found and its RSSI: `> 433.920 MHz -55dBm`
-5. Scanning runs continuously through all ~40 known frequencies and loops — the display updates every sweep
-6. Press **BACK** (or **PRESS** on devices without a back button) to stop and return to the menu
+1. Select **Detect Freq** from the menu.
+2. The screen shows a single large **peak frequency readout** ("peaky" style) with a status line and an RSSI bar:
+   - **Searching** (dim grey) — sweeping, no carrier above the trigger yet
+   - **LIVE  −xx dBm** — a live carrier is locked; the frequency colour reflects strength: **green** ≥ −52 dBm (close), **yellow** ≥ −60 dBm (medium), **red** < −60 dBm (far)
+   - **hold  −xx dBm** (orange) — the signal dropped; the last peak is **sample-held** on screen for a few frames so it doesn't vanish the instant you release the remote
+3. Detection runs in two stages: a **coarse sweep** across the whole band fills the RSSI map and finds the strongest channel, then a **fine refine** (±0.3 MHz in 20 kHz steps) pins the exact carrier. The radio stays in RX continuously (no per-frame re-strobe that would reset the AGC).
+4. Press **BACK** (or **PRESS** on devices without a back button) to stop and return to the menu.
 
 **Detect Freq does not change the frequency setting.** Use the result as a reference, then manually set the frequency with the **Frequency** menu item.
 
 ### Known Frequencies Scanned
 
-The scanner probes ~40 frequencies covering all common Sub-GHz bands:
+The coarse sweep probes ~40 frequencies covering all common Sub-GHz bands before the fine refine pins the exact carrier:
 
 | Band | Frequencies |
 |------|-------------|
@@ -83,7 +79,7 @@ Capture RF signals on the configured frequency.
 1. Set the desired frequency first via **Detect Freq** (reference) and **Frequency** (set)
 2. Select **Receive**
 3. The device listens on the configured frequency. The footer shows the current Receive Filter:
-   - **Filter: Code** (default) — drop raw captures; only emit signals that decoded as one of the 23 known protocols (Princeton, HT6P20B, CAME, NICE, KeeLoq, …). Cuts noise when hunting a fixed-code remote.
+   - **Filter: Code** (default) — drop raw captures; only emit signals that a decoder recognised — either a brand/manufacturer decoder (38 static protocols, see [Brand / Manufacturer Decoders](#brand--manufacturer-decoders)) or the RcSwitch table (Princeton, HT6P20B, CAME, NICE, KeeLoq, …). Cuts noise when hunting a fixed-code remote.
    - **Filter: RAW** — capture both RCSwitch-decoded protocols **and** raw pulse streams that no protocol matched. Best for unknown remotes and unusual signals.
 4. Toggle between RAW / Code live without leaving the screen — the footer label updates immediately. Setting is session-only.
    - **4-way devices** (Cardputer, Cardputer ADV, DIY Smoochie, DIY Marauder, sticks in Encoder mode): press **LEFT** or **RIGHT**.
@@ -96,6 +92,25 @@ Capture RF signals on the configured frequency.
 8. Saved files go to `/unigeek/rf/` in `.sub` format
 9. Up to 15 signals can be captured per session
 10. Press **BACK** to stop receiving and return to the menu
+
+## Brand / Manufacturer Decoders
+
+On every completed capture, an **authoritative decode engine** runs the raw pulse train through brand/manufacturer state machines before falling back to the generic RcSwitch table and then RAW. The decode order is:
+
+1. **Brand decoders** — 38 static (non-rolling) protocols
+2. **RcSwitch table** — generic fixed-code protocols 1–23
+3. **RAW** — unrecognised pulse streams (kept only when the filter is `RAW`)
+
+Because the capture phase is unknown, each frame is tried at **both parities** and every decoder self-syncs on its own header. The decoded protocol name and fields appear in the capture list and the **Info** view; the raw pulses are retained so brand signals still replay and round-trip to `.sub`.
+
+### Supported static protocols (38)
+
+CAME (+ TWEE), Princeton, Nice FLO, Holtek (+ HT12X), Linear (+ Delta3), Ansonic, BETT, Clemsa, Dickert, Doitrand, Dooya, Elplast, Feron, GateTX, Hormann, Intertechno V3, KeyFinder, Legrand, Marantec (24-bit), Mastercode, MegaCode, Nero Radio / Sketch, Roger, SMC5326, Treadmill37, GangQi, Hollarm, Honeywell (WDB / Sec), Cham_Code, Magellan, Power Smart, Revers_RB2.
+
+> [!note]
+> **KeeLoq (RcSwitch protocol 23)** stays on the fast path — it's a rolling-code protocol handled by the `mfcodes` keystore (see [KeeLoq auto-decode](#keeloq-auto-decode)), so the brand decoders never claim it.
+>
+> FSK protocols (Honeywell Sec, Marantec) are ported but **won't fire until FSK receive exists** in the firmware.
 
 ## Send
 
