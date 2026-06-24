@@ -31,6 +31,9 @@ import kotlin.coroutines.resumeWithException
 import kotlin.math.min
 
 private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+private val NUS_SERVICE_UUID = UUID.fromString(Proto.NUS_SERVICE)
+private val NUS_RX_UUID = UUID.fromString(Proto.NUS_RX)
+private val NUS_TX_UUID = UUID.fromString(Proto.NUS_TX)
 
 data class BleDevice(val device: BluetoothDevice, val name: String?, val rssi: Int)
 
@@ -108,6 +111,9 @@ class BleTransport(
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         finishConnect(IOException("GATT connect failed (status $status)")); return
                     }
+                    // Short connection interval — Android's default is slow and makes the
+                    // mirror/transfers laggy. (Best effort; the peripheral may clamp it.)
+                    runCatching { g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH) }
                     if (!g.requestMtu(247)) g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
@@ -118,6 +124,15 @@ class BleTransport(
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            // Prefer the 2 Mbps PHY — roughly doubles throughput for the screen mirror
+            // on phones + ESP32-S3 that support it. No-op / ignored otherwise.
+            runCatching {
+                g.setPreferredPhy(
+                    BluetoothDevice.PHY_LE_2M_MASK,
+                    BluetoothDevice.PHY_LE_2M_MASK,
+                    BluetoothDevice.PHY_OPTION_NO_PREFERRED,
+                )
+            }
             g.discoverServices()
         }
 
@@ -126,10 +141,10 @@ class BleTransport(
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 finishConnect(IOException("Service discovery failed (status $status)")); return
             }
-            val svc = g.getService(UUID.fromString(Proto.NUS_SERVICE))
+            val svc = g.getService(NUS_SERVICE_UUID)
                 ?: return finishConnect(IOException("Nordic UART service not found — is this a UniGeek?"))
-            rx = svc.getCharacteristic(UUID.fromString(Proto.NUS_RX))
-            val tx = svc.getCharacteristic(UUID.fromString(Proto.NUS_TX))
+            rx = svc.getCharacteristic(NUS_RX_UUID)
+            val tx = svc.getCharacteristic(NUS_TX_UUID)
             if (rx == null || tx == null) {
                 return finishConnect(IOException("UART characteristics missing"))
             }
@@ -149,7 +164,7 @@ class BleTransport(
 
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
-            if (c.uuid == UUID.fromString(Proto.NUS_TX)) c.value?.let(onBytes)
+            if (c.uuid == NUS_TX_UUID) c.value?.let(onBytes)
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
